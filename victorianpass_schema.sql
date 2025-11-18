@@ -274,25 +274,6 @@ ALTER TABLE guest_forms
   ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- =====================================================
--- SAMPLE DATA (Optional - for testing)
--- Remove if you prefer a clean database
--- =====================================================
-
--- Sample resident users (password values shown are placeholders)
-INSERT IGNORE INTO users (first_name, middle_name, last_name, phone, email, user_type, password, sex, birthdate, house_number, address) VALUES
-('John', 'Michael', 'Doe', '09123456789', 'john.doe@email.com', 'resident', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Male', '1990-05-15', 'VH-1001', 'Blk 1 Lot 5, Victorian Heights Subdivision'),
-('Maria', 'Santos', 'Cruz', '09987654321', 'maria.cruz@email.com', 'resident', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Female', '1985-08-22', 'VH-1002', 'Blk 1 Lot 6, Victorian Heights Subdivision');
-
--- Sample entry passes for visitors
-INSERT IGNORE INTO entry_passes (full_name, middle_name, last_name, sex, birthdate, contact, email, address) VALUES
-('Jane', 'Smith', 'Johnson', 'Female', '1992-03-10', '09111222333', 'jane.johnson@email.com', '123 Main Street, Quezon City'),
-('Robert', 'Lee', 'Wilson', 'Male', '1988-12-05', '09444555666', 'robert.wilson@email.com', '456 Oak Avenue, Makati City');
-
--- Sample resident amenity reservation
-INSERT IGNORE INTO resident_reservations (user_id, amenity, start_date, end_date, notes, approval_status, ref_code)
-VALUES (1, 'Basketball Court', '2025-11-15', '2025-11-15', 'Evening practice', 'pending', 'RR-TEST001');
-
--- =====================================================
 -- COMPLETION NOTE
 -- =====================================================
 -- All tables, indexes, foreign keys, and sample data are created.

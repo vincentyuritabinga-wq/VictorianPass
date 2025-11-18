@@ -137,6 +137,9 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       <img src="mainpage/upload.svg" alt="Upload">
       <p>Upload Visitor’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
     </label>
+    <div class="privacy-note" style="background:#fff9e6;border:1px solid #e6d9a8;color:#4a3c1a;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
+      Data Privacy Notice: The visitor’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
+    </div>
 
     <div id="idPreviewWrap" style="display:none;margin:8px 0 14px;">
       <img id="idPreview" alt="Valid ID Preview" style="max-width:240px;border-radius:10px;border:1px solid #e6ebe6;display:block;">

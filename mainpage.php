@@ -80,8 +80,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $_SESSION['entry_pass_id'] = $entryPassId;
     $_SESSION['entry_pass_name'] = $first . ' ' . $last;
 
-    // Redirect to downpayment step (visitor-only) before reservation
-    header("Location: downpayment.php?entry_pass_id=" . $entryPassId . "&continue=reserve");
+    // Redirect to reservation page; downpayment handled on reserve page
+    header("Location: reserve.php?entry_pass_id=" . $entryPassId);
     exit;
   } else {
     // Fallback: keep previous behavior
@@ -366,6 +366,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
     </div>
 
+    <nav class="page-nav">
+      <a href="#home">Home</a>
+      <a href="#about-us">About Us</a>
+      <a href="#facilities">Facilities/Amenities</a>
+      <a href="#about-system">About the System</a>
+    </nav>
+
     <div class="nav-actions">
       <a href="checkurstatus.php" class="btn-nav btn-status" id="checkStatusNav" style="display: none;">Check Status</a>
       <!-- Navigation Links (initially hidden) -->
@@ -397,7 +404,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   </header>
 
   <!-- HERO SECTION -->
-  <section class="hero">
+  <section class="hero" id="home">
     <?php if ($error !== '') { echo '<div class="error">' . htmlspecialchars($error) . '</div>'; } ?>
     <div class="hero-content">
       
@@ -410,11 +417,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
       <h1>WELCOME TO VictorianPass</h1>
       <div class="hero-divider"></div>
-      <p class="welcome-subtitle">
+      <!--<p class="welcome-subtitle">
         VictorianPass: An Online Amenity Reservation System<br>
         with QR-based Entry Pass Security<br>
         for Victorian Heights Subdivision
-      </p>
+      </p> -->
       <p class="tagline">
         Every home holds a story —<br>
         start yours in a place worth remembering.
@@ -431,7 +438,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </button>
           <div class="dropdown-content" id="dropdownContent">
             <a href="#" onclick="selectUserType('resident')">Resident</a>
-            <a href="#" onclick="selectUserType('visitor')">Visitor</a>
+            <?php if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'): ?>
+              <a href="#" onclick="return false" title="Log out to switch">Visitor</a>
+            <?php else: ?>
+              <a href="#" onclick="selectUserType('visitor')">Visitor</a>
+            <?php endif; ?>
           </div>
         </div>
       </div>
@@ -443,6 +454,51 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </section>
 
+  <section id="about-us" class="section">
+    <h2 class="section-title">About Us</h2>
+    <div class="section-divider"></div>
+    <div class="section-body">
+      <p>VictorianPass serves the Victorian Heights Subdivision community by streamlining amenity reservations and enhancing entry security through QR-based passes. The platform is designed to be simple, reliable, and accessible for residents and guests.</p>
+      <p>Our goal is to make community facilities easier to enjoy while maintaining a secure and well-organized environment for everyone.</p>
+    </div>
+  </section>
+
+  <section id="facilities" class="section">
+    <h2 class="section-title">Facilities/Amenities</h2>
+    <div class="section-divider"></div>
+    <div class="amenities-grid">
+      <div class="amenity-card">
+        <img src="mainpage/pool.svg" alt="Community Pool">
+        <h3 class="title">Community Pool</h3>
+        <p class="desc">Relax and enjoy the pool with convenient reservation options.</p>
+      </div>
+      <div class="amenity-card">
+        <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+        <h3 class="title">Clubhouse</h3>
+        <p class="desc">Host gatherings and events in the subdivision clubhouse.</p>
+      </div>
+      <div class="amenity-card">
+        <img src="mainpage/basketball.svg" alt="Basketball Court">
+        <h3 class="title">Basketball Court</h3>
+        <p class="desc">Play and practice on our outdoor basketball court.</p>
+      </div>
+      <div class="amenity-card">
+        <img src="mainpage/tennis.svg" alt="Tennis Court">
+        <h3 class="title">Tennis Court</h3>
+        <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="about-system" class="section">
+    <h2 class="section-title">About the System</h2>
+    <div class="section-divider"></div>
+    <div class="section-body">
+      <p>VictorianPass combines online reservations with QR-based entry verification to keep facilities organized and secure. Residents can log in to manage reservations, while visitors can apply for entry passes and track their status easily.</p>
+      <p>The system integrates with existing community processes and uses a consistent design language for clarity and ease of use.</p>
+    </div>
+  </section>
+
   <!-- Visitor-friendly instructions box fixed at the bottom-left -->
   <div class="bottom-instructions" id="bottomInstructions" style="display: none;">
     <strong>Visitor Tips</strong><br>
@@ -451,6 +507,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   </div>
 
   <script>
+    const isResidentLoggedIn = <?php echo (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') ? 'true' : 'false'; ?>;
     function selectUserType(type) {
       const dropdown = document.getElementById('userTypeDropdown');
       const navLinks = document.getElementById('navLinks');
@@ -471,6 +528,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         var epInst = document.getElementById('entryPassInstruction');
         if (epBtn) epBtn.style.display = 'none';
         if (epInst) epInst.style.display = 'none';
+        try{ localStorage.setItem('vp_user_type','resident'); }catch(e){}
 
         // Check if user is logged in (you can modify this logic based on your session handling)
         <?php if (isset($_SESSION['user_id'])): ?>
@@ -478,6 +536,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php endif; ?>
 
       } else if (type === 'visitor') {
+        if (isResidentLoggedIn) { alert('You are logged in as a resident. Please log out to switch to Visitor.'); return; }
         // Hide dropdown and show entry form and check status
         dropdown.style.display = 'none';
         navLinks.style.display = 'none';
@@ -490,6 +549,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         var epInst = document.getElementById('entryPassInstruction');
         if (epBtn) epBtn.style.display = 'flex';
         if (epInst) epInst.style.display = 'block';
+        try{ localStorage.setItem('vp_user_type','visitor'); }catch(e){}
       }
     }
 
@@ -515,6 +575,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       switcher.style.display = 'none';
       if (epBtn) epBtn.style.display = 'none';
       if (epInst) epInst.style.display = 'none';
+      try{ localStorage.removeItem('vp_user_type'); }catch(e){}
     }
 
     // Toggle dropdown visibility
@@ -532,6 +593,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           dropdowns[i].style.display = 'none';
         }
       }
+    });
+  </script>
+  <script>
+    // Persist selected user type across navigation
+    document.addEventListener('DOMContentLoaded',function(){
+      try{
+        var saved = localStorage.getItem('vp_user_type');
+        if(saved==='visitor' && isResidentLoggedIn){ selectUserType('resident'); return; }
+        if(saved==='resident' || saved==='visitor'){ selectUserType(saved); }
+      }catch(e){}
     });
   </script>
   <script>

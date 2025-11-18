@@ -63,6 +63,10 @@
       cursor: pointer; color: #888; line-height: 1;
     }
     .field-warning .close-warn:hover { color: #555; }
+    .phone-row{display:flex;align-items:center;gap:10px}
+    .phone-row input{flex:1}
+    .ph-flag{display:inline-block;font-size:22px;line-height:1}
+    .phone-help{margin-top:4px;margin-bottom:12px;color:#666;font-size:0.86rem}
   </style>
 </head>
 <body>
@@ -103,15 +107,20 @@
         </div>
       </div>
 
-      <div class="form-row">
-        <input type="tel" id="contact" name="contact" placeholder="Phone Number*" required>
+      <div class="phone-row" id="phoneRow">
+        <span class="ph-flag" aria-hidden="true" title="Philippines">🇵🇭</span>
+        <input type="tel" id="contact" name="contact" placeholder="Phone Number (Philippines)*" required>
       </div>
+      <div id="phoneHelp" class="phone-help">Format: 09xxxxxxxxx or +639xxxxxxxxx</div>
 
       <label class="upload-box">
         <input type="file" id="valid_id" name="valid_id" accept="image/*" hidden required>
         <img src="mainpage/upload.svg" alt="Upload">
         <p>Upload a Valid ID* <br><small>(e.g. National ID, Driver's License)</small></p>
       </label>
+      <div id="privacyNote" class="privacy-note" style="display:none;background:#fff9e6;border:1px solid #e6d9a8;color:#4a3c1a;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
+        Data Privacy Notice: Your uploaded ID is used only for verification and stored securely. Access is limited to authorized staff, in accordance with the Data Privacy Act of 2012.
+      </div>
 
       <div id="idPreviewWrap" style="display:none;margin:8px 0 14px;">
         <img id="idPreview" alt="Valid ID Preview" style="max-width:240px;border-radius:10px;border:1px solid #e6ebe6;display:block;">
@@ -211,23 +220,25 @@
       if (contact){
         contact.addEventListener('input', function(e){
           var val = e.target.value.trim();
-          if (!/^09\d{9}$/.test(val)){
-            setWarning('contact', 'Phone number must start with 09 and contain numbers only.');
+          if (!/^09\d{9}$/.test(val) && !/^\+639\d{9}$/.test(val)){
+            setWarning('contact', 'Use 09xxxxxxxxx or +639xxxxxxxxx');
           } else {
             setWarning('contact', '');
           }
         });
       }
 
+      var privacyNote = document.getElementById('privacyNote');
       if (idInput) idInput.addEventListener('change', function(){
         var file = idInput.files && idInput.files[0];
-        if (!file){ idPreviewWrap.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); return; }
+        if (!file){ idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); return; }
         var reader = new FileReader();
         reader.onload = function(e){ idPreview.src = e.target.result; idPreviewWrap.style.display = 'block'; };
         reader.readAsDataURL(file);
+        if(privacyNote) privacyNote.style.display='block';
         setWarning('valid_id', '');
       });
-      if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); });
+      if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); });
 
       entryForm.addEventListener('submit', function(e){
         var valid = true;
@@ -239,7 +250,7 @@
         });
         if (sex && !sex.value){ setWarning('sex', 'Please select Sex.'); valid = false; }
         if (birthdate && !birthdate.value){ setWarning('birthdate', 'Please provide a birthdate.'); valid = false; }
-        if (contact){ var val = contact.value.trim(); if (!/^09\d{9}$/.test(val)){ setWarning('contact', 'Phone number must start with 09 and contain numbers only.'); valid = false; } }
+        if (contact){ var val = contact.value.trim(); if (!/^09\d{9}$/.test(val) && !/^\+639\d{9}$/.test(val)){ setWarning('contact', 'Use 09xxxxxxxxx or +639xxxxxxxxx'); valid = false; } }
         if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); valid = false; }
         if (!valid) e.preventDefault();
       });

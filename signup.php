@@ -1,5 +1,6 @@
 <?php 
 include("connect.php");
+session_start();
 // Track registration success to show banner and auto-redirect
 $registration_success = false;
 
@@ -86,8 +87,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address);
 
     if ($stmt->execute()) {
-      // Mark success; show banner and auto-redirect via JS
-      $registration_success = true;
+      $newUserId = $stmt->insert_id;
+      $_SESSION['user_id'] = $newUserId;
+      $_SESSION['user_type'] = 'resident';
+      header('Location: profileresident.php');
+      exit;
     } else {
       // Handle duplicate email race condition safely
       if ($con->errno === 1062) {

@@ -11,12 +11,27 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION[
 }
 $user_id = intval($_SESSION['user_id']);
 
+function ensureResidentReservationExtras($con){
+  $c1 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+  if(!$c1 || $c1->num_rows===0){ @$con->query("ALTER TABLE resident_reservations ADD COLUMN start_time TIME NULL AFTER start_date"); }
+  $c2 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+  if(!$c2 || $c2->num_rows===0){ @$con->query("ALTER TABLE resident_reservations ADD COLUMN end_time TIME NULL AFTER end_date"); }
+  $c3 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'downpayment'");
+  if(!$c3 || $c3->num_rows===0){ @$con->query("ALTER TABLE resident_reservations ADD COLUMN downpayment DECIMAL(10,2) NULL AFTER approval_date"); }
+  $c4 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'persons'");
+  if(!$c4 || $c4->num_rows===0){ @$con->query("ALTER TABLE resident_reservations ADD COLUMN persons INT NULL AFTER end_time"); }
+}
+ensureResidentReservationExtras($con);
+
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $amenity = $_POST['amenity'] ?? 'Pool';
   $start   = $_POST['startDate'] ?? '';
   $end     = $_POST['endDate'] ?? '';
-  $persons = intval($_POST['persons'] ?? 1);
+  $startTime = $_POST['startTime'] ?? '';
+  $endTime   = $_POST['endTime'] ?? '';
+  $persons   = intval($_POST['persons'] ?? 1);
+  $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
   $price = $persons * 1; // UI only
 
   // Generate resident ref code
@@ -25,6 +40,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Validate inputs
   if (!$start || !$end) {
     $errorMsg = 'Please select a start and end date.';
+  } else if (!$startTime || !$endTime) {
+    $errorMsg = 'Please select a start and end time.';
+  } else if ($persons < 1) {
+    $errorMsg = 'Persons must be at least 1.';
+  } else if ($downpayment === null || $downpayment < 0) {
+    $errorMsg = 'Please enter a valid downpayment amount.';
   } else {
     // Prevent double-booking (resident reservations)
     $check = $con->prepare("SELECT COUNT(*) AS cnt FROM resident_reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
@@ -35,10 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (intval($row['cnt']) > 0) {
       $errorMsg = 'Selected dates are not available. Please choose different dates.';
     } else {
-      // Insert into resident_reservations (store persons in notes)
-      $notes = "Persons: " . $persons;
-      $stmt = $con->prepare("INSERT INTO resident_reservations (user_id, amenity, start_date, end_date, notes, approval_status, ref_code) VALUES (?, ?, ?, ?, ?, 'pending', ?)");
-      $stmt->bind_param("isssss", $user_id, $amenity, $start, $end, $notes, $ref);
+      $notes = NULL;
+      $stmt = $con->prepare("INSERT INTO resident_reservations (user_id, amenity, start_date, end_date, start_time, end_time, persons, notes, approval_status, downpayment, ref_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)");
+      $stmt->bind_param("isssssisds", $user_id, $amenity, $start, $end, $startTime, $endTime, $persons, $notes, $downpayment, $ref);
       $stmt->execute();
       $generatedCode = $ref;
     }
@@ -145,25 +165,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   </div>
 </header>
 
-<section class="hero">
-  <div class="calendar">
-    <div class="calendar-header">
-      <button id="prevMonth">&lt;</button>
-      <h3 id="monthAndYear"></h3>
-      <button id="nextMonth">&gt;</button>
-    </div>
-    <table>
-      <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
-      <tbody id="calendar-body"></tbody>
-    </table>
-  </div>
-
-  <div class="hero-text">
-    <h1>Reserve Amenity (Resident)</h1>
-    <p>Book amenities for yourself as a resident — same simple flow, resident-specific.</p>
-    <a href="#amenities" class="btn-main">Explore Amenities →</a>
-  </div>
-</section>
+<section class="hero"></section>
 
 <div id="amenities" class="amenities-tabs">
   <button class="amenity-btn active" onclick="showAmenity('pool')">Pool</button>
@@ -172,35 +174,58 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   <button class="amenity-btn" onclick="showAmenity('tennis')">Tennis Court</button>
 </div>
 
-<form method="POST">
-  <div id="amenityDisplay" class="amenity-display">
-    <img id="amenityImage" src="mainpage/pool.svg" alt="Amenity Image">
-    <div class="amenity-info"><h2 id="amenityTitle">Community Pool</h2></div>
-
-    <div class="reservation-card">
-      <input type="hidden" name="amenity" id="amenityField" value="Pool">
-      <div class="res-item">
-        <div class="res-label"><small>Start Date</small></div>
-        <p id="startDate">--</p>
-        <input type="hidden" name="startDate" id="startDateInput">
-      </div>
-      <div class="res-item">
-        <div class="res-label"><small>End Date</small></div>
-        <p id="endDate">--</p>
-        <input type="hidden" name="endDate" id="endDateInput">
-      </div>
-      <div class="res-item">
-        <div class="res-label"><small>Person</small></div>
-        <div class="counter">
-          <button type="button" onclick="changePersons(-1)">-</button>
-          <span id="personCount">1</span>
-          <button type="button" onclick="changePersons(1)">+</button>
+<form method="POST" style="padding:0 6%;">
+  <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
+    <div style="flex:1; min-width:320px;">
+      <div class="calendar">
+        <div class="calendar-header">
+          <button id="prevMonth">&lt;</button>
+          <h3 id="monthAndYear"></h3>
+          <button id="nextMonth">&gt;</button>
         </div>
-        <small id="price">$1</small>
-        <input type="hidden" name="persons" id="personsInput" value="1">
+        <table>
+          <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
+          <tbody id="calendar-body"></tbody>
+        </table>
       </div>
-      <div class="res-item">
-        <button class="btn-submit" type="submit">Submit</button>
+    </div>
+
+    <div class="amenity-display" style="flex:1; min-width:360px; position:relative;">
+      <img id="amenityImage" src="mainpage/pool.svg" alt="Amenity Image">
+      <div class="amenity-info"><h2 id="amenityTitle">Community Pool</h2></div>
+      <div class="reservation-card" style="position:static; box-shadow:none; margin-top:12px;">
+        <input type="hidden" name="amenity" id="amenityField" value="Pool">
+        <div class="res-item">
+          <div class="res-label"><small>Start Date</small></div>
+          <p id="startDate">--</p>
+          <input type="hidden" name="startDate" id="startDateInput">
+          <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
+          <input type="time" name="startTime" id="startTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+        </div>
+        <div class="res-item">
+          <div class="res-label"><small>End Date</small></div>
+          <p id="endDate">--</p>
+          <input type="hidden" name="endDate" id="endDateInput">
+          <div class="res-label" style="margin-top:8px;"><small>End Time</small></div>
+          <input type="time" name="endTime" id="endTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+        </div>
+        <div class="res-item">
+          <div class="res-label"><small>Persons</small></div>
+          <div class="counter">
+            <button type="button" onclick="changePersons(-1)">-</button>
+            <span id="personCount">1</span>
+            <button type="button" onclick="changePersons(1)">+</button>
+          </div>
+          <small id="price">$1</small>
+          <input type="hidden" name="persons" id="personsInput" value="1">
+        </div>
+        <div class="res-item">
+          <div class="res-label"><small>Downpayment</small></div>
+          <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;" placeholder="Enter downpayment amount">
+        </div>
+        <div class="res-item" style="flex-basis:100%; margin-top:8px;">
+          <button class="btn-submit" type="submit">Submit</button>
+        </div>
       </div>
     </div>
   </div>

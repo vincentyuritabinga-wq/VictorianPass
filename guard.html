@@ -141,8 +141,8 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
   <div class="header">
     <h1 id="page-title">Welcome, Guard</h1>
     <div class="profile-mini">
-      <img src="mainpage/profile'.jpg" alt="Guard">
-      <span>Guard Name</span>
+      <img src="mainpage/logo.svg" alt="Guard">
+      <span>Guard</span>
     </div>
   </div>
 
@@ -151,10 +151,14 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
     <div class="card">
       <div class="card-header">Today's Entry</div>
       <div class="card-body">
-        <table>
-          <tr><th>IP</th><th>Image</th><th>Name</th><th>Activity</th></tr>
-          <tr><td>0000</td><td><img src="mainpage/profile'.jpg" width="30"></td><td>Arlene Kim</td><td>Clubhouse Reservation</td></tr>
-          <tr><td>0001</td><td><img src="mainpage/profile'.jpg" width="30"></td><td>Conrad Fisher</td><td>Entry</td></tr>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+          <input id="scanCode" type="text" placeholder="Scan or enter code" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px">
+          <button class="action-btn approve" onclick="scanCode()">Scan</button>
+          <button class="action-btn" onclick="openStatusCard()" style="background:#23412e">Open QR Card</button>
+        </div>
+        <table id="entryTable">
+          <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th></tr>
+          <tr id="emptyRow"><td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
         </table>
       </div>
     </div>
@@ -163,8 +167,7 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
       <div class="card-body">
         <table>
           <tr><th>IP</th><th>Image</th><th>Name</th><th>Status</th></tr>
-          <tr><td>1000</td><td><img src="mainpage/profile'.jpg" width="30"></td><td>Ronald Richards</td>
-              <td><span style="color:var(--status-rejected);font-weight:600">Prohibited</span></td></tr>
+          <tr id="restrictedEmpty"><td colspan="4" style="text-align:center;color:#6b6b6b">No restricted entries</td></tr>
         </table>
       </div>
     </div>
@@ -191,26 +194,7 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
             <th>Description</th>
             <th>Action</th>
           </tr>
-          <tr id="R-001">
-            <td>R-001</td>
-            <td>Jane Marsh</td>
-            <td><img src="mainpage/proof1.jpg" alt="proof" class="proof-thumb"></td>
-            <td>Noise complaint about Unit 12-B</td>
-            <td>
-              <button class="action-btn approve" onclick="handleAction('approve','R-001')">Notify Admin</button>
-              <button class="action-btn deny" onclick="handleAction('deny','R-001')">Deny</button>
-            </td>
-          </tr>
-          <tr id="R-002">
-            <td>R-002</td>
-            <td>Mark Lo</td>
-            <td><img src="mainpage/proof2.jpg" alt="proof" class="proof-thumb"></td>
-            <td>Unauthorized parking report</td>
-            <td>
-              <button class="action-btn approve" onclick="handleAction('approve','R-002')">Notify Admin</button>
-              <button class="action-btn deny" onclick="handleAction('deny','R-002')">Deny</button>
-            </td>
-          </tr>
+          <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
         </table>
       </div>
     </div>
@@ -260,6 +244,31 @@ function showToast(message, type="success"){
   toast.style.background = type === "error" ? "var(--status-rejected)" : "var(--status-approved)";
   toast.classList.add("show");
   setTimeout(()=>toast.classList.remove("show"),2500);
+}
+
+// Scan code and reflect status
+function scanCode(){
+  const code = (document.getElementById('scanCode').value||'').trim();
+  if(!code){ showToast('Enter a code to scan','error'); return; }
+  fetch(`status.php?code=${encodeURIComponent(code)}`)
+    .then(r=>r.json())
+    .then(data=>{
+      if(!data || !data.success){ showToast(data && data.message ? data.message : 'Invalid code','error'); return; }
+      const tbl=document.getElementById('entryTable');
+      const empty=document.getElementById('emptyRow'); if(empty) empty.remove();
+      const dateDisplay = (data.start_date && data.end_date) ? `${data.start_date} → ${data.end_date}` : (data.start_date || '-');
+      const tr=document.createElement('tr');
+      tr.innerHTML = `<td>${data.code}</td><td>${data.name||'-'}</td><td>${data.type||'-'}</td><td>${dateDisplay}</td><td>${data.status||'-'}</td>`;
+      tbl.appendChild(tr);
+      showToast('Scan recorded');
+    })
+    .catch(_=>{ showToast('Network error','error'); });
+}
+
+function openStatusCard(){
+  const code = (document.getElementById('scanCode').value||'').trim();
+  if(!code){ showToast('Enter a code first','error'); return; }
+  window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank');
 }
 
 // Approve / Deny actions (simulate backend)

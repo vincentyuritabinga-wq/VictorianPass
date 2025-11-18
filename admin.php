@@ -38,10 +38,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
                              WHERE gf.id = ?");
     $stmtGF->bind_param('i', $id);
     $stmtGF->execute();
-    $resGF = $stmtGF->get_result();
-    if ($resGF && $row = $resGF->fetch_assoc()) {
-        $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
-        $details = [
+        $resGF = $stmtGF->get_result();
+        if ($resGF && $row = $resGF->fetch_assoc()) {
+            $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+            $details = [
             'id' => intval($row['id']),
             'user_id' => isset($row['resident_user_id']) ? intval($row['resident_user_id']) : null,
             'full_name' => $row['visitor_first_name'],
@@ -57,6 +57,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
             'amenity' => $isAmenity ? ($row['amenity'] ?: 'Amenity Reservation') : 'Guest Entry',
             'start_date' => $isAmenity ? ($row['start_date'] ?: $row['visit_date']) : $row['visit_date'],
             'end_date' => $isAmenity ? ($row['end_date'] ?: $row['visit_date']) : $row['visit_date'],
+            'start_time' => $row['start_time'] ?? null,
+            'end_time' => $row['end_time'] ?? null,
             'persons' => !empty($row['persons']) ? intval($row['persons']) : null,
             'purpose' => $row['purpose'],
             'price' => $isAmenity && isset($row['price']) ? floatval($row['price']) : null,
@@ -643,6 +645,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $reservation_id = intval($_POST['reservation_id']);
             $approval_status = ($action == 'approve_request') ? 'approved' : 'denied';
             $staff_id = $_SESSION['staff_id'] ?? null;
+            $conflict = false; $amenity = ''; $start = ''; $end = ''; $st = ''; $et = '';
 
             // Try updating guest_forms
             $stmtGFCheck = $con->prepare("SELECT id FROM guest_forms WHERE id = ?");
@@ -650,6 +653,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtGFCheck->execute();
             $resGFCheck = $stmtGFCheck->get_result();
             if ($resGFCheck && $resGFCheck->num_rows > 0) {
+                // Load details for conflict check
+                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time FROM guest_forms WHERE id = ?");
+                $stmtInfo->bind_param('i', $reservation_id);
+                $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
+                if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
+                $stmtInfo->close();
+                if ($approval_status === 'approved' && $amenity && $start && $end) {
+                    $singleDay = ($start === $end && $st && $et);
+                    $cnt = 0;
+                    if ($singleDay) {
+                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt1->bind_param('ssss', $amenity, $start, $st, $et); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
+                        $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+                        $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+                        if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                            $stmt2->bind_param('ssss',$amenity,$start,$st,$et);
+                        } else {
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+                            $stmt2->bind_param('sss',$amenity,$end,$start);
+                        }
+                        $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
+                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt3->bind_param('ssss',$amenity,$start,$st,$et); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                    } else {
+                        $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
+                        $stmt1->bind_param('sss',$amenity,$end,$start); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
+                        $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+                        $stmt2->bind_param('sss',$amenity,$end,$start); $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
+                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
+                        $stmt3->bind_param('sss',$amenity,$end,$start); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                    }
+                    $conflict = ($cnt > 0);
+                    if ($conflict) { $approval_status = 'denied'; }
+                }
                 $stmtUp = $con->prepare("UPDATE guest_forms SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?");
                 $stmtUp->bind_param('sii', $approval_status, $staff_id, $reservation_id);
                 $stmtUp->execute();
@@ -659,6 +697,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             } else {
                 // Legacy: Update reservation approval status
+                // Load details for conflict check
+                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time FROM reservations WHERE id = ?");
+                $stmtInfo->bind_param('i', $reservation_id);
+                $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
+                if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
+                $stmtInfo->close();
+                if ($approval_status === 'approved' && $amenity && $start && $end) {
+                    $singleDay = ($start === $end && $st && $et);
+                    $cnt = 0;
+                    if ($singleDay) {
+                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt1->bind_param('ssss', $amenity, $start, $st, $et); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
+                        $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+                        $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+                        if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                            $stmt2->bind_param('ssss',$amenity,$start,$st,$et);
+                        } else {
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+                            $stmt2->bind_param('sss',$amenity,$end,$start);
+                        }
+                        $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
+                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt3->bind_param('ssss',$amenity,$start,$st,$et); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                    } else {
+                        $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
+                        $stmt1->bind_param('sss',$amenity,$end,$start); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
+                        $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+                        $stmt2->bind_param('sss',$amenity,$end,$start); $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
+                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
+                        $stmt3->bind_param('sss',$amenity,$end,$start); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                    }
+                    $conflict = ($cnt > 0);
+                    if ($conflict) { $approval_status = 'denied'; }
+                }
                 $query = "UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?";
                 $stmt = $con->prepare($query);
                 $stmt->bind_param("sii", $approval_status, $staff_id, $reservation_id);
@@ -670,7 +743,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
 
             // Redirect to prevent form resubmission
-            header("Location: admin.php?page=requests");
+            header("Location: admin.php?page=visitor_requests" . ($conflict ? "&msg=time_conflict" : ""));
             exit;
         }
         
@@ -947,6 +1020,40 @@ body{margin:0;background:#f3efe9;color:#222;}
       <h2 id="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
       <div class="search"><input id="search-input" placeholder="Search <?php echo htmlspecialchars($pageTitle); ?>..."></div>
       <img class="avatar" src="mainpage/profile'.jpg" alt="admin">
+      <script>
+        (function(){
+          const input=document.getElementById('search-input');
+          function filter(){
+            const q=(input.value||'').toLowerCase().trim();
+            const main=document.querySelector('.main');
+            const tables=main.querySelectorAll('table');
+            tables.forEach(function(tbl){
+              const rows=tbl.querySelectorAll('tbody tr');
+              let any=false;
+              rows.forEach(function(r){
+                const t=(r.textContent||'').toLowerCase();
+                const show=!q||t.indexOf(q)>=0;
+                r.style.display=show?'':'none';
+                any=any||show;
+              });
+              const thead=tbl.querySelector('thead');
+              const cols=(thead?thead.querySelectorAll('th').length:tbl.rows[0]?tbl.rows[0].cells.length:1)||1;
+              let emptyRow=tbl.querySelector('tr.search-empty');
+              if(!any&&q){
+                if(!emptyRow){
+                  emptyRow=document.createElement('tr');
+                  emptyRow.className='search-empty';
+                  const td=document.createElement('td');
+                  td.colSpan=cols; td.style.textAlign='center'; td.style.color='#6b6b6b'; td.textContent='No results';
+                  emptyRow.appendChild(td);
+                  const tb=tbl.querySelector('tbody')||tbl; tb.appendChild(emptyRow);
+                }
+              } else { if(emptyRow) emptyRow.remove(); }
+            });
+          }
+          if(input){ input.addEventListener('input',filter); }
+        })();
+      </script>
     </div>
 
 <!-- DASHBOARD -->
@@ -996,7 +1103,8 @@ body{margin:0;background:#f3efe9;color:#222;}
             <th>House #</th>
             <th>Amenity</th>
             <th>Dates</th>
-            <th>Status</th>
+            <th>Status Code</th>
+            <th>Request Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1016,6 +1124,7 @@ body{margin:0;background:#f3efe9;color:#222;}
                   echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                  echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '') . "</td>";
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -1040,6 +1149,9 @@ body{margin:0;background:#f3efe9;color:#222;}
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
                       $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
+                      if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                      }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
                   }
                   echo "</td>";
@@ -1063,7 +1175,8 @@ body{margin:0;background:#f3efe9;color:#222;}
             <th>Amenity</th>
             <th>Dates</th>
             <th>Persons</th>
-            <th>Status</th>
+            <th>Status Code</th>
+            <th>Request Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -1084,6 +1197,7 @@ body{margin:0;background:#f3efe9;color:#222;}
                   echo "<td>" . (!empty($gr['persons']) ? intval($gr['persons']) : '-') . "</td>";
                   $approval_status = $gr['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                  echo "<td>" . htmlspecialchars($gr['ref_code'] ?? '') . "</td>";
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   $viewHandler = "showVisitorDetails(" . intval($gr['gf_id'] ?? $gr['id']) . ", 'guest_form')";
@@ -1109,6 +1223,9 @@ body{margin:0;background:#f3efe9;color:#222;}
                   } else {
                       $approvedBy = !empty($gr['approved_by']) ? "by Staff ID " . $gr['approved_by'] : "";
                       $approvalDate = !empty($gr['approval_date']) ? date('M d, Y', strtotime($gr['approval_date'])) : "";
+                      if ($approval_status === 'approved' && !empty($gr['ref_code'])) {
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                      }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
                   }
                   echo "</td>";
@@ -1117,6 +1234,47 @@ body{margin:0;background:#f3efe9;color:#222;}
           }
           if (!$hasGR) {
               echo "<tr><td colspan='6' style='text-align:center;'>No guest reservations found</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-box">
+      <h3>Visitor Reservations (Legacy)</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ref Code</th>
+            <th>Name</th>
+            <th>Amenity</th>
+            <th>Dates</th>
+            <th>Payment</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $legacy = $con->query("SELECT r.*, ep.full_name, ep.middle_name, ep.last_name FROM reservations r JOIN entry_passes ep ON r.entry_pass_id = ep.id ORDER BY r.created_at DESC");
+          if ($legacy && $legacy->num_rows > 0) {
+            while ($row = $legacy->fetch_assoc()) {
+              echo '<tr>';
+              echo '<td>' . htmlspecialchars($row['ref_code']) . '</td>';
+              $fullName = trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+              echo '<td>' . htmlspecialchars($fullName) . '</td>';
+              echo '<td>' . htmlspecialchars($row['amenity'] ?? '-') . '</td>';
+              $dateRange = (!empty($row['start_date']) && !empty($row['end_date'])) ? (date('M d', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))) : '<span class=\'muted\'>-</span>';
+              echo '<td>' . $dateRange . '</td>';
+              $ps = strtolower($row['payment_status'] ?? 'pending');
+              $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
+              echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
+              $as = strtolower($row['approval_status'] ?? 'pending');
+              $asClass = $as==='approved' ? 'badge-approved' : ($as==='denied' ? 'badge-rejected' : 'badge-pending');
+              echo '<td><span class="badge ' . $asClass . '">' . ucfirst($as) . '</span></td>';
+              echo '</tr>';
+            }
+          } else {
+            echo '<tr><td colspan="6" style="text-align:center;">No visitor reservations found</td></tr>'; 
           }
           ?>
         </tbody>
@@ -1156,13 +1314,7 @@ body{margin:0;background:#f3efe9;color:#222;}
               // View Details button
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ")' style='margin-right:6px;'>View Details</button>";
 
-              // Deactivate/Activate toggle
-              $isDisabled = isset($resident['status']) && $resident['status'] === 'disabled';
-              echo "<form method='post' style='display:inline;'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='" . ($isDisabled ? "activate_user" : "deactivate_user") . "'>";
-              echo "<button type='submit' class='btn " . ($isDisabled ? "btn-approve" : "btn-reject") . "' style='margin-right:6px;' onclick='return confirm(" . json_encode($isDisabled ? "Reactivate this user?" : "Deactivate this user?") . ")'>" . ($isDisabled ? "Activate" : "Deactivate") . "</button>";
-              echo "</form>";
+              
 
               // Delete button
               echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
@@ -1235,7 +1387,8 @@ body{margin:0;background:#f3efe9;color:#222;}
           <th>House #</th>
           <th>Amenity</th>
           <th>Dates</th>
-          <th>Status</th>
+          <th>Status Code</th>
+          <th>Request Status</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -1255,6 +1408,7 @@ body{margin:0;background:#f3efe9;color:#222;}
                 echo "<td>" . $dateRange . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '') . "</td>";
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -1305,7 +1459,8 @@ body{margin:0;background:#f3efe9;color:#222;}
         <th>Amenity</th>
         <th>Purpose of Visit</th>
         <th>Persons</th>
-        <th>Status</th>
+        <th>Status Code</th>
+        <th>Request Status</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -1337,6 +1492,7 @@ body{margin:0;background:#f3efe9;color:#222;}
               // Status (approval_status)
               $approval_status = $req['approval_status'] ?? 'pending';
               $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+              echo "<td>" . htmlspecialchars($req['ref_code'] ?? '') . "</td>";
               echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
 
               // Actions
@@ -1552,9 +1708,8 @@ body{margin:0;background:#f3efe9;color:#222;}
         <tr>
           <th>Name</th>
           <th>Amenity</th>
-          <th>Request Type</th>
-          <th>Persons</th>
           <th>Status Code</th>
+          <th>Request Status</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -1573,15 +1728,13 @@ body{margin:0;background:#f3efe9;color:#222;}
                 // Amenity (often Guest Entry)
                 echo "<td>" . (!empty($request['amenity']) ? htmlspecialchars($request['amenity']) : '<span class=\'muted\'>No amenity</span>') . "</td>";
 
-                $reqTypeBadge = "<span class='badge badge-warning'>Visitor Entry Pass</span>";
-                echo "<td>$reqTypeBadge</td>";
+                
 
-                // Persons
-                echo "<td>" . (!empty($request['persons']) ? intval($request['persons']) : '-') . "</td>";
-
-                // Status Code
+                // Status Code + Status badge
                 $approval_status = $request['approval_status'] ?? 'pending';
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                $ref = $request['ref_code'] ?? '';
+                echo "<td>" . htmlspecialchars($ref) . "</td>";
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
 
                 // Actions
@@ -1608,6 +1761,9 @@ body{margin:0;background:#f3efe9;color:#222;}
                 } else {
                     $approvedBy = !empty($request['approved_by']) ? "by Staff ID " . $request['approved_by'] : "";
                     $approvalDate = !empty($request['approval_date']) ? date('M d, Y', strtotime($request['approval_date'])) : "";
+                    if ($approval_status === 'approved' && !empty($ref)) {
+                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($ref) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                    }
                     echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
                 }
                 echo "</td>";
@@ -1669,6 +1825,7 @@ function showVisitorDetails(id, source) {
         if (modalTitleEl) modalTitleEl.textContent = isResident ? 'Resident Request Details' : 'Visitor Request Details';
 
         const residentName = [details.res_first_name || '', details.res_middle_name || '', details.res_last_name || ''].join(' ').replace(/\s+/g, ' ').trim();
+        function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), m=p[1]||'00'; let h=parseInt(p[0],10); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${h}:${m} ${ap}`; }
         const content = isResident
           ? `
           <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
@@ -1691,6 +1848,7 @@ function showVisitorDetails(id, source) {
             <div>
               <h4 style="color:#23412e;margin-bottom:10px;">Visit Details</h4>
               ${details.start_date ? `<p><strong>Date:</strong> ${new Date(details.start_date).toLocaleDateString()}${details.end_date ? ' - ' + new Date(details.end_date).toLocaleDateString() : ''}</p>` : ''}
+              ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
               ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
@@ -1717,6 +1875,7 @@ function showVisitorDetails(id, source) {
               <h4 style="color: #23412e; margin-bottom: 10px;">Reservation Details</h4>
               ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
               ${details.start_date ? `<p><strong>Date:</strong> ${new Date(details.start_date).toLocaleDateString()}${details.end_date ? ' - ' + new Date(details.end_date).toLocaleDateString() : ''}</p>` : ''}
+              ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
               ${details.price ? `<p><strong>Price:</strong> ₱${parseFloat(details.price).toLocaleString()}</p>` : ''}
@@ -1785,6 +1944,7 @@ function showReservationDetails(reservationId){
             ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
             ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
             ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
+            ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
             ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
             ${d.price?`<p><strong>Price:</strong> ₱${parseFloat(d.price).toLocaleString()}</p>`:''}
             ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
@@ -1841,6 +2001,7 @@ function showResidentReservationDetails(rrId){
             ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
             ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
             ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
+            ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
             ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
             ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
             ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}

@@ -8,6 +8,8 @@ body {
   color: #fff;
 }
 
+html { scroll-behavior: smooth; }
+
 /* Navbar */
 .navbar {
   display: flex;
@@ -47,6 +49,10 @@ body {
   align-items: center;
   gap: 12px;
 }
+
+.page-nav { display: flex; align-items: center; gap: 18px; }
+.page-nav a { color: #f4f4f4; text-decoration: none; font-weight: 500; opacity: 0.85; transition: transform 0.2s ease, opacity 0.2s ease; }
+.page-nav a:hover { opacity: 1; transform: translateY(-1px); }
 
 .btn-nav {
   padding: 6px 18px;
@@ -229,6 +235,19 @@ body {
   opacity: 0.9;
 }
 
+.section { padding: 60px 5%; }
+.section-title { margin: 0 0 16px; font-size: 2rem; font-weight: 700; }
+.section-subtitle { margin: 0 0 22px; font-size: 1rem; color: #ddd; }
+.section-divider { width: 54px; height: 3px; background: #e5ddc6; border-radius: 2px; margin: 8px 0 24px; opacity: 0.9; }
+.section-body { max-width: 960px; color: #eee; line-height: 1.6; }
+
+.amenities-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
+.amenity-card { background: #1b1816; border: 1px solid rgba(229,221,198,0.2); border-radius: 12px; padding: 16px; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.amenity-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
+.amenity-card img { width: 100%; max-height: 140px; object-fit: contain; display: block; margin: 6px auto 12px; }
+.amenity-card .title { font-weight: 600; font-size: 1.05rem; margin: 0 0 6px; }
+.amenity-card .desc { color: #ccc; font-size: 0.95rem; margin: 0; }
+
 /* Entry Pass Form */
 .entry-form {
   background: rgba(255, 255, 255, 0.9);
@@ -345,6 +364,13 @@ body {
     margin-top: 20px;
     width: 100%;
   }
+}
+
+@media (max-width: 992px) {
+  .amenities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .amenities-grid { grid-template-columns: 1fr; }
 }
 
 /* Fixed instructions box at bottom-left of the viewport */

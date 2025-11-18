@@ -135,13 +135,14 @@
         <tr>
           <th>Name</th>
           <th>Amenity</th>
-          <th>Date</th>
+          <th>Date & Time</th>
           <th>Persons</th>
           <th>Price</th>
           <th>Status</th>
           <th>Details</th>
           <th>QR Code</th>
           <th>Proof of Payment</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="dashboardRows"></tbody>
@@ -197,6 +198,13 @@
   </div>
 
   <script>
+    function fmtTime(t){
+      if(!t) return '';
+      const parts = String(t).split(':');
+      let h = parseInt(parts[0],10); const m = parts[1]||'00';
+      const ampm = h>=12?'PM':'AM'; h = h%12; if(h===0) h=12;
+      return `${h}:${m} ${ampm}`;
+    }
     let statusData = {};
     
     document.addEventListener('DOMContentLoaded', function() {
@@ -245,13 +253,16 @@
                   : (data.start_date && data.expires_at)
                     ? `${data.start_date} → ${data.expires_at}`
                     : (data.start_date || '-')
+                const timeDisplay = (data.start_time || data.end_time) ? (`<div style="color:#666;font-size:0.9rem">${fmtTime(data.start_time)}${data.end_time?(' → '+fmtTime(data.end_time)):''}</div>`) : '';
                 const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(data.persons);
                 const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
+                const statusLower = (data.status||'').toLowerCase();
+                const canCancel = statusLower==='pending';
                 dashboardRows.innerHTML = `
                   <tr>
                     <td>${data.name}</td>
                     <td>${data.type}</td>
-                    <td>${dateDisplay}</td>
+                    <td>${dateDisplay}${timeDisplay}</td>
                     <td>${personsDisplay}</td>
                     <td>${priceDisplay}</td>
                     <td><span class="status-badge status-${(data.status||'').toLowerCase()}">${data.status}</span></td>
@@ -262,6 +273,7 @@
                         ${(data.status||'').toLowerCase() === 'approved' ? 'View QR' : 'QR Disabled'}
                     </button></td>
                     <td><button class="upload-btn" onclick="openUploadModal()">Upload Receipt</button></td>
+                    <td><button class="qr-btn" style="background:#8a2a2a" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
                   </tr>`;
               }, 600);
             } else {
@@ -353,6 +365,11 @@
       if (!isGuestEntry && (data.type || '')) resRows.push(['Amenity', data.type]);
       resRows.push(['Purpose', data.purpose || '-']);
       resRows.push(['Date', dateDisplay]);
+      if (data.start_time || data.end_time) {
+        const t1 = fmtTime(data.start_time);
+        const t2 = data.end_time ? fmtTime(data.end_time) : '';
+        resRows.push(['Time', `${t1}${t2?(' → '+t2):''}`]);
+      }
       if (data.persons) resRows.push(['Persons', personsDisplay]);
       if (!isGuestEntry && data.price != null && data.price !== '') resRows.push(['Price', priceDisplay]);
       const reservationInfo = resRows.map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
@@ -361,7 +378,25 @@
         <div class="details-section">
           <h4>Your Information</h4>
           <table class="details-table">${yourInfo}</table>
-        </div>
+  </div>
+
+  <!-- Cancel Confirmation Modal -->
+  <div class="modal" id="cancelModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Cancel Reservation</h3>
+        <span class="close-btn" onclick="closeCancelModal()">&times;</span>
+      </div>
+      <div class="upload-section">
+        <p>Are you sure you want to cancel this reservation?</p>
+        <p style="font-size:0.9rem;color:#666">If you paid a downpayment, please wait for refund processing after cancellation.</p>
+      </div>
+      <div class="upload-actions">
+        <button type="button" onclick="closeCancelModal()">Keep Reservation</button>
+        <button type="button" style="background:#8a2a2a" onclick="performCancel()">Confirm Cancel</button>
+      </div>
+    </div>
+  </div>
         <div class="details-section">
           <h4>Reservation Details</h4>
           <table class="details-table">${reservationInfo}</table>
@@ -428,15 +463,42 @@
         console.error("Error:", error);
         alert("Error uploading receipt. Please try again.");
       });
+
+    function confirmCancel(){
+      document.getElementById('cancelModal').style.display='flex';
+    }
+    function closeCancelModal(){
+      document.getElementById('cancelModal').style.display='none';
+    }
+    function performCancel(){
+      const params=new URLSearchParams(window.location.search);
+      const code=params.get('code');
+      if(!code){ alert('Missing reservation code'); return; }
+      fetch('status.php',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({action:'cancel',code})
+      }).then(r=>r.json()).then(data=>{
+        if(data && data.success){
+          closeCancelModal();
+          alert('Reservation cancelled. Please wait for refund for the downpayment.');
+          location.reload();
+        } else {
+          alert('Unable to cancel: '+(data && data.message ? data.message : 'Server error'));
+        }
+      }).catch(_=>{ alert('Network error. Please try again.'); });
+    }
     });
 
     window.onclick = function(event) {
       const qrModal = document.getElementById("qrModal");
       const uploadModal = document.getElementById("uploadModal");
       const detailsModal = document.getElementById('detailsModal');
+      const cancelModal = document.getElementById('cancelModal');
       if (event.target === qrModal) closeQR();
       if (event.target === uploadModal) closeUploadModal();
       if (event.target === detailsModal) closeDetails();
+      if (event.target === cancelModal) closeCancelModal();
     };
   </script>
 </body>
