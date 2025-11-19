@@ -61,8 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $startTime = isset($_POST['startTime']) ? $_POST['startTime'] : '';
     $endTime   = isset($_POST['endTime']) ? $_POST['endTime'] : '';
     $persons = intval($_POST['persons'] ?? 1);
+    $hours = intval($_POST['hours'] ?? 0);
     $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
-    $price = $persons * 1;
+    $price = (in_array($amenity, ['Basketball Court','Tennis Court'], true)) ? (max(1,$hours) * 150) : ($persons * 1);
     $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL;
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
     $ref_code = isset($_POST['ref_code']) ? $_POST['ref_code'] : (isset($_GET['ref_code']) ? $_GET['ref_code'] : '');
@@ -82,8 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Start time must be before end time.';
     } else if (($sdObj && $edObj) && (($sdObj < new DateTime('today')) || ($edObj < new DateTime('today')))) {
       $errorMsg = 'Selected dates must be today or later.';
-    } else if ($persons < 1) {
+    } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
       $errorMsg = 'Persons must be at least 1.';
+    } else if (($stObj && $etObj) && ((int)$stObj->format('H') < 8 || (int)$etObj->format('H') > 23)) {
+      $errorMsg = 'Time must be between 08:00 and 23:00.';
     } else {
       $visitorFlow = (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'resident');
       if (!$errorMsg) {
@@ -916,18 +919,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
-        <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="400" role="button" tabindex="0">
+        <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150" role="button" tabindex="0">
           <img src="mainpage/basketball.svg" alt="Basketball">
           <div class="info">
-            <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱400 / hour</div></div>
+            <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
             <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
-        <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="450" role="button" tabindex="0">
+        <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150" role="button" tabindex="0">
           <img src="mainpage/tennis.svg" alt="Tennis">
           <div class="info">
-            <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱450 / hour</div></div>
+            <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
             <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
@@ -961,14 +964,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             <p id="startDate">--</p>
             <input type="hidden" name="startDate" id="startDateInput">
             <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
-            <input type="time" name="startTime" id="startTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+            <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+            <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
+            <div class="counter" id="hoursCounter" style="display:none;">
+              <button type="button" onclick="changeHours(-1)">-</button>
+              <span id="hoursCount">1</span>
+              <button type="button" onclick="changeHours(1)">+</button>
+            </div>
+            <input type="hidden" name="hours" id="hoursInput" value="1">
           </div>
           <div class="res-item" id="endDateGroup">
             <div class="res-label"><small>End Date</small></div>
             <p id="endDate">--</p>
             <input type="hidden" name="endDate" id="endDateInput">
+            <div id="dateError" class="time-error" style="display:none;"></div>
           <div class="res-label" style="margin-top:8px;"><small>End Time</small></div>
-          <input type="time" name="endTime" id="endTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+          <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
           <div id="timeError" class="time-error" style="display:none;"></div>
         </div>
         <div class="res-item">
@@ -981,10 +992,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <small id="price">$1</small>
           <input type="hidden" name="persons" id="personsInput" value="1">
         </div>
-        <input type="hidden" name="downpayment" id="downpaymentInput" value="0.00">
-        <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px;">
+        <div class="res-item">
+          <div class="res-label"><small>Downpayment</small></div>
+          <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;" placeholder="Enter downpayment amount">
+          <small class="dp-info" style="display:block;color:#666;margin-top:6px;">A partial downpayment is required to reserve your slot. You can pay the partial amount online now and settle the remaining balance onsite.</small>
+        </div>
+        <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
           <?php $refParam = isset($_GET['ref_code']) ? $_GET['ref_code'] : ''; ?>
-          <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Submit</button>
+          <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
           <?php if (!empty($refParam)) { ?><span class="ref-inline">Status Code: <?php echo htmlspecialchars($refParam); ?></span><?php } ?>
           <?php if (!empty($refParam) && !$canSubmit) { ?>
             <div class="field-warning" style="margin-top:8px;">
@@ -1116,6 +1132,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     document.getElementById('endDateInput').value='';
     document.querySelectorAll('.schedule-panel').forEach(p=>p.style.display='none');
     loadBookedDates();
+    configureFieldsForAmenity(selectedAmenity);
   }
 
   document.querySelectorAll('.amenity-card').forEach(function(card){
@@ -1150,7 +1167,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     count=Math.max(1,count+val);
     document.getElementById('personCount').textContent=count;
     document.getElementById('personsInput').value=count;
-    document.getElementById('price').textContent="$"+count;
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+  }
+  function changeHours(val){
+    const hoursSpan=document.getElementById('hoursCount');
+    if(!hoursSpan) return;
+    let hrs=parseInt(hoursSpan.textContent||'1');
+    hrs=Math.max(1,hrs+val);
+    hoursSpan.textContent=hrs;
+    const hid=document.getElementById('hoursInput'); if(hid){ hid.value=hrs; }
+    computeEndTimeFromHours();
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
   }
 
   async function fetchBookedTimesFor(date){
@@ -1159,6 +1188,79 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const data=await res.json();
       return data.times||[];
     }catch(_){return []}
+  }
+
+  function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court'; }
+  function isPersonBasedAmenity(amen){ return amen==='Pool' || amen==='Clubhouse'; }
+  function updateDisplayedPrice(){
+    const amen=document.getElementById('amenityField').value;
+    const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+    let price=0;
+    if(isHourBasedAmenity(amen)) price = Math.max(1,hours) * 150;
+    else price = Math.max(1,persons) * 1;
+    const el=document.getElementById('price'); if(el){ el.textContent = '₱' + price; }
+  }
+  function updateDownpaymentSuggestion(){
+    const el=document.getElementById('price');
+    const dp=document.getElementById('downpaymentInput');
+    if(!dp) return;
+    let price=0;
+    if(el){ const t=el.textContent.replace(/[^0-9.]/g,''); price = parseFloat(t||'0'); }
+    if(!isNaN(price) && price>0){ dp.value = (price*0.5).toFixed(2); }
+  }
+
+  function configureFieldsForAmenity(amen){
+    const personsWrap=document.getElementById('personsInput')?.closest('.res-item');
+    const hoursLabel=document.getElementById('hoursLabel');
+    const hoursInput=document.getElementById('hoursInput');
+    const hoursCounter=document.getElementById('hoursCounter');
+    const endTimeInput=document.getElementById('endTimeInput');
+    const startTimeInput=document.getElementById('startTimeInput');
+    if(isHourBasedAmenity(amen)){
+      if(personsWrap){ personsWrap.style.display='none'; }
+      if(hoursLabel){ hoursLabel.style.display='block'; }
+      if(hoursCounter){ hoursCounter.style.display='block'; }
+      if(hoursInput){ if(!hoursInput.value) hoursInput.value=1; }
+      if(endTimeInput){ endTimeInput.readOnly=true; }
+      if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
+      updateDisplayedPrice();
+      updateDownpaymentSuggestion();
+    } else {
+      if(personsWrap){ personsWrap.style.display='block'; }
+      if(hoursLabel){ hoursLabel.style.display='none'; }
+      if(hoursCounter){ hoursCounter.style.display='none'; }
+      if(endTimeInput){ endTimeInput.readOnly=false; }
+      updateDisplayedPrice();
+      updateDownpaymentSuggestion();
+    }
+  }
+
+  function clampToRange(timeStr){
+    if(!timeStr) return '';
+    const [h,m]=(timeStr||'').split(':');
+    let hh=parseInt(h||'0',10); let mm=parseInt(m||'0',10);
+    if(hh<8){ hh=8; mm=0; }
+    if(hh>23){ hh=23; mm=0; }
+    return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }
+
+  function computeEndTimeFromHours(){
+    const amen=document.getElementById('amenityField').value;
+    if(!isHourBasedAmenity(amen)) return;
+    const st=document.getElementById('startTimeInput').value;
+    const hrs=parseInt(document.getElementById('hoursInput').value||'0',10);
+    if(!st||!hrs||hrs<1) return;
+    const [sh,sm]=(clampToRange(st)||'').split(':');
+    let h=parseInt(sh||'0',10), m=parseInt(sm||'0',10);
+    let endH=h+hrs; let endM=m;
+    if(endH>23){ endH=23; endM=0; }
+    const et=`${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+    document.getElementById('startTimeInput').value = clampToRange(st);
+    document.getElementById('endTimeInput').value = et;
+    checkTimeAvailability();
+    updateActionStates();
+    updateDisplayedPrice();
   }
 
   function computeAvailability(){
@@ -1193,9 +1295,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const [sh,sm]=st.split(':'), [eh,em]=et.split(':');
       const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
       const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
-      if(eMin<=sMin){
+      if(eMin<=sMin || parseInt(sh,10)<8 || parseInt(eh,10)>23){
         pill.textContent='Invalid time'; pill.className='status-pill unavailable';
-        const te=document.getElementById('timeError'); if(te){ te.style.display='block'; te.textContent='End time must be after start time (24-hour).'; }
+        const te=document.getElementById('timeError'); if(te){ te.style.display='block'; te.textContent='Time must be between 08:00 and 23:00 and end after start.'; }
         return;
       }
     }
@@ -1210,6 +1312,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }
   }
 
+  function isDateBooked(ds){ try { return bookedDates && bookedDates.has(ds); } catch(e){ return false; } }
+  function showDateError(msg){ const el=document.getElementById('dateError'); if(el){ el.style.display = msg? 'block':'none'; el.textContent = msg || ''; } }
+  function validateDates(){
+    const s=document.getElementById('startDateInput').value;
+    const e=document.getElementById('endDateInput').value;
+    if(!s||!e){ showDateError(''); return false; }
+    if(e < s){ showDateError('End date cannot be earlier than start date.'); return false; }
+    if(s > e){ showDateError('Start date cannot be later than end date.'); return false; }
+    let hasBooked=false; try {
+      const sd=new Date(s), ed=new Date(e);
+      for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if(isDateBooked(ds)){ hasBooked=true; break; }
+      }
+    } catch(err){}
+    if(hasBooked){ showDateError('Selected dates include an already-booked day.'); return false; }
+    showDateError(''); return true;
+  }
+
   document.getElementById("prevMonth").onclick=()=>{currentMonth=currentMonth===0?11:currentMonth-1;currentYear=currentMonth===11?currentYear-1:currentYear;renderCalendar(currentMonth,currentYear)};
   document.getElementById("nextMonth").onclick=()=>{currentMonth=currentMonth===11?0:currentMonth+1;currentYear=currentMonth===0?currentYear+1:currentYear;renderCalendar(currentMonth,currentYear)};
   loadBookedDates();
@@ -1222,7 +1343,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     });
   });
 
-  ['startTimeInput','endTimeInput'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',checkTimeAvailability)}});
+  ['startTimeInput','endTimeInput'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',function(){ if(isHourBasedAmenity(document.getElementById('amenityField').value) && id==='startTimeInput'){ computeEndTimeFromHours(); } else { checkTimeAvailability(); } })}});
+  const hoursEl=document.getElementById('hoursInput'); if(hoursEl){ hoursEl.addEventListener('input',function(){ computeEndTimeFromHours(); updateDisplayedPrice(); updateDownpaymentSuggestion(); }); }
   const formEl=document.querySelector('form');
   if(formEl){
     formEl.addEventListener('submit', async function(e){
@@ -1233,6 +1355,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const et=document.getElementById('endTimeInput').value;
       const dpVal=document.getElementById('downpaymentInput')?document.getElementById('downpaymentInput').value:'';
       const persons=parseInt(document.getElementById('personsInput').value||'0');
+      const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
       let valid=true;
       function setWarn(id,msg){
         const container=(id==='startDateInput')?document.getElementById('startDateGroup'):(id==='endDateInput')?document.getElementById('endDateGroup'):(id==='amenityField')?document.querySelector('.amenities-list'):document.getElementById(id)?.closest('.res-item');
@@ -1251,6 +1374,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(!eD){ setWarn('endDateInput','End date is required.'); }
       if(!st){ setWarn('startTimeInput','Start time is required.'); }
       if(!et){ setWarn('endTimeInput','End time is required.'); }
+      if(isHourBasedAmenity(amen)){
+        if(hours<1){ setWarn('hoursInput','Number of hours must be at least 1.'); }
+      }
       if(s && eD && s===eD && st && et){
         const [sh,sm]=(st||'').split(':');
         const [eh,em]=(et||'').split(':');
@@ -1258,8 +1384,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
         if(eMin<=sMin){ setWarn('endTimeInput','End time must be after start time (24-hour).'); }
       }
-      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setWarn('downpaymentInput','Downpayment cannot be negative.'); } } else { /* optional: allow empty or 0 */ }
-      if(persons<1){ setWarn('personsInput','Persons must be at least 1.'); }
+      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setWarn('downpaymentInput','Downpayment cannot be negative.'); } }
+      const priceEl=document.getElementById('price');
+      if(priceEl && dpVal!=='' && !isNaN(Number(dpVal))){ const price=parseFloat(priceEl.textContent.replace(/[^0-9.]/g,''))||0; if(Number(dpVal)>price){ setWarn('downpaymentInput','Downpayment cannot exceed total price.'); } }
+      if(isPersonBasedAmenity(amen) && persons<1){ setWarn('personsInput','Persons must be at least 1.'); }
       if(!valid){ e.preventDefault(); return false; }
       if(s && eD && s===eD && st && et){
         const times=await fetchBookedTimesFor(s);
@@ -1279,13 +1407,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const et=document.getElementById('endTimeInput').value;
     const amenVal=document.getElementById('amenityField').value;
     const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     const submitBtn=document.getElementById('submitBtn');
     const allowed=(document.getElementById('submitAllowed')?.value==='1');
-    let ready = allowed && !!amenVal && !!s && !!eD && !!st && !!et && persons>=1;
+    const datesOk = validateDates();
+    let ready = allowed && !!amenVal && !!s && !!eD && !!st && !!et && datesOk && (isHourBasedAmenity(amenVal) ? hours>=1 : persons>=1);
     if(submitBtn){ if(ready){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
+    const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = ready ? 'flex' : 'none'; }
   }
-  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
-  document.addEventListener('DOMContentLoaded',updateActionStates);
+  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
+  document.addEventListener('DOMContentLoaded',function(){ updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); });
+  function goBack(){ if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}
 </script>

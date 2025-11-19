@@ -117,7 +117,7 @@ html { scroll-behavior: smooth; }
   align-items: center;
   padding: 40px 5%;
   min-height: 90vh;
-  background: url("mainpage/background.svg") center/cover no-repeat;
+  background: url("mainpage/new mainpage bg.jpg") center/cover no-repeat, url("mainpage/new mainpage bg.jpg") center/cover no-repeat;
   z-index: 1;
 }
 
@@ -241,12 +241,12 @@ html { scroll-behavior: smooth; }
 .section-divider { width: 54px; height: 3px; background: #e5ddc6; border-radius: 2px; margin: 8px 0 24px; opacity: 0.9; }
 .section-body { max-width: 960px; color: #eee; line-height: 1.6; }
 
-.amenities-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
-.amenity-card { background: #1b1816; border: 1px solid rgba(229,221,198,0.2); border-radius: 12px; padding: 16px; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.amenity-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
-.amenity-card img { width: 100%; max-height: 140px; object-fit: contain; display: block; margin: 6px auto 12px; }
-.amenity-card .title { font-weight: 600; font-size: 1.05rem; margin: 0 0 6px; }
-.amenity-card .desc { color: #ccc; font-size: 0.95rem; margin: 0; }
+.amenities-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 22px; }
+.amenity-card { background: #fff; color: #222; padding: 24px; border-radius: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.12); border: 1px solid #e9ecef; transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.amenity-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(0,0,0,0.18); border-color: #dfe4ea; }
+.amenity-card img { width: 100%; max-height: 240px; object-fit: contain; display: block; margin: 8px auto 16px; }
+.amenity-card .title { font-weight: 700; font-size: 1.25rem; margin: 0 0 8px; color: #23412e; text-align: center; }
+.amenity-card .desc { color: #555; font-size: 1rem; margin: 0; text-align: center; line-height: 1.5; }
 
 /* Entry Pass Form */
 .entry-form {
@@ -366,12 +366,7 @@ html { scroll-behavior: smooth; }
   }
 }
 
-@media (max-width: 992px) {
-  .amenities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 560px) {
-  .amenities-grid { grid-template-columns: 1fr; }
-}
+@media (max-width: 768px) { .amenities-grid { grid-template-columns: 1fr; } }
 
 /* Fixed instructions box at bottom-left of the viewport */
 .bottom-instructions {

@@ -29,6 +29,8 @@ function ensureEntryPassesTable($con) {
 
 ensureEntryPassesTable($con);
 
+$error = '';
+
 // Load resident mini profile data (for dropdown)
 $residentName = '';
 $residentHouse = '';
@@ -52,6 +54,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['u
 // No longer storing downpayment on entry_passes; we link it to reservations via ref_code
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+  $error = '';
+  $formErrors = [];
   // Collect form data
   $first = trim($_POST['first_name'] ?? '');
   $middle = trim($_POST['middle_name'] ?? '');
@@ -63,35 +67,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $birthdate = $_POST['birthdate'] ?? '';
   $contact = trim($_POST['contact'] ?? '');
 
-  // Handle valid ID upload
+  // Basic validation mirroring client rules
+  if ($first === '' || preg_match('/\d/', $first)) { $formErrors[] = 'Please provide a valid First Name.'; }
+  if ($last === '' || preg_match('/\d/', $last)) { $formErrors[] = 'Please provide a valid Last Name.'; }
+  if ($address === '') { $formErrors[] = 'Address is required.'; }
+  if ($sex === '') { $formErrors[] = 'Sex is required.'; }
+  if ($birthdate === '') { $formErrors[] = 'Birthdate is required.'; }
+  if ($contact === '' || (!preg_match('/^09\d{9}$/', $contact) && !preg_match('/^\+639\d{9}$/', $contact))) { $formErrors[] = 'Use 09xxxxxxxxx or +639xxxxxxxxx for contact.'; }
+
+  // Handle valid ID upload (REQUIRED)
   $validIdPath = null;
-  if (!empty($_FILES['valid_id']['name'])) {
+  if (!empty($_FILES['valid_id']['name']) && isset($_FILES['valid_id']['tmp_name']) && is_uploaded_file($_FILES['valid_id']['tmp_name'])) {
     $uploadDir = "uploads/";
     if (!is_dir($uploadDir)) mkdir($uploadDir);
     $fileName = time() . "_" . basename($_FILES["valid_id"]["name"]);
     $targetFile = $uploadDir . $fileName;
     if (move_uploaded_file($_FILES["valid_id"]["tmp_name"], $targetFile)) {
       $validIdPath = $targetFile;
+    } else {
+      $formErrors[] = 'Failed to upload ID. Please try again.';
     }
+  } else {
+    $formErrors[] = 'Valid ID upload is required.';
   }
 
-  // Insert into entry_passes
-  $stmt = $con->prepare("INSERT INTO entry_passes (full_name, middle_name, last_name, sex, birthdate, contact, email, address, valid_id_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  $stmt->bind_param("sssssssss", $first, $middle, $last, $sex, $birthdate, $contact, $email, $address, $validIdPath);
-  if ($stmt->execute()) {
-    $entryPassId = $stmt->insert_id;
-
-    // Store minimal info in session (optional)
-    $_SESSION['entry_pass_id'] = $entryPassId;
-    $_SESSION['entry_pass_name'] = $first . ' ' . $last;
-
-    // Redirect to reservation page; downpayment handled on reserve page
-    header("Location: reserve.php?entry_pass_id=" . $entryPassId);
-    exit;
+  if (empty($formErrors)) {
+    // Insert into entry_passes ONLY when complete and validated
+    $stmt = $con->prepare("INSERT INTO entry_passes (full_name, middle_name, last_name, sex, birthdate, contact, email, address, valid_id_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssssssss", $first, $middle, $last, $sex, $birthdate, $contact, $email, $address, $validIdPath);
+    if ($stmt->execute()) {
+      $entryPassId = $stmt->insert_id;
+      $_SESSION['entry_pass_id'] = $entryPassId;
+      $_SESSION['entry_pass_name'] = $first . ' ' . $last;
+      header("Location: reserve.php?entry_pass_id=" . $entryPassId);
+      exit;
+    } else {
+      $error = 'Failed to save entry pass. Please try again.';
+    }
+    $stmt->close();
   } else {
-    // Fallback: keep previous behavior
-    header("Location: reserve.php");
-    exit;
+    // Aggregate errors for display
+    $error = implode(' ', $formErrors);
   }
 }
 ?>
@@ -259,19 +275,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .user-type-dropdown {
       position: relative;
       display: inline-block;
+      min-width: 280px;
     }
 
     .dropdown-btn {
       background: #23412e;
       color: #fff;
-      padding: 8px 16px;
+      padding: 14px 22px;
       border: none;
-      border-radius: 20px;
+      border-radius: 28px;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 0.9rem;
+      gap: 12px;
+      font-size: 1.1rem;
       font-weight: 500;
       transition: all 0.2s ease;
       width: 100%;
@@ -288,7 +305,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     .dropdown-arrow {
-      font-size: 12px;
+      font-size: 16px;
       transition: transform 0.2s ease;
       user-select: none;
       pointer-events: none;
@@ -379,7 +396,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <nav class="page-nav">
       <a href="#home">Home</a>
       <a href="#about-us">About Us</a>
-      <a href="#facilities">Facilities/Amenities</a>
+      <a href="#facilities">Amenities</a>
       <a href="#about-system">About the System</a>
     </nav>
 
@@ -474,7 +491,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   </section>
 
   <section id="facilities" class="section">
-    <h2 class="section-title">Facilities/Amenities</h2>
+    <h2 class="section-title">Amenities</h2>
     <div class="section-divider"></div>
     <div class="amenities-grid">
       <div class="amenity-card">

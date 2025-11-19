@@ -42,8 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $errorMsg = 'Please select a start and end date.';
   } else if (!$startTime || !$endTime) {
     $errorMsg = 'Please select a start and end time.';
-  } else if ($persons < 1) {
+  } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
     $errorMsg = 'Persons must be at least 1.';
+  } else if ((int)date('H', strtotime($startTime)) < 8 || (int)date('H', strtotime($endTime)) > 23) {
+    $errorMsg = 'Time must be between 08:00 and 23:00.';
   } else if ($downpayment === null || $downpayment < 0) {
     $errorMsg = 'Please enter a valid downpayment amount.';
   } else {
@@ -96,61 +98,85 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   <link rel="icon" type="image/png" href="mainpage/logo.svg">
 
   <style>
-    /* Based on main reserve.css styling */
-    body{margin:0;font-family:'Poppins',sans-serif;background:#111;color:#fff;animation:fadeIn .6s ease-in-out;}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
-    .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:#2b2623;position:sticky;top:0;z-index:1000;}
-    .logo{display:flex;align-items:center;gap:12px;}
-    .logo img{width:42px;}
-    .brand-text h1{margin:0;font-size:1.3rem;font-weight:600;color:#f4f4f4;}
-    .brand-text p{margin:0;font-size:.85rem;color:#aaa;}
-    .nav-actions{display:flex;align-items:center;gap:14px;}
-    .btn-nav{padding:7px 18px;border-radius:20px;font-size:.9rem;font-weight:500;text-decoration:none;display:inline-block;transition:.2s;}
-    .btn-login{background:#23412e;color:#fff;}
-    .btn-register{background:#e5ddc6;color:#222;}
-    .btn-nav:hover{transform:scale(1.05);opacity:.9;}
-    .profile-icon{width:38px;height:38px;border-radius:50%;object-fit:cover;cursor:pointer;}
-    .hero{display:flex;justify-content:center;align-items:flex-start;padding:50px 6%;gap:50px;flex-wrap:wrap;}
-    .calendar{background:#fff;color:#222;padding:20px;border-radius:16px;width:320px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,.15);flex-shrink:0;}
-    .calendar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-    .calendar-header h3{font-size:1.2rem;margin:0;}
-    .calendar-header button{background:#23412e;color:#fff;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:1.2rem;transition:.2s;}
-    .calendar-header button:hover{background:#345c40;}
-    .calendar table{width:100%;border-collapse:collapse;}
-    .calendar th,.calendar td{width:14%;padding:10px;font-size:.95rem;text-align:center;}
-    .calendar td{cursor:pointer;border-radius:8px;transition:background .2s;}
-    .calendar td:hover:not(.disabled){background:#eee;}
-    .calendar td.active{background:#23412e;color:#fff;font-weight:600;}
-    .calendar td.today{border:2px solid #23412e;border-radius:8px;font-weight:600;}
-    .calendar td.disabled{color:#999;cursor:not-allowed;background:#f7f7f7;}
-    .hero-text{max-width:520px;}
-    .hero-text h1{font-size:2.6rem;font-weight:700;margin-bottom:16px;line-height:1.2;}
-    .hero-text p{font-size:1rem;line-height:1.6;margin-bottom:24px;color:#ddd;}
-    .btn-main{background:#e5ddc6;color:#222;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:600;transition:.2s;display:inline-block;}
-    .btn-main:hover{transform:scale(1.05);opacity:.9;}
-    .amenities-tabs{display:flex;justify-content:center;gap:18px;margin:40px 0 25px;flex-wrap:wrap;}
-    .amenity-btn{background:#e5ddc6;color:#222;border:none;padding:12px 26px;border-radius:12px;font-weight:600;cursor:pointer;transition:.2s;}
-    .amenity-btn.active{background:#23412e;color:#fff;}
-    .amenity-btn:hover{transform:translateY(-2px);}
-    .amenity-display{position:relative;max-width:960px;margin:auto;border-radius:20px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,.3);}
-    .amenity-display img{width:100%;height:440px;object-fit:cover;display:block;}
-    .amenity-info{position:absolute;bottom:110px;left:24px;color:white;}
-    .amenity-info h2{font-size:2.2rem;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.5);}
-    .reservation-card{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.95);color:#222;padding:18px;border-radius:12px;position:absolute;bottom:20px;left:20px;right:20px;box-shadow:0 3px 10px rgba(0,0,0,.2);flex-wrap:wrap;}
-    .res-item{flex:1;text-align:center;}
-    .res-label{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:6px;}
-    .icon img{width:18px;height:18px;}
-    .reservation-card p{margin:0;font-weight:600;}
-    .btn-submit{background:#23412e;color:#fff;border:none;padding:10px 22px;border-radius:10px;cursor:pointer;font-weight:600;}
-    .counter{display:flex;align-items:center;gap:6px;justify-content:center;}
-    .counter button{background:#23412e;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:1rem;font-weight:600;}
-    .counter span{font-weight:600;min-width:30px;display:inline-block;text-align:center;}
-    .modal{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.6);align-items:center;justify-content:center;}
-    .modal-content{background:#fff;color:#222;padding:30px;border-radius:14px;width:90%;max-width:450px;text-align:center;animation:fadeIn .5s ease-in-out;}
-    .modal-content h2{margin:0 0 12px;font-weight:700;color:#23412e;}
-    .ref-code{font-size:1.4rem;font-weight:700;background:#f3f3f3;padding:10px 16px;border-radius:10px;display:inline-block;margin-bottom:18px;}
-    .close-btn{background:#23412e;color:#fff;border:none;padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:600;}
-    .btn-secondary{background:#e5ddc6;color:#222;border:none;padding:10px 22px;border-radius:10px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{margin:0;font-family:'Poppins',sans-serif;background:linear-gradient(135deg,#30522bff 0%,#30522bff 100%);color:#fff;animation:fadeIn .6s ease-in-out}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,.95);backdrop-filter:blur(10px);position:sticky;top:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,.1)}
+    .logo{display:flex;align-items:center;gap:12px}
+    .logo img{width:42px;height:42px}
+    .brand-text h1{margin:0;font-size:1.3rem;font-weight:600;color:#f4f4f4}
+    .brand-text p{margin:0;font-size:.85rem;color:#aaa}
+    .hero{display:flex;justify-content:center;align-items:flex-start;padding:30px 6%;min-height:calc(100vh - 80px)}
+    .layout{display:grid;gap:32px;align-items:start;width:100%;max-width:1200px;grid-template-columns:1fr}
+    .left-panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+    .right-panel{min-width:0}
+    .calendar{background:rgba(255,255,255,.95);color:#222;padding:20px;border-radius:16px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1)}
+    .calendar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .calendar-header h3{font-size:1.2rem;margin:0;font-weight:600}
+    .calendar-header button{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:1.2rem;transition:all .3s ease}
+    .calendar-header button:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,.4)}
+    .calendar table{width:100%;border-collapse:collapse}
+    .calendar th,.calendar td{width:14%;padding:10px;font-size:.95rem;text-align:center}
+    .calendar th{font-weight:600;color:#666}
+    .calendar td{cursor:pointer;border-radius:8px;transition:all .3s ease;position:relative}
+    .calendar td:hover:not(.disabled){background:#e8f5e8;transform:scale(1.05)}
+    .calendar td.active{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(35,65,46,.4)}
+    .calendar td.today{border:2px solid #23412e;border-radius:8px;font-weight:600;background:rgba(35,65,46,.1)}
+    .calendar td.disabled{color:#999;cursor:not-allowed;background:#f7f7f7;opacity:.6}
+    .section-header{display:flex;justify-content:space-between;align-items:flex-end;margin:0 0 10px}
+    .section-header h2{font-size:1.4rem;font-weight:700}
+    .section-header p{color:#cfcfcf}
+    .amenity-desc{background:#fff;color:#222;padding:18px;border-radius:14px;min-height:120px;box-shadow:0 10px 24px rgba(0,0,0,.12);border:2px solid #23412e}
+    .amenity-desc .media{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+    .amenity-desc .desc-img{width:64px;height:64px;border-radius:10px;object-fit:cover;display:none}
+    .amenity-desc h3{margin:0 0 6px;font-weight:700;color:#23412e;font-size:1.14rem}
+    .amenity-desc p{margin:0;color:#555;line-height:1.5;font-size:.95rem}
+    .amenities-list{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px}
+    .amenity-card{display:flex;gap:16px;align-items:center;background:#fff;color:#222;padding:18px;border-radius:14px;box-shadow:0 10px 24px rgba(0,0,0,.12);border:1px solid #e9ecef;cursor:pointer;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease,background .25s ease;min-height:160px;position:relative;pointer-events:auto}
+    .amenity-card:hover{transform:translateY(-2px);box-shadow:0 14px 26px rgba(0,0,0,.18);border-color:#dfe4ea}
+    .amenity-card.selected{border:3px solid #000;background:#e8f5ee;box-shadow:0 0 0 4px rgba(0,0,0,.12),0 10px 28px rgba(60,141,109,.18)}
+    .amenity-card img{width:160px;height:120px;object-fit:cover;border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,.25)}
+    .amenity-card .info{flex:1;color:#222;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .amenity-card .title-block{display:flex;flex-direction:column;gap:4px}
+    .amenity-card .price{color:#3c8d6d;font-weight:700}
+    .amenity-card .info .name{font-weight:700;font-size:1.15rem;margin:0;line-height:1.2}
+    .amenity-card .info .meta{color:#666;font-size:.9rem;display:flex;flex-wrap:wrap;gap:10px;background:#f9f9f9;border:1px solid #e9ecef;padding:8px 10px;border-radius:12px}
+    .status-pill{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:10px;font-weight:600;font-size:.9rem;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+    .status-pill.available{background:#23412e;color:#fff}
+    .status-pill.unavailable{background:#8a2a2a;color:#fff}
+    .status-pill.neutral{background:#e5ddc6;color:#23412e;border:1px solid #d7cfb0}
+    .btn-main.small{display:inline-flex;align-items:center;justify-content:center;height:38px;min-width:140px;padding:0 14px;border-radius:10px;font-size:.9rem;margin-left:0;box-shadow:0 4px 12px rgba(35,65,46,.35)}
+    .schedule-panel{margin-top:8px;background:#f7f7f7;border:1px solid #e9ecef;border-radius:10px;padding:10px;display:none}
+    .reservation-card{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));align-items:start;background:rgba(255,255,255,.95);color:#222;padding:20px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);gap:18px}
+    .reservation-card .calendar{grid-column:1/-1;margin-bottom:6px}
+    .res-item{flex:1;text-align:center;min-width:120px}
+    .res-label{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:6px;font-size:.85rem;color:#666;font-weight:500}
+    .reservation-card p{margin:0;font-weight:600;color:#333}
+    .btn-submit{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;border:none;padding:12px 24px;border-radius:10px;cursor:pointer;font-weight:600;font-size:1rem;transition:all .3s ease;box-shadow:0 4px 12px rgba(35,65,46,.4)}
+    .btn-submit:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(35,65,46,.5)}
+    .counter{display:flex;align-items:center;gap:6px;justify-content:center}
+    .counter button{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:1rem;font-weight:600;transition:all .3s ease}
+    .counter button:hover{transform:scale(1.1)}
+    .counter span{font-weight:600;min-width:30px;display:inline-block;text-align:center;font-size:1.1rem}
+    input[type="time"]{width:100%;padding:8px;border:2px solid #e0e0e0;border-radius:8px;font-size:.9rem;transition:all .3s ease;background:#fff}
+    input[type="time"]:focus{outline:none;border-color:#23412e;box-shadow:0 0 0 3px rgba(35,65,46,.1)}
+    .modal{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);align-items:center;justify-content:center}
+    .modal-content{background:rgba(255,255,255,.95);color:#222;padding:30px;border-radius:14px;width:90%;max-width:450px;text-align:center;animation:fadeIn .5s ease-in-out;box-shadow:0 20px 60px rgba(0,0,0,.3);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1)}
+    .modal-content h2{margin:0 0 12px;font-weight:700;color:#23412e}
+    .ref-code{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,#f3f3f3 0%,#e8e8e8 100%);padding:10px 16px;border-radius:10px;display:inline-block;margin-bottom:18px;color:#23412e;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    .close-btn{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;border:none;padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:600;transition:all .3s ease}
+    .close-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,.4)}
+    .btn-secondary{background:linear-gradient(135deg,#e5ddc6 0%,#d4cdb8 100%);color:#222;border:none;padding:10px 22px;border-radius:10px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-block;transition:all .3s ease}
+    .btn-secondary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+    .alert-error{background:#8a2a2a;color:#fff;padding:10px 12px;border-radius:10px;margin:10px 0;border:1px solid rgba(0,0,0,.2)}
+    @media (max-width:768px){.layout{grid-template-columns:1fr}.left-panel,.right-panel{width:100%}.reservation-card{flex-direction:column;gap:20px}.res-item{width:100%}.hero{padding:20px 4%}.amenities-list{grid-template-columns:1fr}.amenity-card img{width:96px;height:72px;border-radius:10px}.amenity-card .info{flex-direction:column;align-items:flex-start;gap:8px}.amenity-card .info .meta{width:100%;justify-content:flex-start}}
+    @media (min-width:769px) and (max-width:1023px){.layout{grid-template-columns:1fr}.amenities-list{grid-template-columns:1fr}}
+    @media (min-width:1024px){.layout{grid-template-columns:1fr}.amenities-list{grid-template-columns:repeat(2,minmax(360px,1fr))}.amenity-card img{width:180px;height:120px}}
+    @media (min-width:1440px){.layout{grid-template-columns:1fr}}
+    .left-panel:has(.amenity-card.selected[data-key="pool"]) .amenity-desc .desc-img[data-key="pool"]{display:block}
+    .left-panel:has(.amenity-card.selected[data-key="clubhouse"]) .amenity-desc .desc-img[data-key="clubhouse"]{display:block}
+    .left-panel:has(.amenity-card.selected[data-key="basketball"]) .amenity-desc .desc-img[data-key="basketball"]{display:block}
+    .left-panel:has(.amenity-card.selected[data-key="tennis"]) .amenity-desc .desc-img[data-key="tennis"]{display:block}
   </style>
 </head>
 <body>
@@ -165,71 +191,131 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   </div>
 </header>
 
-<section class="hero"></section>
-
-<div id="amenities" class="amenities-tabs">
-  <button class="amenity-btn active" onclick="showAmenity('pool')">Pool</button>
-  <button class="amenity-btn" onclick="showAmenity('clubhouse')">Clubhouse</button>
-  <button class="amenity-btn" onclick="showAmenity('basketball')">Basketball Court</button>
-  <button class="amenity-btn" onclick="showAmenity('tennis')">Tennis Court</button>
-</div>
-
-<form method="POST" style="padding:0 6%;">
-  <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
-    <div style="flex:1; min-width:320px;">
-      <div class="calendar">
-        <div class="calendar-header">
-          <button id="prevMonth">&lt;</button>
-          <h3 id="monthAndYear"></h3>
-          <button id="nextMonth">&gt;</button>
+<section class="hero">
+  <div class="layout">
+    <div class="left-panel">
+      <div class="section-header"><h2>Amenities</h2><p>Select an amenity</p></div>
+      <div class="amenity-desc">
+        <div class="media">
+          <img class="desc-img" data-key="pool" src="mainpage/pool.svg" alt="Pool">
+          <img class="desc-img" data-key="clubhouse" src="mainpage/clubhouse.svg" alt="Clubhouse">
+          <img class="desc-img" data-key="basketball" src="mainpage/basketball.svg" alt="Basketball Court">
+          <img class="desc-img" data-key="tennis" src="mainpage/tennis.svg" alt="Tennis Court">
+          <div>
+            <h3 id="amenityDescTitle">Reserve Amenity</h3>
+            <p id="amenityDescText">Select an amenity to see its details here.</p>
+          </div>
         </div>
-        <table>
-          <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
-          <tbody id="calendar-body"></tbody>
-        </table>
+      </div>
+      <div class="amenities-list" id="amenitiesList">
+        <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="500" role="button" tabindex="0">
+          <img src="mainpage/pool.svg" alt="Pool">
+          <div class="info">
+            <div class="title-block"><div class="name">Community Pool</div><div class="price">₱500 / hour</div></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+          </div>
+          <div class="schedule-panel" data-schedule-panel></div>
+        </div>
+        <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="700" role="button" tabindex="0">
+          <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+          <div class="info">
+            <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱700 / hour</div></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+          </div>
+          <div class="schedule-panel" data-schedule-panel></div>
+        </div>
+        <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150" role="button" tabindex="0">
+          <img src="mainpage/basketball.svg" alt="Basketball">
+          <div class="info">
+            <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+          </div>
+          <div class="schedule-panel" data-schedule-panel></div>
+        </div>
+        <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150" role="button" tabindex="0">
+          <img src="mainpage/tennis.svg" alt="Tennis">
+          <div class="info">
+            <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+          </div>
+          <div class="schedule-panel" data-schedule-panel></div>
+        </div>
       </div>
     </div>
 
-    <div class="amenity-display" style="flex:1; min-width:360px; position:relative;">
-      <img id="amenityImage" src="mainpage/pool.svg" alt="Amenity Image">
-      <div class="amenity-info"><h2 id="amenityTitle">Community Pool</h2></div>
-      <div class="reservation-card" style="position:static; box-shadow:none; margin-top:12px;">
-        <input type="hidden" name="amenity" id="amenityField" value="Pool">
-        <div class="res-item">
-          <div class="res-label"><small>Start Date</small></div>
-          <p id="startDate">--</p>
-          <input type="hidden" name="startDate" id="startDateInput">
-          <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
-          <input type="time" name="startTime" id="startTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
-        </div>
-        <div class="res-item">
-          <div class="res-label"><small>End Date</small></div>
-          <p id="endDate">--</p>
-          <input type="hidden" name="endDate" id="endDateInput">
-          <div class="res-label" style="margin-top:8px;"><small>End Time</small></div>
-          <input type="time" name="endTime" id="endTimeInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
-        </div>
-        <div class="res-item">
-          <div class="res-label"><small>Persons</small></div>
-          <div class="counter">
-            <button type="button" onclick="changePersons(-1)">-</button>
-            <span id="personCount">1</span>
-            <button type="button" onclick="changePersons(1)">+</button>
+    <div class="right-panel">
+      <div class="section-header"><h2>Reservation</h2><p>Select date, time, and persons</p></div>
+      <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
+      <form method="POST">
+        <div class="reservation-card">
+          <div class="calendar" style="width:100%">
+            <div class="calendar-header">
+              <button id="prevMonth">&lt;</button>
+              <h3 id="monthAndYear"></h3>
+              <button id="nextMonth">&gt;</button>
+            </div>
+            <table>
+              <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
+              <tbody id="calendar-body"></tbody>
+            </table>
           </div>
-          <small id="price">$1</small>
-          <input type="hidden" name="persons" id="personsInput" value="1">
+          <input type="hidden" name="amenity" id="amenityField" value="">
+          <div class="res-item" id="startDateGroup">
+            <div class="res-label"><small>Start Date</small></div>
+            <p id="startDate">--</p>
+            <input type="hidden" name="startDate" id="startDateInput">
+            <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
+            <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+            <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
+            <div class="counter" id="hoursCounter" style="display:none;">
+              <button type="button" onclick="changeHours(-1)">-</button>
+              <span id="hoursCount">1</span>
+              <button type="button" onclick="changeHours(1)">+</button>
+            </div>
+            <input type="hidden" name="hours" id="hoursInput" value="1">
+          </div>
+          <div class="res-item" id="endDateGroup">
+            <div class="res-label"><small>End Date</small></div>
+            <p id="endDate">--</p>
+            <input type="hidden" name="endDate" id="endDateInput">
+            <div id="dateError" class="time-error" style="display:none;"></div>
+            <div class="res-label" style="margin-top:8px;"><small>End Time</small></div>
+            <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
+          </div>
+          <div class="res-item" id="personsGroup">
+            <div class="res-label"><small>Persons</small></div>
+            <div class="counter">
+              <button type="button" onclick="changePersons(-1)">-</button>
+              <span id="personCount">1</span>
+              <button type="button" onclick="changePersons(1)">+</button>
+            </div>
+            <small id="price">₱0</small>
+            <input type="hidden" name="persons" id="personsInput" value="1">
+          </div>
+          <div class="res-item">
+            <div class="res-label"><small>Downpayment</small></div>
+            <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;" placeholder="Enter downpayment amount">
+            <small class="dp-info" style="display:block;color:#666;margin-top:6px;">A partial downpayment is required to reserve your slot. You can pay the partial amount online now and settle the remaining balance onsite.</small>
+          </div>
+          <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px;">
+            <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
+            <button id="submitBtn" class="btn-submit" type="submit">Next</button>
+          </div>
         </div>
-        <div class="res-item">
-          <div class="res-label"><small>Downpayment</small></div>
-          <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;" placeholder="Enter downpayment amount">
-        </div>
-        <div class="res-item" style="flex-basis:100%; margin-top:8px;">
-          <button class="btn-submit" type="submit">Submit</button>
-        </div>
-      </div>
+      </form>
     </div>
   </div>
-</form>
+</section>
+
+<div id="hintModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Next Step</h2>
+    <p>Select date here and fill out the form.</p>
+    <div style="text-align:center;margin-top:8px;">
+      <button class="close-btn" onclick="closeHint()">OK</button>
+    </div>
+  </div>
+</div>
 
 <div id="refModal" class="modal" style="<?php echo $generatedCode ? 'display:flex;' : ''; ?>">
   <div class="modal-content">
@@ -248,13 +334,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
 </div>
 
 <script>
-  // Calendar logic (resident)
   const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
   let today=new Date(),currentMonth=today.getMonth(),currentYear=today.getFullYear();
   const monthAndYear=document.getElementById("monthAndYear"),calendarBody=document.getElementById("calendar-body");
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   let selectedStart=null,selectedEnd=null;
   let bookedDates=new Set();
-  let selectedAmenity='Pool';
+  let selectedAmenity=document.getElementById('amenityField').value||'';
+  let hintShown=false;
 
   async function loadBookedDates(){
     try{
@@ -265,13 +352,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
       bookedDates=new Set();
     }
     renderCalendar(currentMonth,currentYear);
+    computeAvailability();
   }
 
   function renderCalendar(month,year){
     calendarBody.innerHTML="";
     let firstDay=(new Date(year,month)).getDay();
     let daysInMonth=32-new Date(year,month,32).getDate();
-    monthAndYear.innerHTML=monthNames[month]+" "+year;
+    monthAndYear.textContent=monthNames[month]+" "+year;
     let date=1;
     for(let i=0;i<6;i++){
       let row=document.createElement("tr");
@@ -281,20 +369,20 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
         else{
           let cell=document.createElement("td");
           cell.textContent=date;
-          let dateString=`${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
-          if(bookedDates.has(dateString)){
-            cell.classList.add('disabled');
-          }
-          cell.addEventListener('click',()=>handleDateClick(cell,dateString));
-          if(date===today.getDate()&&year===today.getFullYear()&&month===today.getMonth()){cell.classList.add('today');}
+          let ds=`${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
+          if(ds < todayStr) { cell.classList.add('disabled'); }
+          else if(bookedDates.has(ds)) { cell.classList.add('disabled'); }
+          cell.addEventListener('click',()=>handleDateClick(cell,ds));
+          if(date===today.getDate()&&year===today.getFullYear()&&month===today.getMonth()) cell.classList.add('today');
           row.appendChild(cell);date++;
         }
-      }calendarBody.appendChild(row);
+      }
+      calendarBody.appendChild(row);
     }
   }
 
   function handleDateClick(cell,dateString){
-    if(cell.classList.contains('disabled')){return;}
+    if(cell.classList.contains('disabled')) return;
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
     if(!selectedStart){
@@ -306,42 +394,240 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
       document.getElementById('endDate').textContent=selectedEnd;
       document.getElementById('endDateInput').value=selectedEnd;
     }
+    computeAvailability();
   }
 
-  document.getElementById("prevMonth").onclick=()=>{currentMonth=currentMonth===0?11:currentMonth-1;currentYear=currentMonth===11?currentYear-1:currentYear;renderCalendar(currentMonth,currentYear);} ;
-  document.getElementById("nextMonth").onclick=()=>{currentMonth=currentMonth===11?0:currentMonth+1;currentYear=currentMonth===0?currentYear+1:currentYear;renderCalendar(currentMonth,currentYear);} ;
-  loadBookedDates();
+  const amenityData={
+    pool:{title:'Community Pool',value:'Pool',img:'mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
+    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
+    basketball:{title:'Basketball Court',value:'Basketball Court',img:'mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
+    tennis:{title:'Tennis Court',value:'Tennis Court',img:'mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
+  };
 
-  // Amenity switcher
-  function showAmenity(type){
-    const title=document.getElementById('amenityTitle');
-    const img=document.getElementById('amenityImage');
-    const field=document.getElementById('amenityField');
-    document.querySelectorAll('.amenity-btn').forEach(btn=>btn.classList.remove('active'));
-    if(type==='clubhouse'){title.textContent='Clubhouse';img.src='mainpage/clubhouse.svg';field.value='Clubhouse';document.querySelector('.amenity-btn:nth-child(2)').classList.add('active');}
-    else if(type==='basketball'){title.textContent='Basketball Court';img.src='mainpage/basketball.svg';field.value='Basketball Court';document.querySelector('.amenity-btn:nth-child(3)').classList.add('active');}
-    else if(type==='tennis'){title.textContent='Tennis Court';img.src='mainpage/tennis.svg';field.value='Tennis Court';document.querySelector('.amenity-btn:nth-child(4)').classList.add('active');}
-    else{title.textContent='Community Pool';img.src='mainpage/pool.svg';field.value='Pool';document.querySelector('.amenity-btn:nth-child(1)').classList.add('active');}
-    selectedAmenity=field.value;
+  function selectAmenityByKey(key){
+    const info=amenityData[key]||amenityData.pool;
+    selectedAmenity=info.value;
+    document.getElementById('amenityField').value=info.value;
+    document.getElementById('amenityDescTitle').textContent=info.title;
+    document.getElementById('amenityDescText').textContent=info.desc;
+    document.querySelectorAll('.amenity-card').forEach(c=>c.classList.remove('selected'));
+    const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
+    if(card) card.classList.add('selected');
+    const rc=document.querySelector('.reservation-card');
+    if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); }
+    if(!hintShown){ hintShown=true; const hm=document.getElementById('hintModal'); if(hm){ hm.style.display='flex'; } }
     selectedStart=null;selectedEnd=null;
     document.getElementById('startDate').textContent='--';
     document.getElementById('endDate').textContent='--';
     document.getElementById('startDateInput').value='';
     document.getElementById('endDateInput').value='';
+    document.querySelectorAll('.schedule-panel').forEach(p=>p.style.display='none');
     loadBookedDates();
+    configureFieldsForAmenity(selectedAmenity);
   }
 
-  // Person counter
+  document.querySelectorAll('.amenity-card').forEach(function(card){
+    card.addEventListener('click',function(){
+      const key=card.getAttribute('data-key');
+      selectAmenityByKey(key);
+    });
+  });
+
+  const amenitiesList=document.getElementById('amenitiesList');
+  if(amenitiesList){
+    amenitiesList.addEventListener('click',function(e){
+      const bookBtn=e.target.closest('button[data-action="book-now"]');
+      if(bookBtn){
+        const card=e.target.closest('.amenity-card');
+        if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
+        return;
+      }
+      const card=e.target.closest('.amenity-card');
+      if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
+    });
+    amenitiesList.addEventListener('keydown',function(e){
+      if(e.key==='Enter'||e.key===' '){
+        const card=e.target.closest('.amenity-card');
+        if(card){ e.preventDefault(); selectAmenityByKey(card.getAttribute('data-key')); }
+      }
+    });
+  }
+
   function changePersons(val){
     let count=parseInt(document.getElementById('personCount').textContent);
     count=Math.max(1,count+val);
     document.getElementById('personCount').textContent=count;
     document.getElementById('personsInput').value=count;
-    document.getElementById('price').textContent="$"+count;
+    updateDisplayedPrice();
+    }
+  function changeHours(val){
+    const hoursSpan=document.getElementById('hoursCount');
+    if(!hoursSpan) return;
+    let hrs=parseInt(hoursSpan.textContent||'1');
+    hrs=Math.max(1,hrs+val);
+    hoursSpan.textContent=hrs;
+    const hid=document.getElementById('hoursInput'); if(hid){ hid.value=hrs; }
+    computeEndTimeFromHours();
+    updateDisplayedPrice();
   }
 
-  // Close popup
-  function closeModal(){document.getElementById("refModal").style.display="none";}
+  function computeAvailability(){
+    const s=document.getElementById('startDateInput').value;
+    const e=document.getElementById('endDateInput').value;
+    const card=document.querySelector('.amenity-card.selected');
+    if(!card) return;
+    const pill=card.querySelector('.status-pill');
+    if(!pill) return;
+    if(!s||!e){pill.textContent='Select dates';pill.className='status-pill neutral';return}
+    const sd=new Date(s),ed=new Date(e);
+    let unavailable=false;
+    for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
+      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if(bookedDates.has(ds)){unavailable=true;break}
+    }
+    if(unavailable){pill.textContent='Unavailable';pill.className='status-pill unavailable'}
+    else{pill.textContent='Available';pill.className='status-pill available'}
+  }
+
+  function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court'; }
+  function isPersonBasedAmenity(amen){ return amen==='Pool' || amen==='Clubhouse'; }
+  function clampToRange(timeStr){
+    if(!timeStr) return '';
+    const [h,m]=(timeStr||'').split(':');
+    let hh=parseInt(h||'0',10); let mm=parseInt(m||'0',10);
+    if(hh<8){ hh=8; mm=0; }
+    if(hh>23){ hh=23; mm=0; }
+    return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }
+function configureFieldsForAmenity(amen){
+  const personsWrap=document.getElementById('personsGroup');
+  const hoursLabel=document.getElementById('hoursLabel');
+  const hoursInput=document.getElementById('hoursInput');
+  const hoursCounter=document.getElementById('hoursCounter');
+  const endTimeInput=document.getElementById('endTimeInput');
+  const startTimeInput=document.getElementById('startTimeInput');
+  if(isHourBasedAmenity(amen)){
+    if(personsWrap){ personsWrap.style.display='none'; }
+    if(hoursLabel){ hoursLabel.style.display='block'; }
+    if(hoursCounter){ hoursCounter.style.display='block'; }
+    if(hoursInput){ if(!hoursInput.value) hoursInput.value=1; }
+    if(endTimeInput){ endTimeInput.readOnly=true; }
+    if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+  } else {
+    if(personsWrap){ personsWrap.style.display='block'; }
+    if(hoursLabel){ hoursLabel.style.display='none'; }
+    if(hoursCounter){ hoursCounter.style.display='none'; }
+    if(endTimeInput){ endTimeInput.readOnly=false; }
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+  }
+}
+  function computeEndTimeFromHours(){
+    const amen=document.getElementById('amenityField').value;
+    if(!isHourBasedAmenity(amen)) return;
+    const st=document.getElementById('startTimeInput').value;
+    const hrs=parseInt(document.getElementById('hoursInput').value||'0',10);
+    if(!st||!hrs||hrs<1) return;
+    const [sh,sm]=(clampToRange(st)||'').split(':');
+    let h=parseInt(sh||'0',10), m=parseInt(sm||'0',10);
+    let endH=h+hrs; let endM=m;
+    if(endH>23){ endH=23; endM=0; }
+    const et=`${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+    document.getElementById('startTimeInput').value = clampToRange(st);
+    document.getElementById('endTimeInput').value = et;
+    updateActionStates();
+    updateDisplayedPrice();
+  }
+
+  document.getElementById("prevMonth").onclick=()=>{currentMonth=currentMonth===0?11:currentMonth-1;currentYear=currentMonth===11?currentYear-1:currentYear;renderCalendar(currentMonth,currentYear)};
+  document.getElementById("nextMonth").onclick=()=>{currentMonth=currentMonth===11?0:currentMonth+1;currentYear=currentMonth===0?currentYear+1:currentYear;renderCalendar(currentMonth,currentYear)};
+  loadBookedDates();
+
+  const formEl=document.querySelector('form');
+  if(formEl){
+    formEl.addEventListener('submit', function(e){
+      const amen=document.getElementById('amenityField').value;
+      const s=document.getElementById('startDateInput').value;
+      const eD=document.getElementById('endDateInput').value;
+      const st=document.getElementById('startTimeInput').value;
+      const et=document.getElementById('endTimeInput').value;
+      const persons=parseInt(document.getElementById('personsInput').value||'0');
+      const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+      const dpVal=document.getElementById('downpaymentInput')?document.getElementById('downpaymentInput').value:'';
+      let valid=true;
+      if(!amen||!s||!eD||!st||!et){ valid=false; }
+      if(isPersonBasedAmenity(amen) && persons<1){ valid=false; }
+      if(isHourBasedAmenity(amen) && hours<1){ valid=false; }
+      if(s && eD && s===eD && st && et){
+        const [sh,sm]=(st||'').split(':');
+        const [eh,em]=(et||'').split(':');
+        const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
+        const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
+        if(eMin<=sMin || parseInt(sh,10)<8 || parseInt(eh,10)>23){ valid=false; }
+      }
+      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ valid=false; } const priceEl=document.getElementById('price'); if(priceEl){ const price=parseFloat(priceEl.textContent.replace(/[^0-9.]/g,''))||0; if(Number(dpVal)>price){ valid=false; } } }
+      if(!valid){ e.preventDefault(); return false; }
+    });
+  }
+  function updateActionStates(){
+    const s=document.getElementById('startDateInput').value;
+    const eD=document.getElementById('endDateInput').value;
+    const st=document.getElementById('startTimeInput').value;
+    const et=document.getElementById('endTimeInput').value;
+    const amenVal=document.getElementById('amenityField').value;
+    const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+    const submitBtn=document.getElementById('submitBtn');
+    const datesOk = validateDates();
+    let ready = !!amenVal && !!s && !!eD && !!st && !!et && datesOk && (isHourBasedAmenity(amenVal) ? hours>=1 : persons>=1);
+    if(submitBtn){ if(ready){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
+    const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = ready ? 'flex' : 'none'; }
+  }
+  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
+  const hoursEl=document.getElementById('hoursInput'); if(hoursEl){ hoursEl.addEventListener('input',function(){ computeEndTimeFromHours(); updateDisplayedPrice(); updateDownpaymentSuggestion(); }); }
+  const stEl=document.getElementById('startTimeInput'); if(stEl){ stEl.addEventListener('input',function(){ if(isHourBasedAmenity(document.getElementById('amenityField').value)){ computeEndTimeFromHours(); } }); }
+  document.addEventListener('DOMContentLoaded',function(){ updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); });
+  function goBack(){ if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
+
+  function isDateBooked(ds){ try { return bookedDates && bookedDates.has(ds); } catch(e){ return false; } }
+  function showDateError(msg){ const el=document.getElementById('dateError'); if(el){ el.style.display = msg? 'block':'none'; el.textContent = msg || ''; } }
+  function validateDates(){
+    const s=document.getElementById('startDateInput').value;
+    const e=document.getElementById('endDateInput').value;
+    if(!s||!e){ showDateError(''); return false; }
+    if(e < s){ showDateError('End date cannot be earlier than start date.'); return false; }
+    if(s > e){ showDateError('Start date cannot be later than end date.'); return false; }
+    let hasBooked=false; try {
+      const sd=new Date(s), ed=new Date(e);
+      for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
+        const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if(isDateBooked(ds)){ hasBooked=true; break; }
+      }
+    } catch(err){}
+    if(hasBooked){ showDateError('Selected dates include an already-booked day.'); return false; }
+    showDateError(''); return true;
+  }
+  function closeModal(){document.getElementById('refModal').style.display='none'}
+  function closeHint(){document.getElementById('hintModal').style.display='none'}
 </script>
 </body>
 </html>
+  function updateDisplayedPrice(){
+    const amen=document.getElementById('amenityField').value;
+    const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+    let price=0;
+    if(isHourBasedAmenity(amen)) price = Math.max(1,hours) * 150;
+    else price = Math.max(1,persons) * 1;
+    const el=document.getElementById('price'); if(el){ el.textContent = '₱' + price; }
+  }
+  function updateDownpaymentSuggestion(){
+    const el=document.getElementById('price');
+    const dp=document.getElementById('downpaymentInput');
+    if(!dp) return;
+    let price=0;
+    if(el){ const t=el.textContent.replace(/[^0-9.]/g,''); price = parseFloat(t||'0'); }
+    if(!isNaN(price) && price>0){ dp.value = (price*0.5).toFixed(2); }
+  }
