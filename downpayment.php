@@ -13,6 +13,8 @@ $pending = isset($_SESSION['pending_reservation']) ? $_SESSION['pending_reservat
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
   $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
+  $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
+  $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
   if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
     $msg = 'Invalid submission.';
   } else if ($ref_code !== '') {
@@ -24,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $persons = isset($pending['persons']) ? intval($pending['persons']) : null;
     $price = isset($pending['price']) ? floatval($pending['price']) : null;
     $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
-    $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id ?: null);
+    $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id_post_form ?: null);
     $uid = ($user_id && $user_id>0) ? $user_id : null;
 
     $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), payment_status='verified' WHERE ref_code = ?");
@@ -33,6 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->close();
     $_SESSION['pending_reservation'] = null;
     $msg = 'Payment confirmed.';
+    // Redirect to main page with a small notification
+    $_SESSION['flash_notice'] = 'Payment confirmed. Please wait for your status code via SMS.';
+    $_SESSION['flash_ref_code'] = $ref_code;
+    header('Location: mainpage.php');
+    exit;
   }
 }
 
@@ -74,6 +81,8 @@ if ($ref_code === '') {
       <form method="POST" style="margin-top:12px;">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($ref_code); ?>">
+        <input type="hidden" name="continue" value="<?php echo htmlspecialchars($continue); ?>">
+        <input type="hidden" name="entry_pass_id" value="<?php echo intval($entry_pass_id); ?>">
         <button type="submit" class="btn">Confirm Payment</button>
       </form>
     </div>

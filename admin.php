@@ -32,9 +32,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
     if ($source !== 'reservation') {
     $stmtGF = $con->prepare("SELECT gf.*, 
                                     u.first_name AS res_first_name, u.middle_name AS res_middle_name, u.last_name AS res_last_name,
-                                    u.email AS res_email, u.phone AS res_phone, u.house_number AS res_house_number
+                                    u.email AS res_email, u.phone AS res_phone, u.house_number AS res_house_number,
+                                    r.payment_status AS r_payment_status, r.price AS r_price,
+                                    r.amenity AS r_amenity, r.start_date AS r_start_date, r.end_date AS r_end_date,
+                                    r.start_time AS r_start_time, r.end_time AS r_end_time, r.persons AS r_persons, r.ref_code AS r_ref_code
                              FROM guest_forms gf
                              LEFT JOIN users u ON gf.resident_user_id = u.id
+                             LEFT JOIN reservations r ON r.ref_code = gf.ref_code
                              WHERE gf.id = ?");
     $stmtGF->bind_param('i', $id);
     $stmtGF->execute();
@@ -54,14 +58,16 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
             'address' => $row['resident_house'],
             'valid_id_path' => $row['valid_id_path'],
             'entry_created' => $row['created_at'],
-            'amenity' => $isAmenity ? ($row['amenity'] ?: 'Amenity Reservation') : 'Guest Entry',
-            'start_date' => $isAmenity ? ($row['start_date'] ?: $row['visit_date']) : $row['visit_date'],
-            'end_date' => $isAmenity ? ($row['end_date'] ?: $row['visit_date']) : $row['visit_date'],
-            'start_time' => $row['start_time'] ?? null,
-            'end_time' => $row['end_time'] ?? null,
-            'persons' => !empty($row['persons']) ? intval($row['persons']) : null,
+            'amenity' => $isAmenity ? ($row['r_amenity'] ?: ($row['amenity'] ?: 'Amenity Reservation')) : 'Guest Entry',
+            'start_date' => $isAmenity ? ($row['r_start_date'] ?: ($row['start_date'] ?: $row['visit_date'])) : $row['visit_date'],
+            'end_date' => $isAmenity ? ($row['r_end_date'] ?: ($row['end_date'] ?: $row['visit_date'])) : $row['visit_date'],
+            'start_time' => ($row['r_start_time'] ?: ($row['start_time'] ?? null)),
+            'end_time' => ($row['r_end_time'] ?: ($row['end_time'] ?? null)),
+            'persons' => isset($row['r_persons']) && $row['r_persons']!==null ? intval($row['r_persons']) : (!empty($row['persons']) ? intval($row['persons']) : null),
             'purpose' => $row['purpose'],
-            'price' => $isAmenity && isset($row['price']) ? floatval($row['price']) : null,
+            'price' => $isAmenity ? (isset($row['price']) ? floatval($row['price']) : (isset($row['r_price']) ? floatval($row['r_price']) : null)) : null,
+            'payment_status' => isset($row['r_payment_status']) ? strtolower($row['r_payment_status']) : null,
+            'ref_code' => ($row['r_ref_code'] ?: $row['ref_code']),
             'approval_status' => $row['approval_status'],
             'approved_by' => $row['approved_by'],
             'approval_date' => $row['approval_date'],
@@ -1825,7 +1831,9 @@ function showVisitorDetails(id, source) {
         if (modalTitleEl) modalTitleEl.textContent = isResident ? 'Resident Request Details' : 'Visitor Request Details';
 
         const residentName = [details.res_first_name || '', details.res_middle_name || '', details.res_last_name || ''].join(' ').replace(/\s+/g, ' ').trim();
-        function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), m=p[1]||'00'; let h=parseInt(p[0],10); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${h}:${m} ${ap}`; }
+        function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+        const ps = ((details.payment_status || 'pending') + '').toLowerCase();
+        const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
         const content = isResident
           ? `
           <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
@@ -1873,12 +1881,14 @@ function showVisitorDetails(id, source) {
             </div>
             <div>
               <h4 style="color: #23412e; margin-bottom: 10px;">Reservation Details</h4>
+              ${details.ref_code ? `<p><strong>Ref Code:</strong> ${details.ref_code}</p>` : ''}
               ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
               ${details.start_date ? `<p><strong>Date:</strong> ${new Date(details.start_date).toLocaleDateString()}${details.end_date ? ' - ' + new Date(details.end_date).toLocaleDateString() : ''}</p>` : ''}
               ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
               ${details.price ? `<p><strong>Price:</strong> ₱${parseFloat(details.price).toLocaleString()}</p>` : ''}
+              <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
               <p><strong>Request Date:</strong> ${new Date(details.entry_created).toLocaleString()}</p>
               <p><strong>Status:</strong> <span class="badge badge-${details.approval_status || 'pending'}">${(details.approval_status || 'pending').charAt(0).toUpperCase() + (details.approval_status || 'pending').slice(1)}</span></p>
               ${details.approved_by ? `<p><strong>Approved By:</strong> Staff ID ${details.approved_by}</p>` : ''}

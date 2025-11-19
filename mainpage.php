@@ -4,6 +4,11 @@ session_start();
 
 // Initialize error message for inline display
 $error = '';
+// Flash notice from payment confirmation
+$flash = isset($_SESSION['flash_notice']) ? $_SESSION['flash_notice'] : '';
+$flashRef = isset($_SESSION['flash_ref_code']) ? $_SESSION['flash_ref_code'] : '';
+if ($flash !== '') { unset($_SESSION['flash_notice']); }
+if ($flashRef !== '') { unset($_SESSION['flash_ref_code']); }
 
 // Ensure entry_passes table exists
 function ensureEntryPassesTable($con) {
@@ -352,10 +357,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .profile-dropdown .btn-view:hover { background: #1a2f21; }
     .profile-dropdown .btn-logout { background: #e5ddc6; color: #222; }
     .profile-dropdown .btn-logout:hover { opacity: 0.9; }
+    .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000}
+    .toast .code{background:#1f3526;border-radius:8px;padding:2px 8px;margin-left:6px}
   </style>
 </head>
 
 <body>
+  <?php if (!empty($flash)) { ?>
+    <div class="toast"><?php echo htmlspecialchars($flash); ?><?php if(!empty($flashRef)){ echo ' <span class="code">' . htmlspecialchars($flashRef) . '</span>'; } ?></div>
+  <?php } ?>
   <!-- HEADER -->
   <header class="navbar">
     <div class="logo">

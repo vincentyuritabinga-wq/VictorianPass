@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
     $errorMsg = 'Invalid form submission.';
   } else {
-    $amenity = isset($_POST['amenity']) ? $_POST['amenity'] : 'Pool';
+    $amenity = isset($_POST['amenity']) ? $_POST['amenity'] : '';
     $start   = isset($_POST['startDate']) ? $_POST['startDate'] : '';
     $end     = isset($_POST['endDate']) ? $_POST['endDate'] : '';
     $startTime = isset($_POST['startTime']) ? $_POST['startTime'] : '';
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
     $ref_code = isset($_POST['ref_code']) ? $_POST['ref_code'] : (isset($_GET['ref_code']) ? $_GET['ref_code'] : '');
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
-    if (!in_array($amenity, $allowedAmenities, true)) { $amenity = 'Pool'; }
+    if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
     $edObj = $end ? DateTime::createFromFormat('Y-m-d', $end) : false;
     $stObj = $startTime ? DateTime::createFromFormat('H:i', $startTime) : false;
@@ -134,21 +134,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $errorMsg = 'Selected dates are not available. Please choose different dates.';
         }
         if (!$errorMsg) {
-          $_SESSION['pending_reservation'] = [
-            'amenity' => $amenity,
-            'start_date' => $start,
-            'end_date' => $end,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
-            'persons' => $persons,
-            'price' => $price,
-            'downpayment' => $downpayment,
-            'user_id' => $user_id,
-            'entry_pass_id' => $entry_pass_id
-          ];
-          $redir = 'downpayment.php?continue=reserve' . ($entry_pass_id?('&entry_pass_id=' . urlencode($entry_pass_id)):'');
-          header('Location: ' . $redir);
-          exit;
+          $paidOk = false;
+          if ($ref_code !== '') {
+            try {
+              if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
+              $s1 = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+              $s1->bind_param('s', $ref_code);
+              $s1->execute();
+              $g1 = $s1->get_result();
+              if ($g1 && ($rr = $g1->fetch_assoc())) {
+                $ps = strtolower(trim($rr['payment_status'] ?? ''));
+                $paidOk = ($ps === 'verified');
+              }
+              $s1->close();
+            } catch (Throwable $e) {
+              error_log('reserve.php payment check error: ' . $e->getMessage());
+            }
+          }
+          if ($visitorFlow && !$paidOk) {
+            $_SESSION['pending_reservation'] = [
+              'amenity' => $amenity,
+              'start_date' => $start,
+              'end_date' => $end,
+              'start_time' => $startTime,
+              'end_time' => $endTime,
+              'persons' => $persons,
+              'price' => $price,
+              'downpayment' => $downpayment,
+              'user_id' => $user_id,
+              'entry_pass_id' => $entry_pass_id
+            ];
+            $redir = 'downpayment.php?continue=reserve' . ($entry_pass_id?('&entry_pass_id=' . urlencode($entry_pass_id)):'');
+            header('Location: ' . $redir);
+            exit;
+          } else {
+            try {
+              if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
+              if ($ref_code === '') { throw new Exception('Missing status code'); }
+              $stmt = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, entry_pass_id = ?, approval_status = 'pending' WHERE ref_code = ?");
+              $epid = $entry_pass_id ? $entry_pass_id : null;
+              $stmt->bind_param('sssssidiss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $epid, $ref_code);
+              $ok = $stmt->execute();
+              $stmt->close();
+              if ($ok) { $generatedCode = $ref_code; } else { $errorMsg = 'Failed to save reservation.'; }
+            } catch (Throwable $e) {
+              error_log('reserve.php finalize error: ' . $e->getMessage());
+              $errorMsg = 'Failed to save reservation.';
+            }
+          }
         }
       }
     }
@@ -190,13 +223,19 @@ $refFromQuery = isset($_GET['ref_code']) ? trim($_GET['ref_code']) : '';
 if ($refFromQuery !== '') {
 try {
   if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-  $stmtGate = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+$stmtGate = $con->prepare("SELECT payment_status, amenity, start_date FROM reservations WHERE ref_code = ? LIMIT 1");
   $stmtGate->bind_param('s', $refFromQuery);
   $stmtGate->execute();
   $resGate = $stmtGate->get_result();
   if ($resGate && ($rw = $resGate->fetch_assoc())) {
+    if (!empty($rw['amenity']) && !empty($rw['start_date'])) {
+      $_SESSION['flash_notice'] = 'A reservation already exists for this status code. Please wait for your status code via SMS.';
+      $_SESSION['flash_ref_code'] = $refFromQuery;
+      header('Location: mainpage.php');
+      exit;
+    }
     $ps = strtolower(trim($rw['payment_status'] ?? ''));
-    $canSubmit = in_array($ps, ['pending','verified']);
+    $canSubmit = ($ps === 'verified');
   } else {
     $canSubmit = false;
   }
@@ -300,7 +339,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     body {
       margin: 0;
       font-family: 'Poppins', sans-serif;
-      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      background: linear-gradient(135deg, #30522bff 0%, #30522bff 100%);
       color: #fff;
       animation: fadeIn .6s ease-in-out;
     }
@@ -531,9 +570,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }
     
     .amenity-card.selected {
-      border: 2px solid #23412e;
-      background: #f6fbf6;
-      box-shadow: 0 10px 28px rgba(35,65,46,.18);
+      border: 3px solid #000;
+      background: #e8f5ee;
+      box-shadow: 0 0 0 4px rgba(0,0,0,.12), 0 10px 28px rgba(60,141,109,.18);
     }
     
     .amenity-card img {
@@ -553,7 +592,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       gap: 16px;
     }
     .amenity-card .title-block{display:flex;flex-direction:column;gap:4px}
-    .amenity-card .price{color:#23412e;font-weight:700}
+    .amenity-card .price{color:#3c8d6d;font-weight:700}
     
     .amenity-card .info .name {
       font-weight: 700;
@@ -865,7 +904,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱500 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="toggle-schedule">View Schedule</button></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -873,7 +912,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱700 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="toggle-schedule">View Schedule</button></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -881,7 +920,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱400 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="toggle-schedule">View Schedule</button></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -889,7 +928,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱450 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="toggle-schedule">View Schedule</button></div>
+            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -916,7 +955,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
               <tbody id="calendar-body"></tbody>
             </table>
           </div>
-          <input type="hidden" name="amenity" id="amenityField" value="Pool">
+          <input type="hidden" name="amenity" id="amenityField" value="">
           <div class="res-item" id="startDateGroup">
             <div class="res-label"><small>Start Date</small></div>
             <p id="startDate">--</p>
@@ -947,6 +986,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <?php $refParam = isset($_GET['ref_code']) ? $_GET['ref_code'] : ''; ?>
           <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Submit</button>
           <?php if (!empty($refParam)) { ?><span class="ref-inline">Status Code: <?php echo htmlspecialchars($refParam); ?></span><?php } ?>
+          <?php if (!empty($refParam) && !$canSubmit) { ?>
+            <div class="field-warning" style="margin-top:8px;">
+              <span class="warn-icon">!</span>
+              <span class="msg">Payment pending. Complete downpayment to enable submission.</span>
+              <button class="close-warn" type="button" onclick="this.closest('.field-warning').remove()">×</button>
+            </div>
+            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=reserve<?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($_GET['ref_code']) ? '&ref_code=' . urlencode($_GET['ref_code']) : ''); ?>">Pay Downpayment</a>
+          <?php } ?>
         </div>
       </div>
     </form>
@@ -986,7 +1033,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   let selectedStart=null,selectedEnd=null;
   let bookedDates=new Set();
-  let selectedAmenity=document.getElementById('amenityField').value||'Pool';
+  let selectedAmenity=document.getElementById('amenityField').value||'';
   let hintShown=false;
 
   async function loadBookedDates(){
@@ -1081,11 +1128,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   const amenitiesList=document.getElementById('amenitiesList');
   if(amenitiesList){
     amenitiesList.addEventListener('click',function(e){
-      const toggle=e.target.closest('button[data-action="toggle-schedule"]');
-      if(toggle){
-        const container=e.target.closest('.amenity-card');
-        const panel=container?container.querySelector('[data-schedule-panel]'):null;
-        if(panel){ panel.style.display=(panel.style.display==='none'||panel.style.display==='')?'block':'none'; }
+      const bookBtn=e.target.closest('button[data-action="book-now"]');
+      if(bookBtn){
+        const card=e.target.closest('.amenity-card');
+        if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
         return;
       }
       const card=e.target.closest('.amenity-card');
@@ -1143,6 +1189,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const pill=card.querySelector('.status-pill');
     if(!s||!e||!st||!et){computeAvailability();return}
     if(s!==e){computeAvailability();return}
+    if(st && et){
+      const [sh,sm]=st.split(':'), [eh,em]=et.split(':');
+      const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
+      const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
+      if(eMin<=sMin){
+        pill.textContent='Invalid time'; pill.className='status-pill unavailable';
+        const te=document.getElementById('timeError'); if(te){ te.style.display='block'; te.textContent='End time must be after start time (24-hour).'; }
+        return;
+      }
+    }
     const times=await fetchBookedTimesFor(s);
     const overlap=times.some(t=>!(st>=t.end || et<=t.start));
     if(overlap){pill.textContent='Unavailable';pill.className='status-pill unavailable'}
@@ -1158,19 +1214,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   document.getElementById("nextMonth").onclick=()=>{currentMonth=currentMonth===11?0:currentMonth+1;currentYear=currentMonth===0?currentYear+1:currentYear;renderCalendar(currentMonth,currentYear)};
   loadBookedDates();
 
-  document.querySelectorAll('[data-action="toggle-schedule"]').forEach(btn=>{
-    btn.addEventListener('click',async function(e){
+  document.querySelectorAll('[data-action="book-now"]').forEach(btn=>{
+    btn.addEventListener('click',function(e){
       e.stopPropagation();
       const card=this.closest('.amenity-card');
-      const panel=card.querySelector('[data-schedule-panel]');
-      const amenity=card.getAttribute('data-amenity')||selectedAmenity;
-      if(panel.style.display==='none'||panel.style.display===''){panel.style.display='block'}else{panel.style.display='none';return}
-      try{
-        const res=await fetch(`reserve.php?action=booked_dates&amenity=${encodeURIComponent(amenity)}`);
-        const data=await res.json();
-        const dates=(data.dates||[]).sort();
-        panel.innerHTML=dates.length?dates.slice(0,12).map(d=>`<div>${d}</div>`).join(''):'<div>No booked dates</div>';
-      }catch(_){panel.innerHTML='<div>Failed to load schedule</div>'}
+      if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
     });
   });
 
@@ -1178,14 +1226,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   const formEl=document.querySelector('form');
   if(formEl){
     formEl.addEventListener('submit', async function(e){
+      const amen=document.getElementById('amenityField').value;
       const s=document.getElementById('startDateInput').value;
       const eD=document.getElementById('endDateInput').value;
       const st=document.getElementById('startTimeInput').value;
       const et=document.getElementById('endTimeInput').value;
+      const dpVal=document.getElementById('downpaymentInput')?document.getElementById('downpaymentInput').value:'';
       const persons=parseInt(document.getElementById('personsInput').value||'0');
       let valid=true;
       function setWarn(id,msg){
-        const container=(id==='startDateInput')?document.getElementById('startDateGroup'):(id==='endDateInput')?document.getElementById('endDateGroup'):document.getElementById(id)?.closest('.res-item');
+        const container=(id==='startDateInput')?document.getElementById('startDateGroup'):(id==='endDateInput')?document.getElementById('endDateGroup'):(id==='amenityField')?document.querySelector('.amenities-list'):document.getElementById(id)?.closest('.res-item');
         if(!container)return;
         let w=container.querySelector('.field-warning[data-for="'+id+'"]');
         if(msg){
@@ -1196,10 +1246,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           valid=false;
         } else { if(w) w.remove(); }
       }
+      if(!amen){ setWarn('amenityField','Please select an amenity.'); }
       if(!s){ setWarn('startDateInput','Start date is required.'); }
       if(!eD){ setWarn('endDateInput','End date is required.'); }
       if(!st){ setWarn('startTimeInput','Start time is required.'); }
       if(!et){ setWarn('endTimeInput','End time is required.'); }
+      if(s && eD && s===eD && st && et){
+        const [sh,sm]=(st||'').split(':');
+        const [eh,em]=(et||'').split(':');
+        const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
+        const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
+        if(eMin<=sMin){ setWarn('endTimeInput','End time must be after start time (24-hour).'); }
+      }
+      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setWarn('downpaymentInput','Downpayment cannot be negative.'); } } else { /* optional: allow empty or 0 */ }
       if(persons<1){ setWarn('personsInput','Persons must be at least 1.'); }
       if(!valid){ e.preventDefault(); return false; }
       if(s && eD && s===eD && st && et){
@@ -1218,13 +1277,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const eD=document.getElementById('endDateInput').value;
     const st=document.getElementById('startTimeInput').value;
     const et=document.getElementById('endTimeInput').value;
+    const amenVal=document.getElementById('amenityField').value;
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const submitBtn=document.getElementById('submitBtn');
     const allowed=(document.getElementById('submitAllowed')?.value==='1');
-    let ready = allowed && !!s && !!eD && !!st && !!et && persons>=1;
+    let ready = allowed && !!amenVal && !!s && !!eD && !!st && !!et && persons>=1;
     if(submitBtn){ if(ready){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
   }
-  ['startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
+  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
   document.addEventListener('DOMContentLoaded',updateActionStates);
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}
