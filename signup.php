@@ -202,7 +202,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body>
   <div class="page-wrapper">
     <div class="image-side">
-      <img src="signuppage/bgsignup.png" alt="Victorian Heights Subdivision">
+      <img src="sign up pic.jpg" alt="Victorian Heights Subdivision">
       <p class="branding">VictorianPass.</p>
     </div>
 
@@ -247,10 +247,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <img src="signuppage/location.svg" alt="Location"> Verify House Number
           </a>
           <span id="houseVerifiedBadge" style="display:none;margin-left:8px;color:#23412e;font-weight:600;">Verified</span>
-          <input type="text" id="addressField" name="address" placeholder="Enter your full address (required)" required>
+
           <input type="hidden" id="houseHidden" name="house_number" value="<?php echo htmlspecialchars($verified_house); ?>">
         </div>
-
+          <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
         <div class="form-row">
           <div class="form-group">
             <select name="sex" required>

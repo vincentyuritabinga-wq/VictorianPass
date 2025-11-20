@@ -17,7 +17,9 @@ html { scroll-behavior: smooth; }
   align-items: center;
   padding: 12px 5%;
   background: #2b2623;
-  position: relative; /* allow absolute-positioned children like nav-instructions */
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 .logo {
@@ -117,7 +119,7 @@ html { scroll-behavior: smooth; }
   align-items: center;
   padding: 40px 5%;
   min-height: 90vh;
-  background: url("mainpage/new mainpage bg.jpg") center/cover no-repeat, url("mainpage/new mainpage bg.jpg") center/cover no-repeat;
+  background: url("mainpage/new mainpage bg.jpg") center/cover no-repeat, url("mainpage/new main page.jpg") center/cover no-repeat;
   z-index: 1;
 }
 
@@ -139,13 +141,35 @@ html { scroll-behavior: smooth; }
   margin: 0 auto;
 }
 
+.hero-content h2 {
+  margin: 0 0 0;
+  font-size: 1rem;
+  letter-spacing: 4px;
+  font-weight: 700;
+  color: #e5ddc6;
+  opacity: 0.9;
+}
+
 .hero-content h1 {
   font-size: 4rem;
   line-height: 1.0;
   letter-spacing: 1px;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
   font-weight: 900;
   text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.hero-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.hero-brand img {
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
 }
 .welcome-subtitle {
   text-align: center;
@@ -231,7 +255,7 @@ html { scroll-behavior: smooth; }
   height: 3px;
   background: #e5ddc6;
   border-radius: 2px;
-  margin: 12px auto 14px;
+  margin: 12px auto 18px;
   opacity: 0.9;
 }
 
@@ -393,4 +417,11 @@ html { scroll-behavior: smooth; }
     max-width: 300px;
   }
 }
+
+.hero-emblem { display:flex; align-items:center; justify-content:center; gap:14px; margin: 12px 0 8px; }
+.hero-emblem .line { width: 120px; height: 3px; background: #e5b84a; border-radius: 2px; }
+.hero-emblem img { width: 34px; height: 34px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+.hero-subbrand { margin: 0; font-size: 1.3rem; font-weight: 700; color: #fff; text-shadow: 1px 1px 4px rgba(0,0,0,0.4); }
+.user-type-center .dropdown-btn { background:#e5ddc6; color:#23412e; box-shadow:0 4px 12px rgba(0,0,0,0.25); border:1px solid rgba(35,65,46,0.12); }
+.user-type-center .dropdown-btn:hover { transform: scale(1.03); }
 

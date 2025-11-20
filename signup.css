@@ -23,6 +23,7 @@ body {
   display: flex;
   width: 100%;
   min-height: 100vh;
+  align-items: stretch;
 }
 
 /* Left Side (Image) */
@@ -35,6 +36,16 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  position: relative;
+  z-index: 0;
+}
+.image-side::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.20);
+  z-index: 1;
 }
 .image-side .branding {
   position: absolute;
@@ -43,6 +54,11 @@ body {
   color: #fff;
   font-size: 1.2rem;
   font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(2px);
+  z-index: 2;
 }
 
 /* Right Side (Form) */
@@ -93,7 +109,9 @@ h1 {
 .form-row {
   display: flex;
   gap: 1rem;
+  flex-wrap: wrap;
 }
+.form-row > * { flex: 1 1 240px; }
 
 input[type="text"],
 input[type="email"],
@@ -313,17 +331,17 @@ input[type="tel"] {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .login-wrapper {
-    flex-direction: column;
-  }
-  .login-left {
-    text-align: center;
-    padding: 2rem 1rem;
-  }
-  .image-overlay {
-    margin-top: 1rem;
-  }
+@media (max-width: 992px) {
+  .page-wrapper { flex-direction: column; }
+  .image-side { height: 40vh; }
+  .form-side { box-shadow: none; padding: 2rem 1.25rem; }
+}
+
+@media (max-width: 600px) {
+  h1 { font-size: 1.6rem; }
+  .subtitle { font-size: 0.95rem; }
+  .image-side { height: 32vh; }
+  .back-arrow { top: 1rem; left: 1rem; }
 }
 
 /* Modal Styles */

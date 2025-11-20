@@ -300,7 +300,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     .dropdown-btn:hover {
-      background: #1a2f21;
+      background: #6faa82ff;
       transform: scale(1.05);
     }
 
@@ -378,7 +378,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .toast .code{background:#1f3526;border-radius:8px;padding:2px 8px;margin-left:6px}
   </style>
 </head>
-
 <body>
   <?php if (!empty($flash)) { ?>
     <div class="toast"><?php echo htmlspecialchars($flash); ?><?php if(!empty($flashRef)){ echo ' <span class="code">' . htmlspecialchars($flashRef) . '</span>'; } ?></div>
@@ -392,7 +391,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
-
+    
     <nav class="page-nav">
       <a href="#home">Home</a>
       <a href="#about-us">About Us</a>
@@ -442,21 +441,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <span>Entry Pass Form</span>
         </a>
       </div>
-      <h1>WELCOME TO VictorianPass</h1>
-      <div class="hero-divider"></div>
+      <h2>WELCOME TO</h2>
+      <div class="hero-brand">
+        <h1>VictorianPass</h1>
+      </div>
+
+      <div class="hero-emblem">
+        <span class="line"></span>
+        <img src="mainpage/logo.svg" alt="Emblem">
+        <span class="line"></span>
+      </div>
+      <h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
       <!--<p class="welcome-subtitle">
         VictorianPass: An Online Amenity Reservation System<br>
         with QR-based Entry Pass Security<br>
         for Victorian Heights Subdivision
-      </p> -->
-      <p class="tagline">
-        Every home holds a story —<br>
-        start yours in a place worth remembering.
-      </p>
-
-      
-
-      <!-- Moved User Type Dropdown to bottom of hero -->
+      </p> -->      <!-- Moved User Type Dropdown to bottom of hero -->
       <div class="user-type-center">
         <div class="user-type-dropdown" id="userTypeDropdown">
           <button class="dropdown-btn" id="dropdownBtn">
@@ -473,6 +473,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         </div>
       </div>
+      <p class="tagline">
+        Every home holds a story —<br>
+        start yours in a place worth remembering.
+      </p>
+
+      
+
+
 
       <!-- Change user type helper (shown after selection) -->
       <div class="user-type-center" id="userTypeSwitch" style="display:none;">
@@ -485,8 +493,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <h2 class="section-title">About Us</h2>
     <div class="section-divider"></div>
     <div class="section-body">
-      <p>VictorianPass serves the Victorian Heights Subdivision community by streamlining amenity reservations and enhancing entry security through QR-based passes. The platform is designed to be simple, reliable, and accessible for residents and guests.</p>
-      <p>Our goal is to make community facilities easier to enjoy while maintaining a secure and well-organized environment for everyone.</p>
+      <p>Victorian Heights subdivision is a gated residence that offers accessibility located at Dahlia Fairview, BRGY. Sauyo, Quezon City. It is a residential development by Swire Land Corporation that provides accessibility and exclusivity with a gated community with 222 houses and an estimated 2,220 residents, making it secure against harm and vulnerability. Furthermore, beautifully designed houses that cater to thousands of residents live within reach of convenience and service while getting the experience of peace in a suburban community .</p>
     </div>
   </section>
 
@@ -516,17 +523,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
     </div>
   </section>
-
   <section id="about-system" class="section">
     <h2 class="section-title">About the System</h2>
     <div class="section-divider"></div>
     <div class="section-body">
-      <p>VictorianPass combines online reservations with QR-based entry verification to keep facilities organized and secure. Residents can log in to manage reservations, while visitors can apply for entry passes and track their status easily.</p>
-      <p>The system integrates with existing community processes and uses a consistent design language for clarity and ease of use.</p>
+      <p>Victorian Pass is a modern subdivision management system that utilizes QR technology to provide fast, secure, and seamless access for residents and visitors. Designed to enhance security and streamline daily processes, the system handles amenity reservations, entry pass requests, incident reporting, and user verification, all in one platform. By replacing manual checks with QR scanning, Victorian Pass ensures quicker entry, and secure access, while improved monitoring subdivision welfare. the system strengthens community safety while offering a more convenient experience for everyone in the subdivision.</p>
     </div>
   </section>
 
   <!-- Visitor-friendly instructions box fixed at the bottom-left -->
+   <br>
+   <br>
   <div class="bottom-instructions" id="bottomInstructions" style="display: none;">
     <strong>Visitor Tips</strong><br>
     • Click <b>Entry Pass Form</b> to apply for a visitor pass.<br>
