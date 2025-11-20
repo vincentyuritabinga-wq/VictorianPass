@@ -364,6 +364,13 @@ body {
 const reserveCheck = document.getElementById('reserveCheck');
 const submitBtn   = document.getElementById('submitBtn');
 const entryForm   = document.getElementById('entryForm');
+const birthdateEl = document.getElementById('birthdate');
+
+// Birthdate must be a past date (not today)
+if (birthdateEl) {
+  var d=new Date(); d.setDate(d.getDate()-1);
+  birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
+}
 
 reserveCheck.addEventListener('change',()=>{
   if(reserveCheck.checked){
@@ -388,6 +395,10 @@ function closeModal(){
 entryForm.addEventListener('submit', async (e)=>{
   if(!reserveCheck.checked){
     e.preventDefault();
+    if (birthdateEl && birthdateEl.value) {
+      var todayStr = new Date().toISOString().split('T')[0];
+      if (birthdateEl.value >= todayStr) { alert('Birthdate must be a past date.'); return; }
+    }
     try {
       const fd = new FormData(entryForm);
       const res = await fetch('submit_guest.php', { method: 'POST', body: fd });

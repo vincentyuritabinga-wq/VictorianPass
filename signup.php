@@ -602,6 +602,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
     });
   </script>
+
+  <script>
+    (function(){
+      var form = document.getElementById('signupForm');
+      var bd = document.querySelector('input[name="birthdate"]');
+      if (bd) {
+        var d = new Date(); d.setDate(d.getDate()-1);
+        bd.setAttribute('max', d.toISOString().split('T')[0]);
+      }
+      if (form) {
+        form.addEventListener('submit', function(e){
+          if (bd && bd.value) {
+            var todayStr = new Date().toISOString().split('T')[0];
+            if (bd.value >= todayStr) {
+              e.preventDefault();
+              alert('Birthdate must be a past date.');
+            }
+          }
+        });
+      }
+    })();
+  </script>
   <!-- Inline warnings are inserted per field; floating layer removed -->
   <?php if (!empty($serverErrors ?? [])) { ?>
   <script>

@@ -191,6 +191,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 const reserveCheck = document.getElementById('reserveCheck');
 const submitBtn   = document.getElementById('submitBtn');
 const entryForm   = document.getElementById('entryForm');
+const birthdateEl = document.getElementById('birthdate');
 const idInput = document.getElementById('visitor_valid_id');
 const idPreviewWrap = document.getElementById('idPreviewWrap');
 const idPreview = document.getElementById('idPreview');
@@ -255,6 +256,12 @@ function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.
 ['resident_contact','visitor_contact'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidPhone(el)? '' : 'Phone must start with 09 and contain numbers only.'); }); });
 ['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
 
+// Birthdate must be a past date (not today)
+if (birthdateEl) {
+  var d=new Date(); d.setDate(d.getDate()-1);
+  birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
+}
+
 // Toggle button behavior when reserving amenity
 function updateSubmitBehavior(){
   if (reserveCheck.checked){
@@ -293,6 +300,10 @@ entryForm.addEventListener('submit', async (e)=>{
   let valid = true;
   const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_contact','visitor_email','birthdate'];
   reqIds.forEach(function(id){ const el=document.getElementById(id); if(!el) return; if(!String(el.value||'').trim()){ setWarning(id,'This field is required.'); valid=false; }});
+  if (birthdateEl && birthdateEl.value){
+    var todayStr = new Date().toISOString().split('T')[0];
+    if (birthdateEl.value >= todayStr){ setWarning('birthdate','Birthdate must be a past date.'); valid=false; }
+  }
   const rc=document.getElementById('resident_contact'); const vc=document.getElementById('visitor_contact');
   if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Phone must start with 09 and contain numbers only.'); valid=false; }
   if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Phone must start with 09 and contain numbers only.'); valid=false; }

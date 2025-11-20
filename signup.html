@@ -401,6 +401,12 @@
       const confirmPwd = document.getElementById('confirm-password');
       const houseHidden = document.getElementById('houseHidden');
       const form = document.getElementById('signupForm');
+      const birthdate = document.getElementById('birthdate');
+
+      if (birthdate) {
+        const d = new Date(); d.setDate(d.getDate()-1);
+        birthdate.setAttribute('max', d.toISOString().split('T')[0]);
+      }
 
       function blockDigits(e) {
         if (/[0-9]/.test(e.key)) {
@@ -482,6 +488,13 @@
           if (terms && !terms.checked) {
             setWarning('terms', 'Please read and agree to the Terms & Conditions.');
             valid = false;
+          }
+          if (birthdate && birthdate.value) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (birthdate.value >= todayStr) {
+              setWarning('birthdate', 'Birthdate must be a past date.');
+              valid = false;
+            }
           }
           if (!valid) e.preventDefault();
         });

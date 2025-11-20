@@ -199,6 +199,13 @@
       var idPreview = document.getElementById('idPreview');
       var btnClearId = document.getElementById('btnClearId');
 
+      // Limit birthdate to past dates only (not today)
+      if (birthdate) {
+        var d = new Date();
+        d.setDate(d.getDate() - 1);
+        birthdate.setAttribute('max', d.toISOString().split('T')[0]);
+      }
+
       function blockDigits(e){
         if(/[0-9]/.test(e.key)){
           e.preventDefault();
@@ -250,6 +257,10 @@
         });
         if (sex && !sex.value){ setWarning('sex', 'Please select Sex.'); valid = false; }
         if (birthdate && !birthdate.value){ setWarning('birthdate', 'Please provide a birthdate.'); valid = false; }
+        if (birthdate && birthdate.value){
+          var todayStr = new Date().toISOString().split('T')[0];
+          if (birthdate.value >= todayStr){ setWarning('birthdate', 'Birthdate must be a past date.'); valid = false; }
+        }
         if (contact){ var val = contact.value.trim(); if (!/^09\d{9}$/.test(val) && !/^\+639\d{9}$/.test(val)){ setWarning('contact', 'Use 09xxxxxxxxx or +639xxxxxxxxx'); valid = false; } }
         if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); valid = false; }
         if (!valid) e.preventDefault();
