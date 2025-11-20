@@ -14,8 +14,8 @@ $pending = isset($_SESSION['pending_reservation']) ? $_SESSION['pending_reservat
 $amenity = isset($pending['amenity']) ? $pending['amenity'] : '';
 $price   = isset($pending['price']) ? floatval($pending['price']) : 0.0;
 $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
-$isHourBased = in_array($amenity, ['Basketball Court','Tennis Court'], true);
-$isPersonBased = in_array($amenity, ['Pool','Clubhouse'], true);
+$isHourBased = in_array($amenity, ['Basketball Court','Tennis Court','Clubhouse'], true);
+$isPersonBased = in_array($amenity, ['Pool'], true);
 // Fallback partial if not provided: 50% of total
 if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
 $remaining = max(0, round($price - $downpayment, 2));
@@ -39,21 +39,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id_post_form ?: null);
     $uid = ($user_id && $user_id>0) ? $user_id : null;
 
-    $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), payment_status='verified' WHERE ref_code = ?");
+    $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), payment_status='verified', approval_status='pending' WHERE ref_code = ?");
     $stmt->bind_param('sssssiddiis', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $uid, $entry_pass_id_post, $ref_code);
     $stmt->execute();
     $affected = $stmt->affected_rows;
     $stmt->close();
     if ($affected === 0) {
-      $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'verified')");
-      $ins->bind_param('ssssssiddiis', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $uid, $entry_pass_id_post);
+      $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, payment_status, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'verified', 'pending')");
+      $ins->bind_param('ssssssiddii', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $uid, $entry_pass_id_post);
       $ins->execute();
       $ins->close();
     }
     $_SESSION['pending_reservation'] = null;
     $msg = 'Payment confirmed.';
     // Redirect to main page with a small notification
-    $_SESSION['flash_notice'] = 'Payment confirmed. Please wait for your status code via SMS.';
+    $_SESSION['flash_notice'] = 'Please wait for your status code SMS.';
     $_SESSION['flash_ref_code'] = $ref_code;
     header('Location: mainpage.php');
     exit;
@@ -97,6 +97,19 @@ if ($ref_code === '') {
       <p>Your Status Code: <span class="code"><?php echo htmlspecialchars($ref_code); ?></span></p>
       <div class="break">
         <div class="row"><span class="label">Amenity</span><span class="amount"><?php echo htmlspecialchars($amenity ?: 'N/A'); ?></span></div>
+        <?php
+          $unitsLabel = $isHourBased ? 'Hours' : 'Persons';
+          $unitsValue = 0;
+          if ($isHourBased) {
+            $sd = $pending['start_date'] ?? null; $ed = $pending['end_date'] ?? null; $st = $pending['start_time'] ?? null; $et = $pending['end_time'] ?? null;
+            if ($sd && $ed && $sd === $ed && $st && $et) {
+              $sh = intval(substr($st,0,2)); $eh = intval(substr($et,0,2)); $unitsValue = max(1, $eh - $sh);
+            } else { $unitsValue = 1; }
+          } else {
+            $unitsValue = intval($pending['persons'] ?? 1);
+          }
+        ?>
+        <div class="row"><span class="label"><?php echo htmlspecialchars($unitsLabel); ?></span><span class="amount"><?php echo intval($unitsValue); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
         <div class="row"><span class="label">Onsite Payment (Remaining)</span><span class="amount">₱<?php echo number_format($remaining, 2); ?></span></div>
       </div>
@@ -107,7 +120,7 @@ if ($ref_code === '') {
         <input type="hidden" name="entry_pass_id" value="<?php echo intval($entry_pass_id); ?>">
         <?php $backUrl = 'reserve.php' . ($entry_pass_id ? ('?entry_pass_id=' . urlencode($entry_pass_id)) : ''); ?>
         <a href="<?php echo htmlspecialchars($backUrl); ?>" class="btn btn-outline">Go Back</a>
-        <button type="submit" class="btn">Next</button>
+        <button type="submit" class="btn">Confirm Payment</button>
       </form>
     </div>
   </div>

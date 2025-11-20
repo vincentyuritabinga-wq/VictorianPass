@@ -39,14 +39,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $ref = "RR-" . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT);
 
   // Validate inputs
+  $minH = ($amenity === 'Clubhouse') ? 9 : 9;
+  $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
   if (!$start || !$end) {
     $errorMsg = 'Please select a start and end date.';
   } else if (!$startTime || !$endTime) {
     $errorMsg = 'Please select a start and end time.';
   } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
     $errorMsg = 'Persons must be at least 1.';
-  } else if ((int)date('H', strtotime($startTime)) < 8 || (int)date('H', strtotime($endTime)) > 23) {
-    $errorMsg = 'Time must be between 08:00 and 23:00.';
+  } else if ((int)date('H', strtotime($startTime)) < $minH || (int)date('H', strtotime($endTime)) > $maxH) {
+    $errorMsg = 'Selected time is outside operating hours.';
   } else if ($downpayment === null || $downpayment < 0) {
     $errorMsg = 'Please enter a valid downpayment amount.';
   } else if ($downpayment !== null && $downpayment > $price) {
@@ -316,6 +318,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <div>
             <h3 id="amenityDescTitle">Reserve Amenity</h3>
             <p id="amenityDescText">Select an amenity to see its details here.</p>
+            <p id="hoursNotice" style="margin-top:6px;color:#cfcfcf;font-size:.9rem"></p>
           </div>
         </div>
       </div>
@@ -324,7 +327,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱500 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -332,7 +335,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱700 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -340,7 +343,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -348,7 +351,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -372,11 +375,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             </table>
           </div>
           <input type="hidden" name="amenity" id="amenityField" value="">
-          <div class="res-item" id="startDateGroup">
-            <div class="res-label"><small>Start Date</small></div>
-            <p id="startDate">--</p>
-            <input type="hidden" name="startDate" id="startDateInput">
-            <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
+      <div class="res-item" id="startDateGroup">
+        <div class="res-label"><small>Start Date</small></div>
+        <div class="date-line"><p id="startDate">--</p><button type="button" class="clear-date" id="clearStartBtn" title="Clear start date">Clear</button></div>
+        <input type="hidden" name="startDate" id="startDateInput">
+        <div class="res-label" style="margin-top:8px;"><small>Start Time</small></div>
             <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
             <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
             <div class="counter" id="hoursCounter" style="display:none;">
@@ -386,11 +389,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             </div>
             <input type="hidden" name="hours" id="hoursInput" value="1">
           </div>
-          <div class="res-item" id="endDateGroup">
-            <div class="res-label"><small>End Date</small></div>
-            <p id="endDate">--</p>
-            <input type="hidden" name="endDate" id="endDateInput">
-            <div id="dateError" class="time-error" style="display:none;"></div>
+      <div class="res-item" id="endDateGroup">
+        <div class="res-label"><small>End Date</small></div>
+        <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
+        <input type="hidden" name="endDate" id="endDateInput">
+        <div id="dateError" class="time-error" style="display:none;"></div>
             <div class="res-label" style="margin-top:8px;"><small>End Time</small></div>
             <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px;">
             <div id="timeError" class="time-error" style="display:none;"></div>
@@ -502,12 +505,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       selectedStart=dateString;
       document.getElementById('startDate').textContent=selectedStart;
       document.getElementById('startDateInput').value=selectedStart;
-    } else {
+    } else if(!selectedEnd){
       selectedEnd=dateString;
       document.getElementById('endDate').textContent=selectedEnd;
       document.getElementById('endDateInput').value=selectedEnd;
+    } else {
+      selectedStart=dateString;
+      selectedEnd=null;
+      document.getElementById('startDate').textContent=selectedStart;
+      document.getElementById('startDateInput').value=selectedStart;
+      document.getElementById('endDate').textContent='--';
+      document.getElementById('endDateInput').value='';
     }
     computeAvailability();
+    showIncompleteWarnings();
+    updateActionStates();
   }
 
   const amenityData={
@@ -544,6 +556,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const key=card.getAttribute('data-key');
       selectAmenityByKey(key);
     });
+  });
+  document.querySelectorAll('.status-pill[data-action="select-dates"]').forEach(function(el){
+    el.addEventListener('click',function(){ const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); } });
+    el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); } } });
   });
 
   const amenitiesList=document.getElementById('amenitiesList');
@@ -602,9 +618,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':');
     const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
     const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
-    if(eMin<=sMin || parseInt(sh,10)<8 || parseInt(eh,10)>23){
+    const amen=document.getElementById('amenityField').value;
+    const allowed=getAmenityHours(amen);
+    const minHour=parseInt(allowed.min.split(':')[0],10);
+    const maxHour=parseInt(allowed.max.split(':')[0],10);
+    if(eMin<=sMin || parseInt(sh,10)<minHour || parseInt(eh,10)>maxHour){
       if(pill){ pill.textContent='Invalid time'; pill.className='status-pill unavailable'; }
-      const te=document.getElementById('timeError'); if(te){ te.style.display='block'; te.textContent='Time must be between 08:00 and 23:00 and end after start.'; }
+      const te=document.getElementById('timeError'); if(te){ te.style.display='block'; te.textContent='Selected time is outside operating hours.'; }
       return;
     }
     const times=await fetchBookedTimesFor(s);
@@ -644,11 +664,49 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   function isPersonBasedAmenity(amen){ return amen==='Pool' || amen==='Clubhouse'; }
   function clampToRange(timeStr){
     if(!timeStr) return '';
+    const amen=document.getElementById('amenityField').value;
+    const hrs=getAmenityHours(amen);
     const [h,m]=(timeStr||'').split(':');
     let hh=parseInt(h||'0',10); let mm=parseInt(m||'0',10);
-    if(hh<8){ hh=8; mm=0; }
-    if(hh>23){ hh=23; mm=0; }
+    const [minH]=hrs.min.split(':'), [maxH]=hrs.max.split(':');
+    const minHour=parseInt(minH,10), maxHour=parseInt(maxH,10);
+    if(hh<minHour){ hh=minHour; mm=0; }
+    if(hh>maxHour){ hh=maxHour; mm=0; }
     return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }
+  function setFieldWarning(id,msg){
+    const container=(id==='startDateInput')?document.getElementById('startDateGroup'):(id==='endDateInput')?document.getElementById('endDateGroup'):(id==='amenityField')?document.querySelector('.amenities-list'):document.getElementById(id)?.closest('.res-item');
+    if(!container)return;
+    let w=container.querySelector('.field-warning[data-for="'+id+'"]');
+    if(msg){
+      if(!w){ w=document.createElement('div'); w.className='field-warning'; w.setAttribute('data-for',id); container.appendChild(w);} 
+      let icon=w.querySelector('.warn-icon'); if(!icon){ icon=document.createElement('span'); icon.className='warn-icon'; icon.textContent='!'; w.appendChild(icon);} 
+      let m=w.querySelector('.msg'); if(!m){ m=document.createElement('span'); m.className='msg'; w.appendChild(m);} m.textContent=msg;
+      let close=w.querySelector('.close-warn'); if(!close){ close=document.createElement('button'); close.className='close-warn'; close.type='button'; close.textContent='\u00d7'; w.appendChild(close); close.addEventListener('click',function(){ w.remove(); }); }
+    } else { if(w) w.remove(); }
+  }
+  function showIncompleteWarnings(){
+    const amen=document.getElementById('amenityField').value;
+    const s=document.getElementById('startDateInput').value;
+    const eD=document.getElementById('endDateInput').value;
+    const st=document.getElementById('startTimeInput').value;
+    const et=document.getElementById('endTimeInput').value;
+    const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+    if(!amen){ setFieldWarning('amenityField','Please select an amenity.'); } else { setFieldWarning('amenityField',''); }
+    if(!s){ setFieldWarning('startDateInput','Start date is required.'); } else { setFieldWarning('startDateInput',''); }
+    if(!eD){ setFieldWarning('endDateInput','End date is required.'); } else { setFieldWarning('endDateInput',''); }
+    if(!st){ setFieldWarning('startTimeInput','Start time is required.'); } else { setFieldWarning('startTimeInput',''); }
+    if(!et){ setFieldWarning('endTimeInput','End time is required.'); } else { setFieldWarning('endTimeInput',''); }
+    if(isHourBasedAmenity(amen)){
+      if(hours<1){ setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
+    } else {
+      if(persons<1){ setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
+    }
+  }
+  function getAmenityHours(amen){
+    if(amen==='Clubhouse') return {min:'09:00', max:'21:00'};
+    return {min:'09:00', max:'18:00'};
   }
 function configureFieldsForAmenity(amen){
   const personsWrap=document.getElementById('personsGroup');
@@ -657,6 +715,10 @@ function configureFieldsForAmenity(amen){
   const hoursCounter=document.getElementById('hoursCounter');
   const endTimeInput=document.getElementById('endTimeInput');
   const startTimeInput=document.getElementById('startTimeInput');
+  const hrs=getAmenityHours(amen);
+  if(startTimeInput){ startTimeInput.min=hrs.min; startTimeInput.max=hrs.max; }
+  if(endTimeInput){ endTimeInput.min=hrs.min; endTimeInput.max=hrs.max; }
+  const hn=document.getElementById('hoursNotice'); if(hn){ hn.textContent = amen==='Clubhouse' ? 'Available 9:00 AM – 9:00 PM' : 'Available 9:00 AM – 6:00 PM'; }
   if(isHourBasedAmenity(amen)){
     if(personsWrap){ personsWrap.style.display='none'; }
     if(hoursLabel){ hoursLabel.style.display='block'; }
@@ -684,7 +746,9 @@ function configureFieldsForAmenity(amen){
     const [sh,sm]=(clampToRange(st)||'').split(':');
     let h=parseInt(sh||'0',10), m=parseInt(sm||'0',10);
     let endH=h+hrs; let endM=m;
-    if(endH>23){ endH=23; endM=0; }
+    const allowed=getAmenityHours(amen);
+    const maxHour=parseInt(allowed.max.split(':')[0],10);
+    if(endH>maxHour){ endH=maxHour; endM=0; }
     const et=`${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
     document.getElementById('startTimeInput').value = clampToRange(st);
     document.getElementById('endTimeInput').value = et;
@@ -700,27 +764,7 @@ function configureFieldsForAmenity(amen){
   const formEl=document.querySelector('form');
   if(formEl){
     formEl.addEventListener('submit', function(e){
-      const amen=document.getElementById('amenityField').value;
-      const s=document.getElementById('startDateInput').value;
-      const eD=document.getElementById('endDateInput').value;
-      const st=document.getElementById('startTimeInput').value;
-      const et=document.getElementById('endTimeInput').value;
-      const persons=parseInt(document.getElementById('personsInput').value||'0');
-      const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
-      const dpVal=document.getElementById('downpaymentInput')?document.getElementById('downpaymentInput').value:'';
-      let valid=true;
-      if(!amen||!s||!eD||!st||!et){ valid=false; }
-      if(isPersonBasedAmenity(amen) && persons<1){ valid=false; }
-      if(isHourBasedAmenity(amen) && hours<1){ valid=false; }
-      if(s && eD && s===eD && st && et){
-        const [sh,sm]=(st||'').split(':');
-        const [eh,em]=(et||'').split(':');
-        const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
-        const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
-        if(eMin<=sMin || parseInt(sh,10)<8 || parseInt(eh,10)>23){ valid=false; }
-      }
-      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ valid=false; } const priceEl=document.getElementById('price'); if(priceEl){ const price=parseFloat(priceEl.textContent.replace(/[^0-9.]/g,''))||0; if(Number(dpVal)>price){ valid=false; } } }
-      if(!valid){ e.preventDefault(); return false; }
+      showIncompleteWarnings();
     });
   }
   function updateActionStates(){
@@ -732,10 +776,8 @@ function configureFieldsForAmenity(amen){
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     const submitBtn=document.getElementById('submitBtn');
-    const datesOk = validateDates();
-    let ready = !!amenVal && !!s && !!eD && !!st && !!et && datesOk && (isHourBasedAmenity(amenVal) ? hours>=1 : persons>=1);
-    if(submitBtn){ if(ready){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
-    const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = ready ? 'flex' : 'none'; }
+    if(submitBtn){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); }
+    const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = 'flex'; }
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',updateActionStates); }});
   const hoursEl=document.getElementById('hoursInput'); if(hoursEl){ hoursEl.addEventListener('input',function(){ computeEndTimeFromHours(); updateDisplayedPrice(); updateDownpaymentSuggestion(); }); }
@@ -783,3 +825,16 @@ function configureFieldsForAmenity(amen){
     if(el){ const t=el.textContent.replace(/[^0-9.]/g,''); price = parseFloat(t||'0'); }
     if(!isNaN(price) && price>0){ dp.value = (price*0.5).toFixed(2); }
   }
+  const cs=document.getElementById('clearStartBtn'); if(cs){ cs.addEventListener('click',function(){ selectedStart=null; document.getElementById('startDate').textContent='--'; document.getElementById('startDateInput').value=''; computeAvailability(); showIncompleteWarnings(); updateActionStates(); }); }
+  const ce=document.getElementById('clearEndBtn'); if(ce){ ce.addEventListener('click',function(){ selectedEnd=null; document.getElementById('endDate').textContent='--'; document.getElementById('endDateInput').value=''; computeAvailability(); showIncompleteWarnings(); updateActionStates(); }); }
+  const styleWarn=document.createElement('style');
+  styleWarn.textContent=`
+    .field-warning{background:#fff3cd;color:#7a5c00;border-left:4px solid #b08900;padding:8px;border-radius:10px;margin-top:6px;display:flex;align-items:center;gap:8px}
+    .field-warning .warn-icon{display:inline-block;font-weight:700}
+    .field-warning .close-warn{margin-left:auto;background:transparent;border:none;color:#7a5c00;font-size:1rem;cursor:pointer}
+    .field-warning .close-warn:hover{opacity:.8}
+    .date-line{display:flex;align-items:center;gap:8px}
+    .clear-date{background:transparent;border:1px solid #ccc;color:#fff;padding:4px 8px;border-radius:6px;cursor:pointer}
+    .clear-date:hover{background:rgba(255,255,255,0.1)}
+  `;
+  document.head.appendChild(styleWarn);
