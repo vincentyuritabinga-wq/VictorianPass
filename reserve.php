@@ -1,4 +1,5 @@
 <?php
+ob_start(); // Prevents header issues on redirect
 session_start();
 include 'connect.php';
 $generatedCode = '';
@@ -8,8 +9,12 @@ if (empty($_SESSION['csrf_token'])) {
   $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// If a resident is logged in and not handling a visitor entry pass, redirect to resident-only reservation page
-if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && (!isset($_GET['entry_pass_id']) || $_GET['entry_pass_id'] === '')) {
+// If a resident is logged in and not handling a visitor entry pass, redirect to resident-only reservation page (GET requests only)
+if (
+  $_SERVER['REQUEST_METHOD'] === 'GET' &&
+  isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' &&
+  (!isset($_GET['entry_pass_id']) || $_GET['entry_pass_id'] === '')
+) {
   header('Location: reserve_resident.php');
   exit;
 }
@@ -50,6 +55,24 @@ ensureReservationTimeAndDownpayment($con);
 
 // Downpayment moved on-page: do not force redirect; users can pay via GCash from the form
 
+function generateUniqueRefCode($con){
+  $tries=0; $code='';
+  while($tries<6){
+    $candidate='VP-'.str_pad(rand(0,99999),5,'0',STR_PAD_LEFT);
+    $exists=false;
+    if($con instanceof mysqli){
+      $q1=$con->prepare("SELECT 1 FROM reservations WHERE ref_code=? LIMIT 1");
+      $q1->bind_param('s',$candidate); $q1->execute(); $r1=$q1->get_result(); $exists = $exists || ($r1 && $r1->num_rows>0); $q1->close();
+      $q2=$con->prepare("SELECT 1 FROM guest_forms WHERE ref_code=? LIMIT 1");
+      $q2->bind_param('s',$candidate); $q2->execute(); $r2=$q2->get_result(); $exists = $exists || ($r2 && $r2->num_rows>0); $q2->close();
+    }
+    if(!$exists){ $code=$candidate; break; }
+    $tries++;
+  }
+  if($code===''){ $code='VP-'.str_pad(rand(0,99999),5,'0',STR_PAD_LEFT); }
+  return $code;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
   if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
@@ -63,12 +86,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $persons = intval($_POST['persons'] ?? 1);
     $hours = intval($_POST['hours'] ?? 0);
     $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
+    $purpose = isset($_POST['purpose']) ? trim($_POST['purpose']) : null;
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
       $price = max(1, $hours) * 150;
     } else if ($amenity === 'Clubhouse') {
       $price = max(1, $hours) * 200;
-    } else { // Pool
+    } else if ($amenity === 'Pool') {
       $price = max(1, $persons) * 175;
+    } else {
+      $price = 0;
     }
     $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL;
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
@@ -97,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if ((int)$stObj->format('H') < $minH || (int)$etObj->format('H') > $maxH) {
         $errorMsg = 'Selected time is outside operating hours.';
       }
-    } else {
+    }
       $visitorFlow = (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'resident');
       if (!$errorMsg) {
         $cnt = 0;
@@ -164,26 +190,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               error_log('reserve.php payment check error: ' . $e->getMessage());
             }
           }
-          $_SESSION['pending_reservation'] = [
-            'amenity' => $amenity,
-            'start_date' => $start,
-            'end_date' => $end,
-            'start_time' => $startTime,
-            'end_time' => $endTime,
-            'persons' => $persons,
-            'price' => $price,
-            'downpayment' => $downpayment,
-            'user_id' => $user_id,
-            'entry_pass_id' => $entry_pass_id
-          ];
-          $redir = 'downpayment.php?continue=reserve' . ($entry_pass_id?('&entry_pass_id=' . urlencode($entry_pass_id)):'') . ($ref_code?('&ref_code=' . urlencode($ref_code)):'');
-          header('Location: ' . $redir);
-          exit;
+          $newRef = $ref_code !== '' ? $ref_code : generateUniqueRefCode($con);
+          try {
+            if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
+            $dpIns = ($downpayment !== null ? $downpayment : 0.0);
+            $uidIns = ($user_id && intval($user_id) > 0) ? intval($user_id) : NULL;
+            $epIns = ($entry_pass_id && intval($entry_pass_id) > 0) ? intval($entry_pass_id) : NULL;
+
+            $existsStmt = $con->prepare("SELECT id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $existsStmt->bind_param('s', $newRef);
+            $existsStmt->execute();
+            $existsRes = $existsStmt->get_result();
+            $existsStmt->close();
+
+            if ($existsRes && $existsRes->num_rows > 0) {
+              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, approval_status = 'pending' WHERE ref_code = ?");
+              $upd->bind_param('sssssiddiiss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $newRef);
+              $upd->execute();
+              $upd->close();
+              if ($paidOk) {
+                $psu = $con->prepare("UPDATE reservations SET payment_status = 'verified' WHERE ref_code = ?");
+                $psu->bind_param('s', $newRef);
+                $psu->execute();
+                $psu->close();
+              } else {
+                $psu = $con->prepare("UPDATE reservations SET payment_status = 'pending' WHERE ref_code = ?");
+                $psu->bind_param('s', $newRef);
+                $psu->execute();
+                $psu->close();
+              }
+            } else {
+              $payStatus = $paidOk ? 'verified' : 'pending';
+              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+              $ins->bind_param('ssssssiddiiss', $newRef, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $payStatus);
+              $ins->execute();
+              $ins->close();
+            }
+          } catch (Throwable $e) {
+            error_log('reserve.php upsert error: ' . $e->getMessage());
+            $errorMsg = 'Server error. Please try again later.';
+          }
+          if (!$errorMsg) {
+            // Store reservation info in session for confirmation/debugging if needed
+            $_SESSION['pending_reservation'] = [
+              'amenity' => $amenity,
+              'start_date' => $start,
+              'end_date' => $end,
+              'start_time' => $startTime,
+              'end_time' => $endTime,
+              'persons' => $persons,
+              'price' => $price,
+              'downpayment' => $downpayment,
+              'user_id' => $user_id,
+              'entry_pass_id' => $entry_pass_id,
+              'ref_code' => $newRef
+            ];
+            $generatedCode = $newRef;
+            $canSubmit = true;
+            // Prevent double submission
+            if (isset($_SESSION['reservation_submitted']) && $_SESSION['reservation_submitted'] === $newRef) {
+              $errorMsg = 'This reservation has already been submitted.';
+            } else {
+              $_SESSION['reservation_submitted'] = $newRef;
+              // Always redirect to downpayment page with entry_pass_id and ref_code
+              $redir = 'downpayment.php?continue=reserve';
+              if (!empty($entry_pass_id)) { $redir .= '&entry_pass_id=' . urlencode((string)$entry_pass_id); }
+              if (!empty($newRef)) { $redir .= '&ref_code=' . urlencode($newRef); }
+              header('Location: ' . $redir);
+              exit;
+            }
+          }
         }
       }
     }
   }
-}
+// End of POST handler
 
 // Lightweight endpoint to return booked dates for the selected amenity
 if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
@@ -863,16 +944,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       .amenity-card img{width:180px;height:120px}
     }
 
-    @media (min-width: 1440px) {
-      .layout { grid-template-columns: 1fr; }
-    }
-    .left-panel:has(.amenity-card.selected[data-key="pool"]) .amenity-desc .desc-img[data-key="pool"]{display:block}
-    .left-panel:has(.amenity-card.selected[data-key="clubhouse"]) .amenity-desc .desc-img[data-key="clubhouse"]{display:block}
-    .left-panel:has(.amenity-card.selected[data-key="basketball"]) .amenity-desc .desc-img[data-key="basketball"]{display:block}
-    .left-panel:has(.amenity-card.selected[data-key="tennis"]) .amenity-desc .desc-img[data-key="tennis"]{display:block}
+  @media (min-width: 1440px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  .left-panel:has(.amenity-card.selected[data-key="pool"]) .amenity-desc .desc-img[data-key="pool"]{display:block}
+  .left-panel:has(.amenity-card.selected[data-key="clubhouse"]) .amenity-desc .desc-img[data-key="clubhouse"]{display:block}
+  .left-panel:has(.amenity-card.selected[data-key="basketball"]) .amenity-desc .desc-img[data-key="basketball"]{display:block}
+  .left-panel:has(.amenity-card.selected[data-key="tennis"]) .amenity-desc .desc-img[data-key="tennis"]{display:block}
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000;display:none}
   </style>
 </head>
 <body>
+  <div id="notifyLayer" class="toast"></div>
    
 <header class="navbar">
   <div class="logo">
@@ -941,10 +1024,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       <div class="section-header"><h2>Reservation</h2><p>Select date, time, and persons</p></div>
       <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
       <form method="POST">
+        <input type="hidden" name="purpose" value="Amenity Reservation">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
         <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
-        <input type="hidden" id="submitAllowed" value="<?php echo $canSubmit ? '1' : '0'; ?>">
+        <input type="hidden" id="submitAllowed" value="1">
         <div class="reservation-card">
           <div class="calendar" style="width:100%">
             <div class="calendar-header">
@@ -998,7 +1082,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         </div>
         <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
-          <?php $refParam = isset($_GET['ref_code']) ? $_GET['ref_code'] : ''; ?>
+          <?php $refParam = isset($_GET['ref_code']) ? $_GET['ref_code'] : ''; if (empty($refParam) && !empty($generatedCode)) { $refParam = $generatedCode; } ?>
           <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
           <?php if (!empty($refParam)) { ?><span class="ref-inline">Status Code: <?php echo htmlspecialchars($refParam); ?></span><?php } ?>
           <?php if (!empty($refParam) && !$canSubmit) { ?>
@@ -1007,13 +1091,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
               <span class="msg">Payment pending. Complete downpayment to enable submission.</span>
               <button class="close-warn" type="button" onclick="this.closest('.field-warning').remove()">×</button>
             </div>
-            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=reserve<?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($_GET['ref_code']) ? '&ref_code=' . urlencode($_GET['ref_code']) : ''); ?>">Pay Downpayment</a>
+            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=reserve<?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($refParam) ? '&ref_code=' . urlencode($refParam) : ''); ?>">Pay Downpayment</a>
           <?php } ?>
         </div>
       </div>
     </form>
-  </div>
- </div>
+</div>
+</div>
 </section>
 
 <div id="refModal" class="modal" style="<?php echo $generatedCode ? 'display:flex;' : ''; ?>">
@@ -1028,8 +1112,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     <div style="text-align:center;margin-top:12px;">
       <a href="mainpage.php#" class="btn-secondary" title="Back to Visitor Home">← Back to Visitor Home</a>
     </div>
-  </div>
 </div>
+</div>
+
+<div id="verifyModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Confirm Details</h2>
+    <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
+    <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="btn-secondary" id="verifyConfirmBtn">Proceed</button>
+    </div>
+  </div>
+  </div>
 
 <!--
 <div id="hintModal" class="modal" style="display:none;">
@@ -1401,6 +1496,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }
   }
 
+  function formIsComplete(){
+    const amen=document.getElementById('amenityField').value;
+    const s=document.getElementById('startDateInput').value;
+    const eD=document.getElementById('endDateInput').value;
+    const st=document.getElementById('startTimeInput').value;
+    const et=document.getElementById('endTimeInput').value;
+    const persons=parseInt(document.getElementById('personsInput').value||'0');
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
+    if(!amen||!s||!eD||!st||!et) return false;
+    if(s && eD && eD < s) return false;
+    if(st && et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) return false; }
+    if(isHourBasedAmenity(amen)){ if(hours<1) return false; } else { if(persons<1) return false; }
+    return true;
+  }
+
   document.getElementById("prevMonth").onclick=()=>{currentMonth=currentMonth===0?11:currentMonth-1;currentYear=currentMonth===11?currentYear-1:currentYear;renderCalendar(currentMonth,currentYear)};
   document.getElementById("nextMonth").onclick=()=>{currentMonth=currentMonth===11?0:currentMonth+1;currentYear=currentMonth===0?currentYear+1:currentYear;renderCalendar(currentMonth,currentYear)};
   loadBookedDates();
@@ -1423,8 +1533,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   const ce=document.getElementById('clearEndBtn'); if(ce){ ce.addEventListener('click',clearEndDate); }
   const formEl=document.querySelector('form');
   if(formEl){
+    let submitting = false;
     formEl.addEventListener('submit', async function(e){
+      if (submitting) { e.preventDefault(); return false; }
       persistForm();
+      let verifyAllowed=true;
+      const gateEl=document.getElementById('submitAllowed');
+      if(gateEl && gateEl.value==='0'){ verifyAllowed=false; setFieldWarning('amenityField','Payment pending. Complete downpayment to continue.'); }
       const amen=document.getElementById('amenityField').value;
       const s=document.getElementById('startDateInput').value;
       const eD=document.getElementById('endDateInput').value;
@@ -1439,12 +1554,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         const [eh,em]=(et||'').split(':');
         const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10);
         const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10);
-        if(eMin<=sMin){ setFieldWarning('endTimeInput','End time must be after start time (24-hour).'); }
+        if(eMin<=sMin){ setFieldWarning('endTimeInput','End time must be after start time (24-hour).'); verifyAllowed=false; }
       }
-      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setFieldWarning('downpaymentInput','Downpayment cannot be negative.'); } }
+      if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setFieldWarning('downpaymentInput','Downpayment cannot be negative.'); verifyAllowed=false; } }
       const priceEl=document.getElementById('price');
-      if(priceEl && dpVal!=='' && !isNaN(Number(dpVal))){ const price=parseFloat(priceEl.textContent.replace(/[^0-9.]/g,''))||0; if(Number(dpVal)>price){ setFieldWarning('downpaymentInput','Downpayment cannot exceed total price.'); } }
-      if(isPersonBasedAmenity(amen) && persons<1){ setFieldWarning('personsInput','Persons must be at least 1.'); }
+      if(priceEl && dpVal!=='' && !isNaN(Number(dpVal))){ const price=parseFloat(priceEl.textContent.replace(/[^0-9.]/g,''))||0; if(Number(dpVal)>price){ setFieldWarning('downpaymentInput','Downpayment cannot exceed total price.'); verifyAllowed=false; } }
+      if(isPersonBasedAmenity(amen) && persons<1){ setFieldWarning('personsInput','Persons must be at least 1.'); verifyAllowed=false; }
       if(s && eD && s===eD && st && et){
         const times=await fetchBookedTimesFor(s);
         const overlap=times.some(t=>!(st>=t.end || et<=t.start));
@@ -1454,8 +1569,70 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           return false;
         }
       }
+      const amenVal=document.getElementById('amenityField').value;
+      if(!amenVal || !s || !eD || !st || !et){ verifyAllowed=false; }
+      if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
+      if(!verifyAllowed){ e.preventDefault(); showToast('Please complete all fields accurately before proceeding.','warning'); return false; }
+      // Only show modal if not confirmed yet
+      if(!window.__verifyConfirmed){
+        e.preventDefault();
+        const priceTxt = (priceEl && priceEl.textContent) ? priceEl.textContent : '₱0';
+        const unitsLabel = isHourBasedAmenity(amenVal) ? 'Hours' : 'Persons';
+        const unitsValue = isHourBasedAmenity(amenVal) ? (parseInt(document.getElementById('hoursInput').value||'1',10)) : (parseInt(document.getElementById('personsInput').value||'1',10));
+        const summary = [
+          ['Amenity', amenVal||'-'],
+          ['Start', s||'-'],
+          ['End', eD||'-'],
+          ['Time', (st||'') + (et?(' → '+et):'')],
+          [unitsLabel, String(unitsValue)],
+          ['Total Price', priceTxt],
+          ['Downpayment', (dpVal!==''?('₱'+Number(dpVal).toFixed(2)):'—')]
+        ].map(function(x){ return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>'; }).join('');
+        const sumEl=document.getElementById('verifySummary'); if(sumEl){ sumEl.innerHTML = summary; }
+        const vm=document.getElementById('verifyModal'); if(vm){ vm.style.display='flex'; }
+        return false;
+      } else {
+        // Reset confirmation for next submit
+        window.__verifyConfirmed = false;
+        submitting = true;
+        setTimeout(function(){ submitting = false; }, 3000);
+      }
     });
   }
+  (function(){
+    const btn=document.getElementById('submitBtn');
+    const vm=document.getElementById('verifyModal');
+    const cBtn=document.getElementById('verifyCancelBtn');
+    const pBtn=document.getElementById('verifyConfirmBtn');
+    window.__verifyConfirmed=false;
+    if(cBtn){ cBtn.addEventListener('click', function(){ if(vm){ vm.style.display='none'; } }); }
+    if(pBtn){
+      pBtn.addEventListener('click', function(){
+        showIncompleteWarnings();
+        if(!formIsComplete()){
+          showToast('Please fix the highlighted fields before proceeding.','warning');
+          return;
+        }
+        window.__verifyConfirmed=true;
+        if(vm){ vm.style.display='none'; }
+        showToast('Details confirmed. Redirecting to payment…','success');
+        // Actually submit the form (bypass modal)
+        const f=document.querySelector('form');
+        if(f){
+          f.requestSubmit();
+        }
+      });
+    }
+    if(btn){
+      btn.addEventListener('click', function(e){
+        const f=document.querySelector('form');
+        if(f){
+          f.requestSubmit();
+        }
+      });
+    }
+  })();
+  function showToast(message,type){ const nl=document.getElementById('notifyLayer'); if(!nl) return; nl.textContent=message; nl.style.background= type==='warning' ? '#8a2a2a' : type==='success' ? '#23412e' : '#345c40'; nl.style.display='block'; clearTimeout(nl.__t); nl.__t=setTimeout(function(){ nl.style.display='none'; }, 3000); }
   function updateActionStates(){
     const s=document.getElementById('startDateInput').value;
     const eD=document.getElementById('endDateInput').value;
@@ -1465,6 +1642,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     const submitBtn=document.getElementById('submitBtn');
+    const gate=document.getElementById('submitAllowed');
     let allowed=true;
     if(!amenVal) allowed=false;
     if(!s||!eD) allowed=false;
@@ -1472,6 +1650,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(s&&eD && eD < s) allowed=false;
     if(st&&et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) allowed=false; }
     if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; } else { if(persons<1) allowed=false; }
+    
     if(submitBtn){ if(allowed){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
     const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = 'flex'; }
   }
@@ -1509,8 +1688,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const card=document.querySelector(`.amenity-card[data-key="${key}"]`); if(card){ card.classList.add('selected'); }
     }catch(_){}
   }
-  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ persistForm(); updateActionStates(); }); }});
+  ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ persistForm(); updateActionStates(); showIncompleteWarnings(); }); }});
   document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); });
+  document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}

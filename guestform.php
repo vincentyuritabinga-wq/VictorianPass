@@ -320,7 +320,7 @@ entryForm.addEventListener('submit', async (e)=>{
       const ref = String(data.ref_code || '');
       if (reserveCheck.checked) {
         // Proceed to amenity reservation page carrying the ref_code
-        const url = 'reserve_guest.php?wants_amenity=1&ref_code=' + encodeURIComponent(ref);
+        const url = 'reserve.php?wants_amenity=1&ref_code=' + encodeURIComponent(ref);
         window.location.href = url;
       } else {
         openModal(ref);

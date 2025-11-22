@@ -124,7 +124,7 @@
     <h2>Entry Pass Status</h2>
     <div id="statusResult" class="status-message">Loading...</div>
   </div>
-
+  
   <div class="dashboard" id="dashboard">
     <div class="dashboard-header">
       <img src="mainpage/logo.svg" alt="VictorianPass Logo" />

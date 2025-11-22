@@ -3,6 +3,10 @@ session_start();
 include 'connect.php';
 
 if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); }
+function vp_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/status_view.php?code='.urlencode($code); }
+function normalizePhonePh($phone){ $p=trim($phone??''); if(preg_match('/^\+63(9\d{9})$/',$p)){ return '0'.substr($p,3); } return $p; }
+function sendEmailConfirmation($to,$subject,$body){ if(!$to) return false; $headers="MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nFrom: VictorianPass <noreply@victorianpass.local>\r\n"; return @mail($to,$subject,$body,$headers); }
+function sendSmsWebhook($phone,$message){ $url=getenv('SMS_WEBHOOK_URL')?:''; $ph=normalizePhonePh($phone); if(!$url||!$ph) return false; $payload=json_encode(['phone'=>$ph,'message'=>$message]); $ctx=stream_context_create(['http'=>['method'=>'POST','header'=>"Content-Type: application/json\r\n",'content'=>$payload,'timeout'=>5]]); $resp=@file_get_contents($url,false,$ctx); return $resp!==false; }
 
 $continue = isset($_GET['continue']) ? $_GET['continue'] : 'reserve';
 $entry_pass_id = isset($_GET['entry_pass_id']) ? intval($_GET['entry_pass_id']) : 0;
@@ -50,6 +54,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $ins->execute();
       $ins->close();
     }
+    $toEmail=''; $toPhone=''; $amenityDet=$amenity; $sdDet=$start; $edDet=$end; $stDet=$startTime; $etDet=$endTime; $priceDet=$price;
+    $ds=$con->prepare("SELECT r.amenity,r.start_date,r.end_date,r.start_time,r.end_time,r.price,r.ref_code,e.full_name,e.email AS ep_email,e.contact AS ep_phone,u.email AS user_email,u.phone AS user_phone FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id=e.id LEFT JOIN users u ON r.user_id=u.id WHERE r.ref_code=? LIMIT 1");
+    $ds->bind_param('s',$ref_code);
+    $ds->execute();
+    $dr=$ds->get_result();
+    if($dr && ($row=$dr->fetch_assoc())){
+      $amenityDet=$row['amenity']?:$amenityDet;
+      $sdDet=$row['start_date']?:$sdDet;
+      $edDet=$row['end_date']?:$edDet;
+      $stDet=$row['start_time']?:$stDet;
+      $etDet=$row['end_time']?:$etDet;
+      $priceDet=isset($row['price'])?floatval($row['price']):$priceDet;
+      $toEmail=($row['ep_email']?:'')?:($row['user_email']?:'');
+      $toPhone=($row['ep_phone']?:'')?:($row['user_phone']?:'');
+    }
+    $ds->close();
+    $link=vp_status_link($ref_code);
+    $subject='Reservation Confirmed: '.$ref_code;
+    $timeStr=($stDet?$stDet:'').(($etDet&&$stDet)?' - '.$etDet:'');
+    $body="Your reservation has been recorded.\nRef Code: ".$ref_code."\nAmenity: ".($amenityDet?:'-')."\nDates: ".($sdDet?:'-')." to ".($edDet?:'-')."\nTime: ".($timeStr?:'-')."\nTotal Price: ₱".number_format(($priceDet?:0),2)."\nTrack status: ".$link;
+    sendEmailConfirmation($toEmail,$subject,$body);
+    sendSmsWebhook($toPhone,'Reservation '.$ref_code.' confirmed. Track: '.$link);
     $_SESSION['pending_reservation'] = null;
     $msg = 'Payment confirmed.';
     // Redirect to main page with a small notification
@@ -86,9 +112,13 @@ if ($ref_code === '') {
     .row{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
     .row .label{color:#ddd;font-weight:600}
     .row .amount{font-weight:700}
+    .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000}
   </style>
   </head>
 <body>
+  <?php if (!empty($ref_code)) { ?>
+    <div class="toast">Reservation captured. Code <?php echo htmlspecialchars($ref_code); ?></div>
+  <?php } ?>
   <div class="wrap">
     <div class="card">
       <h2 class="title">Downpayment</h2>
