@@ -48,85 +48,140 @@ function ensureGuestFormExtras($con){
 }
 ensureGuestFormExtras($con);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $amenity = $_POST['amenity'] ?? 'Pool';
-  $start   = $_POST['startDate'] ?? '';
-  $end     = $_POST['endDate'] ?? '';
-  $startTime = $_POST['startTime'] ?? '';
-  $endTime   = $_POST['endTime'] ?? '';
-  $persons = intval($_POST['persons'] ?? 1);
-  $hours = intval($_POST['hours'] ?? 0);
-  $price = (in_array($amenity, ['Basketball Court','Tennis Court'], true)) ? (max(1,$hours) * 150) : ($persons * 1);
-  $minH = ($amenity === 'Clubhouse') ? 9 : 9;
-  $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
-  $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
-  $user_id = $residentOwnerId ? intval($residentOwnerId) : NULL;
+// CSRF protection
+if (empty($_SESSION['csrf_token'])) {
+  $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
-  // Validate inputs
-  if (!$start || !$end) {
-    $errorMsg = 'Please select a start and end date.';
-  } else if (!$startTime || !$endTime) {
-    $errorMsg = 'Please select a start and end time.';
-  } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
-    $errorMsg = 'Persons must be at least 1.';
-  } else if ((int)date('H', strtotime($startTime)) < $minH || (int)date('H', strtotime($endTime)) > $maxH) {
-    $errorMsg = 'Selected time is outside operating hours.';
-  } else if ($downpayment === null || $downpayment < 0) {
-    $errorMsg = 'Please enter a valid downpayment amount.';
-  } else if ($downpayment !== null && $downpayment > $price) {
-    $errorMsg = 'Downpayment cannot exceed the total price.';
+function generateUniqueGuestRefCode($con) {
+  $tries = 0; $code = '';
+  while ($tries < 6) {
+    $candidate = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT);
+    $exists = false;
+    if ($con instanceof mysqli) {
+      $q1 = $con->prepare("SELECT 1 FROM guest_forms WHERE ref_code=? LIMIT 1");
+      $q1->bind_param('s', $candidate); $q1->execute(); $r1 = $q1->get_result(); $exists = $exists || ($r1 && $r1->num_rows > 0); $q1->close();
+    }
+    if (!$exists) { $code = $candidate; break; }
+    $tries++;
+  }
+  if ($code === '') { $code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
+  return $code;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
+  if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
+    $errorMsg = 'Invalid form submission.';
   } else {
-    $cnt = 0;
-    $singleDay = ($start && $end && $start === $end && $startTime && $endTime);
-    try {
-      if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-      if ($singleDay) {
-        $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
-        $check1->bind_param("ssss", $amenity, $start, $startTime, $endTime);
-        $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
-        $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
-        $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
-        if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
-          $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
-          $check2->bind_param("ssss", $amenity, $start, $startTime, $endTime);
+    $amenity = isset($_POST['amenity']) ? $_POST['amenity'] : '';
+    $start   = isset($_POST['startDate']) ? $_POST['startDate'] : '';
+    $end     = isset($_POST['endDate']) ? $_POST['endDate'] : '';
+    $startTime = isset($_POST['startTime']) ? $_POST['startTime'] : '';
+    $endTime   = isset($_POST['endTime']) ? $_POST['endTime'] : '';
+    $persons = intval($_POST['persons'] ?? 1);
+    $hours = intval($_POST['hours'] ?? 0);
+    $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
+    // Price logic
+    if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
+      $price = max(1, $hours) * 150;
+    } else if ($amenity === 'Clubhouse') {
+      $price = max(1, $hours) * 200;
+    } else if ($amenity === 'Pool') {
+      $price = max(1, $persons) * 175;
+    } else {
+      $price = 0;
+    }
+    $user_id = $residentOwnerId ? intval($residentOwnerId) : NULL;
+    $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
+    if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
+    $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
+    $edObj = $end ? DateTime::createFromFormat('Y-m-d', $end) : false;
+    $stObj = $startTime ? DateTime::createFromFormat('H:i', $startTime) : false;
+    $etObj = $endTime ? DateTime::createFromFormat('H:i', $endTime) : false;
+    if (!$sdObj || !$edObj) {
+      $errorMsg = 'Please select a start and end date.';
+    } else if (!$stObj || !$etObj) {
+      $errorMsg = 'Please select a start and end time.';
+    } else if ($sdObj && $edObj && $sdObj > $edObj) {
+      $errorMsg = 'Start date must be before end date.';
+    } else if ($start === $end && $stObj && $etObj && $stObj >= $etObj) {
+      $errorMsg = 'Start time must be before end time.';
+    } else if (($sdObj && $edObj) && (($sdObj < new DateTime('today')) || ($edObj < new DateTime('today')))) {
+      $errorMsg = 'Selected dates must be today or later.';
+    } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
+      $errorMsg = 'Persons must be at least 1.';
+    } else if ($stObj && $etObj) {
+      $minH = ($amenity === 'Clubhouse') ? 9 : 9;
+      $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
+      if ((int)$stObj->format('H') < $minH || (int)$etObj->format('H') > $maxH) {
+        $errorMsg = 'Selected time is outside operating hours.';
+      }
+    }
+    if (!$errorMsg) {
+      $cnt = 0;
+      $singleDay = ($start && $end && $start === $end && $startTime && $endTime);
+      try {
+        if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
+        if ($singleDay) {
+          $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+          $check1->bind_param("ssss", $amenity, $start, $startTime, $endTime);
+          $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
+          $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+          $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+          if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
+            $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+            $check2->bind_param("ssss", $amenity, $start, $startTime, $endTime);
+          } else {
+            $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+            $check2->bind_param("sss", $amenity, $end, $start);
+          }
+          $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
+          $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
+          $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
+          if ($hasGt && $hasGt->num_rows>0 && $hasGe && $hasGe->num_rows>0) {
+            $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
+            $check3->bind_param("ssss", $amenity, $start, $startTime, $endTime);
+          } else {
+            $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
+            $check3->bind_param("sss", $amenity, $end, $start);
+          }
+          $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
         } else {
+          $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
+          $check1->bind_param("sss", $amenity, $end, $start);
+          $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
           $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
           $check2->bind_param("sss", $amenity, $end, $start);
-        }
-        $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
-        $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
-        $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
-        if ($hasGt && $hasGt->num_rows>0 && $hasGe && $hasGe->num_rows>0) {
-          $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
-          $check3->bind_param("ssss", $amenity, $start, $startTime, $endTime);
-        } else {
+          $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
           $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
           $check3->bind_param("sss", $amenity, $end, $start);
+          $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
         }
-        $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
-      } else {
-        $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
-        $check1->bind_param("sss", $amenity, $end, $start);
-        $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
-        $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
-        $check2->bind_param("sss", $amenity, $end, $start);
-        $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
-        $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
-        $check3->bind_param("sss", $amenity, $end, $start);
-        $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
+      } catch (Throwable $e) {
+        error_log('reserve_guest.php POST error: ' . $e->getMessage());
+        $errorMsg = 'Server error. Please try again later.';
       }
-    } catch (Throwable $e) {
-      error_log('reserve_guest.php POST error: ' . $e->getMessage());
-      $errorMsg = 'Server error. Please try again later.';
-    }
-    if ($cnt > 0) {
-      $errorMsg = 'Selected dates are not available. Please choose different dates.';
-    } else {
-      // Store amenity reservation details on guest_forms
-      $stmtUp = $con->prepare("UPDATE guest_forms SET wants_amenity = 1, amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, updated_at = NOW() WHERE ref_code = ?");
-      $stmtUp->bind_param("sssssiddds", $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $ref_code);
-      $stmtUp->execute();
-      $generatedCode = $ref_code;
+      if (!$errorMsg && $cnt > 0) {
+        $errorMsg = 'Selected dates are not available. Please choose different dates.';
+      }
+      if (!$errorMsg) {
+        // Prevent double submission
+        if (isset($_SESSION['guest_reservation_submitted']) && $_SESSION['guest_reservation_submitted'] === $ref_code) {
+          $errorMsg = 'This reservation has already been submitted.';
+        } else {
+          $_SESSION['guest_reservation_submitted'] = $ref_code;
+          // Store amenity reservation details on guest_forms
+          $stmtUp = $con->prepare("UPDATE guest_forms SET wants_amenity = 1, amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, updated_at = NOW(), approval_status = 'pending' WHERE ref_code = ?");
+          $stmtUp->bind_param("sssssiddds", $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $ref_code);
+          $stmtUp->execute();
+          $generatedCode = $ref_code;
+          // Redirect to downpayment page
+          $redir = 'downpayment.php?continue=reserve_guest&ref_code=' . urlencode($ref_code);
+          header('Location: ' . $redir);
+          exit;
+        }
+      }
     }
   }
 }
@@ -350,7 +405,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱500 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -358,7 +413,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱700 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -366,7 +421,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -374,7 +429,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="mainpage/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -382,7 +437,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     </div>
 
     <div class="right-panel">
-      <div class="section-header"><h2>Reservation</h2><p>Select date, time, and persons</p></div>
+      <div class="section-header"><h2>Reservation</h2><p></p></div>
       <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
       <form method="POST">
         <div class="reservation-card">
@@ -579,10 +634,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       selectAmenityByKey(key);
     });
   });
-  document.querySelectorAll('.status-pill[data-action="select-dates"]').forEach(function(el){
-    el.addEventListener('click',function(){ const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); } });
-    el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); } } });
-  });
+  
 
   const amenitiesList=document.getElementById('amenitiesList');
   if(amenitiesList){
@@ -591,6 +643,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(bookBtn){
         const card=e.target.closest('.amenity-card');
         if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
+        return;
+      }
+      const detailsBtn=e.target.closest('button[data-action="view-details"]');
+      if(detailsBtn){
+        const card=e.target.closest('.amenity-card');
+        if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
+        const desc=document.querySelector('.amenity-desc');
+        if(desc){ desc.scrollIntoView({behavior:'smooth',block:'start'}); }
         return;
       }
       const card=e.target.closest('.amenity-card');

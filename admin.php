@@ -692,7 +692,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         $stmt3->bind_param('sss',$amenity,$end,$start); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
                     }
                     $conflict = ($cnt > 0);
-                    if ($conflict) { $approval_status = 'denied'; }
+                    // Do NOT override approval_status. Just warn admin via redirect if conflict.
                 }
                 $stmtUp = $con->prepare("UPDATE guest_forms SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?");
                 $stmtUp->bind_param('sii', $approval_status, $staff_id, $reservation_id);
@@ -736,7 +736,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         $stmt3->bind_param('sss',$amenity,$end,$start); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
                     }
                     $conflict = ($cnt > 0);
-                    if ($conflict) { $approval_status = 'denied'; }
+                    // Do NOT override approval_status. Just warn admin via redirect if conflict.
                 }
                 $query = "UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?";
                 $stmt = $con->prepare($query);

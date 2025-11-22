@@ -440,7 +440,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <img src="mainpage/entrypass.svg" alt="Entry Pass">
           <span>Entry Pass Form</span>
         </a>
+      
       </div>
+      <br>
       <h2>WELCOME TO</h2>
       <div class="hero-brand">
         <h1>VictorianPass</h1>
@@ -452,6 +454,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <span class="line"></span>
       </div>
       <h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
+      <br><br>
       <!--<p class="welcome-subtitle">
         VictorianPass: An Online Amenity Reservation System<br>
         with QR-based Entry Pass Security<br>

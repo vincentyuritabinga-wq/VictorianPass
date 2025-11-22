@@ -110,7 +110,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
     </div>
     <div class="form-row">
       <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Contact Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
     </div>
 
     <h4 style="margin:20px 0 5px;color:#23412e;">Visitor Information</h4>
@@ -129,7 +129,9 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
         <label for="birthdate">Birthdate*</label>
       </div>
     </div>
-    <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Contact Number*" required>
+    <div class="input-wrap">
+      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor's Phone Number*" required>
+    </div>
     <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
 
     <label class="upload-box">
@@ -319,8 +321,8 @@ entryForm.addEventListener('submit', async (e)=>{
     if (data && data.success) {
       const ref = String(data.ref_code || '');
       if (reserveCheck.checked) {
-        // Proceed to amenity reservation page carrying the ref_code
-        const url = 'reserve.php?wants_amenity=1&ref_code=' + encodeURIComponent(ref);
+        // Proceed to guest amenity reservation page carrying the ref_code
+        const url = 'reserve_guest.php?ref_code=' + encodeURIComponent(ref);
         window.location.href = url;
       } else {
         openModal(ref);

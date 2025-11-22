@@ -20,7 +20,7 @@ $visitor_last_name  = trim($_POST['visitor_last_name'] ?? '');
 $visitor_sex        = trim($_POST['visitor_sex'] ?? '');
 $visitor_birthdate  = trim($_POST['visitor_birthdate'] ?? '');
 $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
-$visitor_email      = trim($_POST['visitor_email'] ?? ''); // required by schema
+
 
 $visit_date    = trim($_POST['visit_date'] ?? '');
 $visit_time    = trim($_POST['visit_time'] ?? '');
@@ -35,9 +35,13 @@ $wants_amenity = isset($_POST['wants_amenity']) ? 1 : 0;
 // If reserving an amenity, allow Visit Details (date/time/purpose) to be blank; otherwise require them.
 if ($resident_full_name === '' || $resident_house === '' || $resident_email === '' || $resident_contact === '' ||
     $visitor_first_name === '' || $visitor_last_name === '' || $visitor_sex === '' || $visitor_birthdate === '' ||
-    $visitor_contact === '' || $visitor_email === '' ||
-    (!$wants_amenity && ($visit_date === '' || $visit_time === '' || $visit_purpose === ''))) {
+    $visitor_contact === '') {
   echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+  exit;
+}
+// Only require visit details if not reserving an amenity
+if (!$wants_amenity && ($visit_date === '' || $visit_time === '' || $visit_purpose === '')) {
+  echo json_encode(['success' => false, 'message' => 'Please fill in all visit details.']);
   exit;
 }
 
@@ -59,8 +63,8 @@ if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
   echo json_encode(['success' => false, 'message' => 'Visitor phone must start with 09 and contain numbers only.']);
   exit;
 }
-if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL) || !filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
-  echo json_encode(['success' => false, 'message' => 'Please provide valid email addresses.']);
+if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {
+  echo json_encode(['success' => false, 'message' => 'Please provide a valid resident email address.']);
   exit;
 }
 
@@ -145,17 +149,17 @@ if ($resident_user_id === null) {
 }
 
 // Insert into guest_forms
+
+// Insert into guest_forms (visitor_email is not required anymore)
 $stmtGF = $con->prepare("INSERT INTO guest_forms (
   resident_user_id, resident_house, resident_email,
   visitor_first_name, visitor_middle_name, visitor_last_name,
-  visitor_sex, visitor_birthdate, visitor_contact, visitor_email,
+  visitor_sex, visitor_birthdate, visitor_contact,
   valid_id_path, visit_date, visit_time, purpose, persons, wants_amenity, ref_code, approval_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
-
-// $wants_amenity already determined above
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
 $stmtGF->bind_param(
-  'isssssssssssssiis',
+  'isssssssssssssis',
   $resident_user_id,
   $resident_house,
   $resident_email,
@@ -165,7 +169,6 @@ $stmtGF->bind_param(
   $visitor_sex,
   $visitor_birthdate,
   $visitor_contact,
-  $visitor_email,
   $validIdPath,
   $visit_date,
   $visit_time,

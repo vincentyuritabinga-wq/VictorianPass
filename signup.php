@@ -74,7 +74,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
   // 📞 Validate Philippine mobile number: must start with 09 and be 11 digits
   if (empty($phone) || !preg_match('/^09\d{9}$/', $phone)) {
-    $serverErrors['phone'] = 'Phone must start with 09 and contain numbers only.';
+    $serverErrors['phone'] = 'Phone number must be 11 digits and start with 09.';
   }
 
   // ✅ Register user if no errors
@@ -224,10 +224,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <input type="text" name="first_name" id="first_name" placeholder="First Name*" required>
           </div>
           <div class="input-wrap">
-            <input type="text" name="last_name" id="last_name" placeholder="Last Name*" required>
+            <input type="text" name="middle_name" id="middle_name" placeholder="Middle Name*" required>
           </div>
           <div class="input-wrap">
-            <input type="text" name="middle_name" id="middle_name" placeholder="Middle Name*" required>
+            <input type="text" name="last_name" id="last_name" placeholder="Last Name*" required>
           </div>
         </div>
 
@@ -490,6 +490,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           closer.addEventListener('click', function(){ warnEl.remove(); });
           closer.addEventListener('keydown', function(evt){ if (evt.key==='Enter' || evt.key===' '){ evt.preventDefault(); warnEl.remove(); } });
         }
+        // Auto-dismiss warning if input becomes valid
+        if (inputEl && (key === 'phone' || key === 'email')) {
+          inputEl.addEventListener('input', function autoDismiss(){
+            if ((key === 'phone' && /^09\d{9}$/.test(inputEl.value.trim())) || (key === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEl.value.trim()))) {
+              if (warnEl) warnEl.remove();
+              inputEl.removeEventListener('input', autoDismiss);
+            }
+          });
+        }
       } else {
         if (warnEl) warnEl.remove();
       }
@@ -534,7 +543,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         phone.addEventListener('input', function(e) {
           const val = e.target.value.trim();
           if (!/^09\d{9}$/.test(val)) {
-            setWarning('phone', 'Phone must start with 09 and contain numbers only.');
+            setWarning('phone', 'Phone number must be 11 digits and start with 09.');
           } else {
             setWarning('phone', '');
           }
@@ -573,7 +582,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           if (phone) {
             const val = phone.value.trim();
             if (!/^09\d{9}$/.test(val)) {
-              setWarning('phone', 'Phone must start with 09 and contain numbers only.');
+              setWarning('phone', 'Phone number must be 11 digits and start with 09.');
               valid = false;
             }
           }

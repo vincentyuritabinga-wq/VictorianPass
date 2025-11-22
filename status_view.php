@@ -100,12 +100,43 @@
       justify-content: center; align-items: center;
       z-index: 1000;
     }
-    .modal-content { background: #fff; border-radius: 12px; width: 350px; max-width: 90vw; max-height: 85vh; overflow-y: auto; color: #222; position: relative; box-shadow:0 8px 18px rgba(0,0,0,0.12); }
+    .modal-content { background: #fff; border-radius: 16px; width: 420px; max-width: 98vw; max-height: 90vh; overflow-y: auto; color: #222; position: relative; box-shadow:0 8px 24px rgba(0,0,0,0.18); }
     @media (max-width: 600px){ .details-content{ width: 92vw; } }
     .modal-header img { height: 28px; }
-    .qr-section { text-align: center; background: #fff; padding: 20px; }
-    .qr-section img { width: 220px; height: 220px; }
-    .qr-details { padding: 15px; font-size: 0.9rem; line-height: 1.4; color: #eee; }
+    .qr-section { text-align: center; background: #fff; padding: 24px 0 10px 0; }
+    .qr-section img { width: 200px; height: 200px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.10); }
+    .qr-details {
+      background: #fff;
+      padding: 18px 22px 18px 22px;
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: #222;
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      font-weight: 500;
+      text-align: left;
+      word-break: break-word;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .qr-details strong, .qr-details b {
+      color: #23412e;
+      font-weight: 700;
+    }
+    .qr-details .valid {
+      color: #1e7d46;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .qr-details .valid:before {
+      content: '\2714';
+      color: #1e7d46;
+      font-size: 1.1em;
+      margin-right: 4px;
+    }
     
     /* Upload Modal Styles */
     .upload-section { padding: 20px; }
