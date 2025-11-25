@@ -286,7 +286,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass - Reserve (Guest)</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
 
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -374,7 +374,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
    
 <header class="navbar">
   <div class="logo">
-    <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+    <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
     <div class="brand-text">
       <h1>VictorianPass</h1>
       <p>Victorian Heights Subdivision</p>
@@ -389,10 +389,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       <div class="section-header"><h2>Amenities</h2><p>Select an amenity</p></div>
       <div class="amenity-desc">
         <div class="media">
-          <img class="desc-img" data-key="pool" src="mainpage/pool.svg" alt="Pool">
-          <img class="desc-img" data-key="clubhouse" src="mainpage/clubhouse.svg" alt="Clubhouse">
-          <img class="desc-img" data-key="basketball" src="mainpage/basketball.svg" alt="Basketball Court">
-          <img class="desc-img" data-key="tennis" src="mainpage/tennis.svg" alt="Tennis Court">
+          <img class="desc-img" data-key="pool" src="images/pool.svg" alt="Pool">
+          <img class="desc-img" data-key="clubhouse" src="images/clubhouse.svg" alt="Clubhouse">
+          <img class="desc-img" data-key="basketball" src="images/basketball.svg" alt="Basketball Court">
+          <img class="desc-img" data-key="tennis" src="images/tennis.svg" alt="Tennis Court">
           <div>
             <h3 id="amenityDescTitle">Reserve Amenity</h3>
             <p id="amenityDescText">Select an amenity to see its details here.</p>
@@ -402,7 +402,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       </div>
       <div class="amenities-list" id="amenitiesList">
         <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="500" role="button" tabindex="0">
-          <img src="mainpage/pool.svg" alt="Pool">
+          <img src="images/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱500 / hour</div></div>
             <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
@@ -410,7 +410,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="700" role="button" tabindex="0">
-          <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+          <img src="images/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱700 / hour</div></div>
             <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
@@ -418,7 +418,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150" role="button" tabindex="0">
-          <img src="mainpage/basketball.svg" alt="Basketball">
+          <img src="images/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
             <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
@@ -426,7 +426,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150" role="button" tabindex="0">
-          <img src="mainpage/tennis.svg" alt="Tennis">
+          <img src="images/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
             <div class="meta"><button type="button" class="btn-main small" data-action="view-details">View Details</button><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
@@ -600,10 +600,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   const amenityData={
-    pool:{title:'Community Pool',value:'Pool',img:'mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
-    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
-    basketball:{title:'Basketball Court',value:'Basketball Court',img:'mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
-    tennis:{title:'Tennis Court',value:'Tennis Court',img:'mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
+    pool:{title:'Community Pool',value:'Pool',img:'images/mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
+    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'images/mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
+    basketball:{title:'Basketball Court',value:'Basketball Court',img:'images/mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
+    tennis:{title:'Tennis Court',value:'Tennis Court',img:'images/mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
   };
 
   function selectAmenityByKey(key){

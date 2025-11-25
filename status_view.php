@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Status Result - VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg" />
+  <link rel="icon" type="image/png" href="images/logo.svg" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
   <style>
     body { animation: fadeIn 0.6s ease-in-out; }
     * { font-family: 'Poppins', sans-serif !important; margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: url("mainpage/background.svg") center/cover no-repeat;
+      background: url("images/background.svg") center/cover no-repeat;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -158,7 +158,7 @@
   
   <div class="dashboard" id="dashboard">
     <div class="dashboard-header">
-      <img src="mainpage/logo.svg" alt="VictorianPass Logo" />
+      <img src="images/logo.svg" alt="VictorianPass Logo" />
       <button onclick="goBack()" class="qr-btn">Go Back</button>
     </div>
     <table>
@@ -183,7 +183,7 @@
   <div class="modal" id="qrModal">
     <div class="modal-content">
       <div class="modal-header">
-        <img src="mainpage/logo.svg" alt="Victorian Heights" />
+        <img src="images/logo.svg" alt="Victorian Heights" />
         <span class="close-btn" onclick="closeQR()">&times;</span>
       </div>
       <div class="qr-section">

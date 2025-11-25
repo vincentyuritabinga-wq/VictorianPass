@@ -118,11 +118,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-  <?php $mainCssVer = @filemtime(__DIR__ . '/mainpage.css') ?: time(); $respCssVer = @filemtime(__DIR__ . '/responsive.css') ?: time(); ?>
-  <link rel="stylesheet" href="mainpage.css?v=<?php echo $mainCssVer; ?>">
-  <link rel="stylesheet" href="responsive.css?v=<?php echo $respCssVer; ?>">
+  <?php $mainCssVer = @filemtime(__DIR__ . '/css/mainpage.css') ?: time(); $respCssVer = @filemtime(__DIR__ . '/css/responsive.css') ?: time(); ?>
+  <link rel="stylesheet" href="css/mainpage.css?v=<?php echo $mainCssVer; ?>">
+  <link rel="stylesheet" href="css/responsive.css?v=<?php echo $respCssVer; ?>">
 
   <style>
     /* Global Poppins Font Application */
@@ -243,7 +243,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .entry-form select { 
       width: 95%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; 
       font-size: 0.9rem; font-family: 'Poppins', sans-serif; 
-      background: #fff url("mainpage/arrow.svg") no-repeat right 12px center; 
+      background: #fff url("images/arrow.svg") no-repeat right 12px center; 
       background-size: 14px; appearance: none; color: #333; cursor: pointer; 
       margin-bottom: 14px;
     } 
@@ -385,43 +385,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- HEADER -->
   <header class="navbar">
     <div class="logo">
-      <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+      <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
       <div class="brand-text">
         <h1>VictorianPass</h1>
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
     
-    <nav class="page-nav">
-      <a href="#home">Home</a>
-      <a href="#about-us">About Us</a>
-      <a href="#facilities">Amenities</a>
-      <a href="#about-system">About the System</a>
-    </nav>
-
-    <div class="nav-actions">
-      <a href="checkurstatus.php" class="btn-nav btn-status" id="checkStatusNav" style="display: none;">Check Status</a>
-      <!-- Navigation Links (initially hidden) -->
-      <div class="nav-links" id="navLinks" style="display: none;">
-        <a href="login.php" class="btn-nav btn-login">Login</a>
-        <a href="signup.php" class="btn-nav btn-register">Register</a>
-        <div id="profileIcon" class="profile-icon-wrap" style="display: none;">
-          <img src="mainpage/profile'.jpg" alt="Profile" class="profile-icon">
-          <?php if ($hasResidentProfile): ?>
-          <div id="profileDropdown" class="profile-dropdown" role="dialog" aria-label="Resident quick profile">
-            <div class="mini-profile">
-              <img src="mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
-              <div class="mini-text">
-                <span class="mini-name"><?php echo htmlspecialchars($residentName); ?></span>
-                <span class="mini-house">House No.: <?php echo htmlspecialchars($residentHouse); ?></span>
+    <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navCollapse"><span></span><span></span><span></span></button>
+    <div class="nav-collapse" id="navCollapse">
+      <nav class="page-nav" id="primaryNav">
+        <a href="#home">Home</a>
+        <a href="#about-us">About Us</a>
+        <a href="#facilities">Amenities</a>
+        <a href="#about-system">About the System</a>
+      </nav>
+      <div class="nav-actions">
+        <a href="checkurstatus.php" class="btn-nav btn-status" id="checkStatusNav" style="display: none;">Check Status</a>
+        <div class="nav-links" id="navLinks" style="display: none;">
+          <a href="login.php" class="btn-nav btn-login">Login</a>
+          <a href="signup.php" class="btn-nav btn-register">Register</a>
+          <div id="profileIcon" class="profile-icon-wrap" style="display: none;">
+            <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon">
+            <?php if ($hasResidentProfile): ?>
+            <div id="profileDropdown" class="profile-dropdown" role="dialog" aria-label="Resident quick profile">
+              <div class="mini-profile">
+                <img src="images/mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
+                <div class="mini-text">
+                  <span class="mini-name"><?php echo htmlspecialchars($residentName); ?></span>
+                  <span class="mini-house">House No.: <?php echo htmlspecialchars($residentHouse); ?></span>
+                </div>
+              </div>
+              <div class="actions">
+                <a href="profileresident.php" class="btn btn-view">View More</a>
+                <a href="logout.php" class="btn btn-logout">Log Out</a>
               </div>
             </div>
-            <div class="actions">
-              <a href="profileresident.php" class="btn btn-view">View More</a>
-              <a href="logout.php" class="btn btn-logout">Log Out</a>
-            </div>
+            <?php endif; ?>
           </div>
-          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -437,7 +438,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <div class="hero-icons" id="entryPassButtonWrapper" style="display:none;">
         <a href="entrypass.html" class="icon-box" id="entryFormButton">
-          <img src="mainpage/entrypass.svg" alt="Entry Pass">
+          <img src="images/entrypass.svg" alt="Entry Pass">
           <span>Entry Pass Form</span>
         </a>
       
@@ -450,12 +451,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <div class="hero-emblem">
         <span class="line"></span>
-        <img src="mainpage/logo.svg" alt="Emblem">
+        <img src="images/logo.svg" alt="Emblem">
         <span class="line"></span>
       </div>
-      <h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
-      <br><br>
-      <!--<p class="welcome-subtitle">
+      <!--<h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
+      <p class="welcome-subtitle">
         VictorianPass: An Online Amenity Reservation System<br>
         with QR-based Entry Pass Security<br>
         for Victorian Heights Subdivision
@@ -477,7 +477,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
       </div>
       <p class="tagline">
-        Every home holds a story —<br>
+        Every home holds a story.<br>
         start yours in a place worth remembering.
       </p>
 
@@ -497,6 +497,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="section-divider"></div>
     <div class="section-body">
       <p>Victorian Heights subdivision is a gated residence that offers accessibility located at Dahlia Fairview, BRGY. Sauyo, Quezon City. It is a residential development by Swire Land Corporation that provides accessibility and exclusivity with a gated community with 222 houses and an estimated 2,220 residents, making it secure against harm and vulnerability. Furthermore, beautifully designed houses that cater to thousands of residents live within reach of convenience and service while getting the experience of peace in a suburban community .</p>
+      <img src="images/about subd.png" alt="Victorian Heights Subdivision" class="about-subdivision-photo">
     </div>
   </section>
 
@@ -505,22 +506,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="section-divider"></div>
     <div class="amenities-grid">
       <div class="amenity-card">
-        <img src="mainpage/pool.svg" alt="Community Pool">
+        <img src="images/pool.svg" alt="Community Pool">
         <h3 class="title">Community Pool</h3>
         <p class="desc">Relax and enjoy the pool with convenient reservation options.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+        <img src="images/clubhouse.svg" alt="Clubhouse">
         <h3 class="title">Clubhouse</h3>
         <p class="desc">Host gatherings and events in the subdivision clubhouse.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/basketball.svg" alt="Basketball Court">
+        <img src="images/basketball.svg" alt="Basketball Court">
         <h3 class="title">Basketball Court</h3>
         <p class="desc">Play and practice on our outdoor basketball court.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/tennis.svg" alt="Tennis Court">
+        <img src="images/tennis.svg" alt="Tennis Court">
         <h3 class="title">Tennis Court</h3>
         <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
       </div>
@@ -531,9 +532,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="section-divider"></div>
     <div class="section-body">
       <p>Victorian Pass is a modern subdivision management system that utilizes QR technology to provide fast, secure, and seamless access for residents and visitors. Designed to enhance security and streamline daily processes, the system handles amenity reservations, entry pass requests, incident reporting, and user verification, all in one platform. By replacing manual checks with QR scanning, Victorian Pass ensures quicker entry, and secure access, while improved monitoring subdivision welfare. the system strengthens community safety while offering a more convenient experience for everyone in the subdivision.</p>
+      <div class="about-intro"><h3>Experience peace of mind designed to safeguard your neighborhood.</h3></div>
+      <div class="about-system-grid">
+        <div class="about-card">
+          <img src="images/as1.png" alt="Community Life">
+          <h3>What You'll Find in Victorian Heights Subdivision?</h3>
+          <p>VictorianPass supports a connected and well-managed community. Residents enjoy secure living, convenient services, and organized processes that bring comfort, safety, and a sense of belonging.</p>
+        </div>
+        <div class="about-card">
+          <img src="images/as2.png" alt="Quick Response">
+          <h3>Quick response</h3>
+          <p>QR-based entry and reservation workflows enable fast approvals and real-time updates for residents, visitors, and guards, streamlining actions for better control and safer operations.</p>
+        </div>
+        <div class="about-card">
+          <img src="images/as3.png" alt="A Shelter">
+          <h3>A Shelter</h3>
+          <p>A welcoming, secure environment designed to offer comfort and confidence to every resident, with systems that protect and organize daily community life.</p>
+        </div>
+      </div>
     </div>
   </section>
-<p>BRANCHES</p>
+
   <!-- Visitor-friendly instructions box fixed at the bottom-left -->
    <br>
    <br>
@@ -660,7 +679,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     });
   </script>
   <script>
-    // Profile dropdown interactions: click/hover to open, click outside to close
+    (function(){var t=document.getElementById('navToggle');var c=document.getElementById('navCollapse');if(!t||!c)return;t.addEventListener('click',function(){var o=c.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');});window.addEventListener('click',function(e){if(!c.contains(e.target)&&!t.contains(e.target)){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});window.addEventListener('resize',function(){if(window.innerWidth>900){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});})();
+  </script>
+  <script>
     document.addEventListener('DOMContentLoaded', function(){
       const iconWrap = document.getElementById('profileIcon');
       const dd = document.getElementById('profileDropdown');

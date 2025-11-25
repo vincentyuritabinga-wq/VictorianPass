@@ -405,7 +405,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass - Reserve</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
 
   <style>
     /* Modern UI Design */
@@ -977,7 +977,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
    
 <header class="navbar">
   <div class="logo">
-    <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+    <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
     <div class="brand-text">
       <h1>VictorianPass</h1>
       <p>Victorian Heights Subdivision</p>
@@ -991,10 +991,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       <div class="section-header"><h2>Amenities</h2><p>Select an amenity</p></div>
       <div class="amenity-desc">
         <div class="media">
-          <img class="desc-img" data-key="pool" src="mainpage/pool.svg" alt="Pool">
-          <img class="desc-img" data-key="clubhouse" src="mainpage/clubhouse.svg" alt="Clubhouse">
-          <img class="desc-img" data-key="basketball" src="mainpage/basketball.svg" alt="Basketball Court">
-          <img class="desc-img" data-key="tennis" src="mainpage/tennis.svg" alt="Tennis Court">
+          <img class="desc-img" data-key="pool" src="images/pool.svg" alt="Pool">
+          <img class="desc-img" data-key="clubhouse" src="images/clubhouse.svg" alt="Clubhouse">
+          <img class="desc-img" data-key="basketball" src="images/basketball.svg" alt="Basketball Court">
+          <img class="desc-img" data-key="tennis" src="images/tennis.svg" alt="Tennis Court">
           <div>
             <h3 id="amenityDescTitle">Reserve Amenity</h3>
             <p id="amenityDescText">Select an amenity to see its details here.</p>
@@ -1004,34 +1004,34 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       </div>
       <div class="amenities-list" id="amenitiesList">
         <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175" role="button" tabindex="0">
-          <img src="mainpage/pool.svg" alt="Pool">
+          <img src="images/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱175 / person</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="200" role="button" tabindex="0">
-          <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+          <img src="images/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱200 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150" role="button" tabindex="0">
-          <img src="mainpage/basketball.svg" alt="Basketball">
+          <img src="images/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
         <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150" role="button" tabindex="0">
-          <img src="mainpage/tennis.svg" alt="Tennis">
+          <img src="images/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -1039,7 +1039,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     </div>
 
     <div class="right-panel">
-      <div class="section-header"><h2 id="reservationTitle">Reserve an Amenity</h2><p id="reservationHint">Select an amenity to continue</p></div>
+      <div class="section-header"><h2>Reservation</h2><p>Select date, time, and persons</p></div>
       <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
       <form method="POST">
         <input type="hidden" name="purpose" value="Amenity Reservation">
@@ -1047,7 +1047,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
         <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
         <input type="hidden" id="submitAllowed" value="1">
-        <div class="reservation-card" id="reservationCard" style="display:none;">
+        <div class="reservation-card">
           <div class="calendar" style="width:100%">
             <div class="calendar-header">
               <button id="prevMonth">&lt;</button>
@@ -1323,10 +1323,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   const amenityData={
-    pool:{title:'Community Pool',value:'Pool',img:'mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
-    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
-    basketball:{title:'Basketball Court',value:'Basketball Court',img:'mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
-    tennis:{title:'Tennis Court',value:'Tennis Court',img:'mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
+    pool:{title:'Community Pool',value:'Pool',img:'images/mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
+    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'images/mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
+    basketball:{title:'Basketball Court',value:'Basketball Court',img:'images/mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
+    tennis:{title:'Tennis Court',value:'Tennis Court',img:'images/mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
   };
 
   function selectAmenityByKey(key){
@@ -1350,7 +1350,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     configureFieldsForAmenity(selectedAmenity);
     renderHoursDropdownForAmenity();
     renderTimeSlotButtons();
-    try{ document.getElementById('reservationCard').style.display='flex'; document.getElementById('reservationTitle').textContent='Reservation'; document.getElementById('reservationHint').textContent='Select date, time, and persons'; if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(_){}
   }
 
   document.querySelectorAll('.amenity-card').forEach(function(card){
@@ -1448,14 +1447,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   function configureFieldsForAmenity(amen){
-    if(!amen){
-      try{
-        document.getElementById('reservationCard').style.display='none';
-        document.getElementById('reservationTitle').textContent='Reserve an Amenity';
-        document.getElementById('reservationHint').textContent='Select an amenity to continue';
-      }catch(_){}
-      return;
-    }
     const personsWrap=document.getElementById('personsInput')?.closest('.res-item');
     const hoursLabel=document.getElementById('hoursLabel');
     const hoursInput=document.getElementById('hoursInput');
@@ -1473,19 +1464,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hoursInput){ if(!hoursInput.value) hoursInput.value=1; }
       if(endTimeInput){ endTimeInput.readOnly=true; }
       if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
-      updateDisplayedPrice();
-      updateDownpaymentSuggestion();
-      renderHoursDropdownForAmenity();
-      renderTimeSlotButtons();
-    } else if(amen==='Pool'){
-      if(personsWrap){ personsWrap.style.display='block'; }
-      if(hoursLabel){ hoursLabel.style.display='none'; }
-      if(hoursCounter){ hoursCounter.style.display='none'; }
-      const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='inline-block'; }
-      document.getElementById('hoursSectionLabel').style.display='block';
-      document.getElementById('timeSectionLabel').style.display='block';
-      if(hoursInput && !hoursInput.value) hoursInput.value=1;
-      if(endTimeInput){ endTimeInput.readOnly=true; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1587,7 +1565,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const card=document.querySelector('.amenity-card.selected');
     if(!card) return;
     const pill=card.querySelector('.status-pill');
-    if(!pill) { return; }
     if(!s||!e||!st||!et){computeAvailability();return}
     if(s!==e){computeAvailability();return}
     if(st && et){
@@ -1664,9 +1641,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!et){ if(force||isDirty('endTimeInput')) setFieldWarning('endTimeInput','End time is required.'); } else { setFieldWarning('endTimeInput',''); }
     if(isHourBasedAmenity(amen)){
       if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
-    } else if(amen==='Pool'){
-      if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
-      if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
     } else {
       if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
     }
@@ -1683,9 +1657,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!amen||!s||!eD||!st||!et) return false;
     if(s && eD && eD < s) return false;
     if(st && et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) return false; }
-    if(isHourBasedAmenity(amen)){ if(hours<1) return false; }
-    else if(amen==='Pool'){ if(hours<1 || persons<1) return false; }
-    else { if(persons<1) return false; }
+    if(isHourBasedAmenity(amen)){ if(hours<1) return false; } else { if(persons<1) return false; }
     return true;
   }
 
@@ -1700,7 +1672,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
     });
   });
-  
+  document.querySelectorAll('.status-pill[data-action="select-dates"]').forEach(el=>{
+    el.addEventListener('click',function(){ const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); const rc=document.querySelector('.reservation-card'); if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } } });
+    el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); const rc=document.querySelector('.reservation-card'); if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } } } });
+  });
 
   ['startTimeInput','endTimeInput'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',function(){ if(isHourBasedAmenity(document.getElementById('amenityField').value) && id==='startTimeInput'){ computeEndTimeFromHours(); } else { checkTimeAvailability(); } })}});
   const hoursEl=document.getElementById('hoursInput'); if(hoursEl){ hoursEl.addEventListener('input',function(){ computeEndTimeFromHours(); updateDisplayedPrice(); updateDownpaymentSuggestion(); }); }
@@ -1831,9 +1806,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!st||!et) allowed=false;
     if(s&&eD && eD < s) allowed=false;
     if(st&&et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) allowed=false; }
-    if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; }
-    else if(amenVal==='Pool'){ if(hours<1 || persons<1) allowed=false; }
-    else { if(persons<1) allowed=false; }
+    if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; } else { if(persons<1) allowed=false; }
     
     if(submitBtn){ if(allowed){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
     const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = 'flex'; }
@@ -1873,7 +1846,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
-  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); initSingleDayToggle(); try{ const amen=document.getElementById('amenityField').value; if(!amen){ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; } else { document.getElementById('reservationCard').style.display='flex'; document.getElementById('reservationTitle').textContent='Reservation'; document.getElementById('reservationHint').textContent='Select date, time, and persons'; } }catch(_){} });
+  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); initSingleDayToggle(); });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
@@ -1896,7 +1869,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const lbl=document.getElementById('hoursSectionLabel');
     if(!sel) return;
     sel.innerHTML='';
-    if(!(isHourBasedAmenity(amen) || amen==='Pool')){ sel.style.display='none'; if(lbl) lbl.style.display='none'; return; }
+    if(!isHourBasedAmenity(amen)){ sel.style.display='none'; if(lbl) lbl.style.display='none'; return; }
     sel.style.display='inline-block'; if(lbl) lbl.style.display='block';
     const maxH=amen==='Clubhouse'?12:9;
     for(let h=1; h<=maxH; h++){ const opt=document.createElement('option'); opt.value=String(h); opt.textContent=`${h} hour${h>1?'s':''}`; sel.appendChild(opt); }
@@ -1923,7 +1896,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(btn.disabled || isPastOnToday){
         btn.disabled=true;
         btn.classList.add('unavailable');
-        if(isPastOnToday){ btn.title='This time has already passed and cannot be booked.'; }
+        if(isPastOnToday){ btn.title='Past time — cannot book starting in the past.'; }
         else { btn.title=`Partially booked — some slots still available. Need ${hours} hour${hours>1?'s':''}, only ${Math.max(0,maxPossible)} available from ${btn.textContent}`; }
       } else {
         btn.title='Available';

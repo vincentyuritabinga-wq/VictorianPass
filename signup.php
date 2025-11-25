@@ -110,9 +110,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign Up</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="signup.css">
+  <link rel="stylesheet" href="css/signup.css">
   <style>
     .success-banner {
       background: #e6ffed;
@@ -202,13 +202,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body>
   <div class="page-wrapper">
     <div class="image-side">
-      <img src="sign up pic.jpg" alt="Victorian Heights Subdivision">
+      <img src="images/signuppage/sign up pic.jpg" alt="Victorian Heights Subdivision">
       <p class="branding">VictorianPass.</p>
     </div>
 
     <div class="form-side">
       <a href="mainpage.php" class="back-arrow">
-        <img src="signuppage/back.svg" alt="Back">
+        <img src="images/signuppage/back.svg" alt="Back">
       </a>
 
       <?php if ($registration_success): ?>
@@ -244,7 +244,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <!-- ✅ House verification section -->
         <div class="form-row homeowner">
           <a href="#" class="verify-link" onclick="openHouseModal(); return false;">
-            <img src="signuppage/location.svg" alt="Location"> Verify House Number
+            <img src="images/signuppage/location.svg" alt="Location"> Verify House Number
           </a>
           <span id="houseVerifiedBadge" style="display:none;margin-left:8px;color:#23412e;font-weight:600;">Verified</span>
 

@@ -104,7 +104,7 @@ if (empty($error)) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QR Pass - VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg" />
+  <link rel="icon" type="image/png" href="images/logo.svg" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
   <style>
     *{ font-family:'Poppins',sans-serif; box-sizing:border-box; }
@@ -147,7 +147,7 @@ if (empty($error)) {
     <?php else: ?>
     <div class="card">
       <div class="card-header">
-        <img src="mainpage/logo.svg" alt="Victorian Heights" />
+        <img src="images/logo.svg" alt="Victorian Heights" />
         <div class="brand">Victorian Heights</div>
       </div>
       <div class="qr-area">

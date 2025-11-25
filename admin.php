@@ -892,7 +892,7 @@ $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>VictorianPass | Admin</title>
-<link rel="icon" type="image/png" href="mainpage/logo.svg">
+<link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
@@ -989,20 +989,20 @@ body{margin:0;background:#f3efe9;color:#222;}
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="brand">
-      <img src="mainpage/logo.svg" alt="VictorianPass logo">
+      <img src="images/logo.svg" alt="VictorianPass logo">
       <div class="title">
         <h1>Admin Dashboard</h1>
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
     <nav class="nav-list">
-       <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="dashboard.svg"><span>Dashboard</span></a>
-       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="dashboard.svg"><span>Residents</span></a>
-       <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="dashboard.svg"><span>Resident Requests</span></a>
-       <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="dashboard.svg"><span>Visitor Requests</span></a>
-       <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="dashboard.svg"><span>View Reported Incidents</span></a>
-       <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="dashboard.svg"><span>Security Guards</span></a>
-       <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="dashboard.svg"><span>Verify Payment Receipts</span></a>
+       <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
+       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
+       <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
+       <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
+       <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
+       <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
+       <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
      </nav>
     <div class="sidebar-footer">
       <a href="?logout=1" style="color:#bfb7aa;text-decoration:none;">Log Out</a>
@@ -1025,7 +1025,7 @@ body{margin:0;background:#f3efe9;color:#222;}
       $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
       <h2 id="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
       <div class="search"><input id="search-input" placeholder="Search <?php echo htmlspecialchars($pageTitle); ?>..."></div>
-      <img class="avatar" src="mainpage/profile'.jpg" alt="admin">
+      <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
       <script>
         (function(){
           const input=document.getElementById('search-input');

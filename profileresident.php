@@ -55,7 +55,7 @@ if (!file_exists($qrAbsPath)) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>User Profile - Residents</title>
-<link rel="icon" type="image/png" href="mainpage/logo.svg">
+<link rel="icon" type="image/png" href="images/logo.svg">
 
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -262,7 +262,7 @@ if (!file_exists($qrAbsPath)) {
 <body>
   <div class="header">
     <div class="brand">
-      <img src="mainpage/logo.svg" alt="VictorianPass">
+      <img src="images/logo.svg" alt="VictorianPass">
       <span>Your Profile & Dashboard</span>
     </div>
   </div>
@@ -271,17 +271,17 @@ if (!file_exists($qrAbsPath)) {
     <!-- Sidebar -->
     <div class="sidebar">
       <div class="menu-top">
-        <div class="menu-item"><a href="mainpage.php"><img src="mainpage/start.svg">Main Page</a></div><br>
-        <div class="menu-item"><a href="reserve_resident.php"><img src="mainpage/ticket.svg">Reserve an Amenity</a></div><div class="menu-note-pair"> Make a reservation to use an amenity for yourself as a resident.</div>
-        <br><div class="menu-item compact"><a href="guestform.php"><img src="mainpage/ticket.svg">Guest Form</a></div>
+        <div class="menu-item"><a href="mainpage.php"><img src="images/mainpage/start.svg">Main Page</a></div><br>
+        <div class="menu-item"><a href="reserve_resident.php"><img src="images/mainpage/ticket.svg">Reserve an Amenity</a></div><div class="menu-note-pair"> Make a reservation to use an amenity for yourself as a resident.</div>
+        <br><div class="menu-item compact"><a href="guestform.php"><img src="images/mainpage/ticket.svg">Guest Form</a></div>
          <div class="menu-note-pair"> Submit a guest entry request for your visitor.</div>
-        <br><div class="menu-item compact report"><a href="residentreport.php"><img src="mainpage/report.svg">Report Incident</a></div>
+        <br><div class="menu-item compact report"><a href="residentreport.php"><img src="images/mainpage/report.svg">Report Incident</a></div>
         <div class="menu-note-pair"><br> Report suspicious persons or activities within the subdivision.
         </div>
       </div>
 
       <div class="menu-bottom">
-        <div class="menu-item logout"><a href="logout.php"><img src="mainpage/login.svg">Log Out</a></div>
+        <div class="menu-item logout"><a href="logout.php"><img src="images/login.svg">Log Out</a></div>
       </div>
     </div>
 
@@ -290,7 +290,7 @@ if (!file_exists($qrAbsPath)) {
       <!-- Profile Info -->
       <div class="card">
         <div class="profile-header">
-          <img src="mainpage/profile'.jpg" alt="Profile Picture">
+          <img src="images/mainpage/profile'.jpg" alt="Profile Picture">
           <div>
             <h3><?php echo htmlspecialchars($fullName ?: 'Resident'); ?></h3>
             <p><?php echo htmlspecialchars($user['email']); ?></p>

@@ -48,7 +48,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <style>
     body {
       font-family: 'Poppins', sans-serif;
-      background: url('signuppage/bgsignup.png') no-repeat center/cover;
+      background: url('images/signuppage/bgsignup.png') no-repeat center/cover;
       display: flex; justify-content: center; align-items: center;
       height: 100vh; margin: 0;
     }

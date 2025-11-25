@@ -46,11 +46,11 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Guest Entry Pass - VictorianPass</title>
-<link rel="icon" type="image/png" href="mainpage/logo.svg">
+<link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <style>
-<?php echo file_get_contents('guestform.css') ?: '';?>
+<?php echo file_get_contents('css/guestform.css') ?: '';?>
 /* Inline warnings copied from signup style */
 .field-warning {
   color: #333;
@@ -85,21 +85,21 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 
 <header class="navbar">
   <div class="logo">
-    <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+    <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
     <div class="brand-text">
       <h1>VictorianPass</h1>
       <p>Victorian Heights Subdivision</p>
     </div>
   </div>
   <div class="nav-actions">
-    <a href="profileresident.php"><img src="mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
+    <a href="profileresident.php"><img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
   </div>
 </header>
 
 <section class="hero">
   <form class="entry-form" id="entryForm">
     <div class="form-header">
-      <img src="mainpage/ticket.svg" alt="Entry Icon">
+      <img src="images/ticket.svg" alt="Entry Icon">
       <span>Guest Form</span>
     </div>
 
@@ -136,7 +136,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
-      <img src="mainpage/upload.svg" alt="Upload">
+      <img src="images/mainpage/upload.svg" alt="Upload">
       <p>Upload Visitor’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
     </label>
     <div class="privacy-note" style="background:#fff9e6;border:1px solid #e6d9a8;color:#4a3c1a;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">

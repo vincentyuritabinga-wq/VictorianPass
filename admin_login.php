@@ -56,7 +56,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <title>VictorianPass | Admin Login</title>
-    <link rel="icon" type="image/png" href="mainpage/logo.svg">
+    <link rel="icon" type="image/png" href="images/logo.svg">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -143,7 +143,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
     <div class="login-container">
         <div class="login-header">
-            <img src="mainpage/logo.svg" alt="VictorianPass Logo">
+            <img src="images/logo.svg" alt="VictorianPass Logo">
             <h1>Admin Login</h1>
         </div>
         

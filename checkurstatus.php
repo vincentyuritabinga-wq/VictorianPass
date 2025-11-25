@@ -8,7 +8,7 @@ session_start();
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Check Status - VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 
@@ -26,7 +26,7 @@ session_start();
     }
 
     body {
-      background: url("mainpage/background.svg") center/cover no-repeat;
+      background: url("images/background.svg") center/cover no-repeat;
       color: #fff;
       min-height: 100vh;
       display: flex;

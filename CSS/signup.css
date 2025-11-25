@@ -30,35 +30,32 @@ body {
 .image-side {
   flex: 1 1 50%;
   position: relative;
+  background: url("../images/registerbg.jpg") center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  color: #fff;
 }
 
-.image-side img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  position: relative;
-  z-index: 0;
-}
+.image-side img { display: none; }
 .image-side::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.20);
-  z-index: 1;
+  background: linear-gradient(rgba(35, 65, 46, 0.55), rgba(0,0,0,0.35));
+  z-index: 0;
 }
 .image-side .branding {
-  position: absolute;
-  bottom: 1rem;
-  left: 1rem;
+  position: relative;
+  z-index: 1;
   color: #fff;
-  font-size: 1.2rem;
-  font-weight: 500;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.35);
-  backdrop-filter: blur(2px);
-  z-index: 2;
+  font-size: 2rem;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(35, 65, 46, 0.45);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
 }
 
 /* Right Side (Form) */

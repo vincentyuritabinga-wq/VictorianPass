@@ -4,4 +4,24 @@ git init && git remote remove origin 2>nul || true && git remote add origin git@
 pag update
 git add . && git commit -m "Updated project files" && git push origin main
 
+git remote -v
+
+git remote set-url origin git@github.com:ayeysabelleysa/VictorianPass.git
+
+GIT PUSH
+git add .'
+
+git commit -m "Updated project files"
+
+git push origin main
+
+DROP DATABASE victorianpass_db
+
+GIT BRANCH
+git branch organizedfiles
+git branch -a
+git checkout organizedfiles
+git branch -a
+
+
 

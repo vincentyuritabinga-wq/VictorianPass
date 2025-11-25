@@ -44,7 +44,7 @@ body {
   min-height:90vh;
   background:
     linear-gradient(rgba(17,17,17,0.7), rgba(17,17,17,0.7)),
-    url("mainpage/background.svg") center/cover no-repeat fixed;
+    url("../images/background.svg") center/cover no-repeat fixed;
 }
 .hero::before {
   content: "";

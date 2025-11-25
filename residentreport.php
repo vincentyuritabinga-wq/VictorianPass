@@ -39,7 +39,7 @@ $address = $user['address'] ?? '';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Resident Report</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Poppins', sans-serif; box-sizing: border-box; }
@@ -80,14 +80,14 @@ $address = $user['address'] ?? '';
   <!-- HEADER -->
   <header class="navbar">
     <div class="logo">
-      <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+      <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
       <div class="brand-text">
         <h1>VictorianPass</h1>
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
     <div class="nav-actions">
-      <a href="profileresident.php"><img src="mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
+      <a href="profileresident.php"><img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
     </div>
   </header>
 
@@ -137,7 +137,7 @@ $address = $user['address'] ?? '';
         <label for="proof">Attach Proof (optional)</label>
         <div class="upload-box" onclick="document.getElementById('proof').click()">
           <input type="file" id="proof" name="proof[]" multiple hidden accept="image/*,.pdf,.doc,.docx">
-          <img src="mainpage/upload.svg" alt="Upload Icon">
+          <img src="images/mainpage/upload.svg" alt="Upload Icon">
           <p>Click to upload photos or documents<br><small>(images, PDF, or Word files)</small></p>
         </div>
         <div id="fileList" class="file-list"></div>

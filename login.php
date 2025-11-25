@@ -82,7 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -114,7 +114,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     /* LEFT SIDE */
     .login-left {
       flex: 1;
-      background: url("loginpage/bglogin.jpg") center/cover no-repeat;
+      background: url("images/loginpage/bglogin.jpg") center/cover no-repeat;
       display: flex;
       align-items: center;
       padding: 60px;
@@ -290,11 +290,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <!-- Right Side -->
     <div class="login-right">
       <a href="mainpage.php" class="back-arrow">
-        <img src="signuppage/back.svg" alt="Back">
+        <img src="images/signuppage/back.svg" alt="Back">
       </a>
 
       <div class="login-box">
-        <img src="loginpage/biglogo.svg" alt="Logo" class="biglogo">
+        <img src="images/loginpage/biglogo.svg" alt="Logo" class="biglogo">
         <h2>Welcome Back!</h2>
         <p class="subtitle">To Victorian Heights</p>
 
