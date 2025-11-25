@@ -533,7 +533,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <p>Victorian Pass is a modern subdivision management system that utilizes QR technology to provide fast, secure, and seamless access for residents and visitors. Designed to enhance security and streamline daily processes, the system handles amenity reservations, entry pass requests, incident reporting, and user verification, all in one platform. By replacing manual checks with QR scanning, Victorian Pass ensures quicker entry, and secure access, while improved monitoring subdivision welfare. the system strengthens community safety while offering a more convenient experience for everyone in the subdivision.</p>
     </div>
   </section>
-
+<p>BRANCHES</p>
   <!-- Visitor-friendly instructions box fixed at the bottom-left -->
    <br>
    <br>
