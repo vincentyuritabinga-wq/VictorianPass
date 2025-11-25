@@ -404,573 +404,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass - Reserve</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="images/logo.svg">
-
-  <style>
-    /* Modern UI Design */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      margin: 0;
-      font-family: 'Poppins', sans-serif;
-      background: linear-gradient(135deg, #30522bff 0%, #30522bff 100%);
-      color: #fff;
-      animation: fadeIn .6s ease-in-out;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* Navigation */
-    .navbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 14px 6%;
-      background: rgba(43, 38, 35, 0.95);
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .logo img {
-      width: 42px;
-      height: 42px;
-    }
-    
-    .brand-text h1 {
-      margin: 0;
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: #f4f4f4;
-    }
-    
-    .brand-text p {
-      margin: 0;
-      font-size: .85rem;
-      color: #aaa;
-    }
-    
-    /* Main Layout */
-    .hero {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 30px 6%;
-      min-height: calc(100vh - 80px);
-    }
-    
-    .layout {
-      display: grid;
-      gap: 32px;
-      align-items: start;
-      width: 100%;
-      max-width: 1200px;
-      grid-template-columns: 1fr;
-    }
-    
-    .left-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      min-width: 0;
-    }
-    
-    .right-panel {
-      min-width: 0;
-    }
-    
-    /* Calendar */
-    .calendar {
-      background: rgba(255, 255, 255, 0.95);
-      color: #222;
-      padding: 20px;
-      border-radius: 16px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .calendar-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    
-    .calendar-header h3 {
-      font-size: 1.2rem;
-      margin: 0;
-      font-weight: 600;
-    }
-    
-    .calendar-header button {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1.2rem;
-      transition: all 0.3s ease;
-    }
-    
-    .calendar-header button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
-    }
-    
-    .calendar table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    
-    .calendar th, .calendar td {
-      width: 14%;
-      padding: 10px;
-      font-size: .95rem;
-      text-align: center;
-    }
-    
-    .calendar th {
-      font-weight: 600;
-      color: #666;
-    }
-    
-    .calendar td {
-      cursor: pointer;
-      border-radius: 8px;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-    
-    .calendar td:hover:not(.disabled) {
-      background: #e8f5e8;
-      transform: scale(1.05);
-    }
-    
-    .calendar td.active {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
-    }
-    
-    .calendar td.today {
-      border: 2px solid #23412e;
-      border-radius: 8px;
-      font-weight: 600;
-      background: rgba(35, 65, 46, 0.1);
-    }
-    
-    .calendar td.disabled {
-      color: #999;
-      cursor: not-allowed;
-      background: #f7f7f7;
-      opacity: 0.6;
-    }
-    .calendar td.partly {
-      background: linear-gradient(135deg, rgba(245,242,234,1) 50%, rgba(247,247,247,1) 50%);
-      border: 1px dashed #b08900;
-    }
-    .section-header{display:flex;justify-content:space-between;align-items:flex-end;margin:0 0 10px}
-    .section-header h2{font-size:1.4rem;font-weight:700}
-    .section-header p{color:#cfcfcf}
-    
-    /* Amenity Description */
-    .amenity-desc {
-      background: #fff;
-      color: #222;
-      padding: 18px;
-      border-radius: 14px;
-      min-height: 120px;
-      box-shadow: 0 10px 24px rgba(0,0,0,.12);
-      border: 2px solid #23412e;
-    }
-    .amenity-desc .media{display:flex;align-items:center;gap:12px;margin-bottom:8px}
-    .amenity-desc .desc-img{width:64px;height:64px;border-radius:10px;object-fit:cover;display:none}
-    
-    .amenity-desc h3 {
-      margin: 0 0 6px;
-      font-weight: 700;
-      color: #23412e;
-      font-size: 1.14rem;
-    }
-    
-    .amenity-desc p {
-      margin: 0;
-      color: #555;
-      line-height: 1.5;
-      font-size: 0.95rem;
-    }
-    
-    /* Amenities List */
-    .amenities-list {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    
-    .amenity-card {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      background: #fff;
-      color: #222;
-      padding: 18px;
-      border-radius: 14px;
-      box-shadow: 0 10px 24px rgba(0,0,0,.12);
-      border: 1px solid #e9ecef;
-      cursor: pointer;
-      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease, background .25s ease;
-      min-height: 160px;
-      position: relative;
-      pointer-events: auto;
-    }
-    
-    .amenity-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 26px rgba(0,0,0,.18);
-      border-color: #dfe4ea;
-    }
-    
-    .amenity-card.selected {
-      border: 2px solid #23412e;
-      background: linear-gradient(135deg, #f5f2ea 0%, #e9e4d3 100%);
-      box-shadow: 0 8px 24px rgba(35, 65, 46, 0.25);
-    }
-    
-    .amenity-card img {
-      width: 160px;
-      height: 120px;
-      object-fit: cover;
-      border-radius: 12px;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
-    }
-    
-    .amenity-card .info {
-      flex: 1;
-      color: #222;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .amenity-card .title-block{display:flex;flex-direction:column;gap:4px}
-    .amenity-card .price{color:#23412e;font-weight:700}
-    
-    .amenity-card .info .name {
-      font-weight: 700;
-      font-size: 1.15rem;
-      margin: 0;
-      line-height: 1.2;
-    }
-    
-    .amenity-card .info .meta {
-      color: #666;
-      font-size: 0.9rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      background: #f9f9f9;
-      border: 1px solid #e9ecef;
-      padding: 8px 10px;
-      border-radius: 12px;
-    }
-    .status-pill{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:10px;font-weight:600;font-size:0.9rem;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
-    .status-pill.available{background:#23412e;color:#fff}
-    .status-pill.unavailable{background:#8a2a2a;color:#fff}
-    .status-pill.neutral{background:#e5ddc6;color:#23412e;border:1px solid #d7cfb0}
-    .btn-main.small{display:inline-flex;align-items:center;justify-content:center;height:38px;min-width:140px;padding:0 14px;border-radius:10px;font-size:.9rem;margin-left:0;box-shadow:0 4px 12px rgba(35,65,46,0.35)}
-    .schedule-panel{margin-top:8px;background:#f7f7f7;border:1px solid #e9ecef;border-radius:10px;padding:10px;display:none}
-    
-    /* Reservation Card */
-    .reservation-card {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      background: rgba(255, 255, 255, 0.95);
-      color: #222;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      gap: 18px;
-    }
-    .date-row{display:flex;gap:12px;flex-wrap:wrap}
-    .date-row .date-item{flex:1 1 280px}
-    .single-day{display:inline-flex;align-items:center;gap:8px;font-weight:600}
-    .single-day input{accent-color:#23412e}
-    .reservation-card .calendar{grid-column:1/-1;margin-bottom:6px}
-    
-    .res-item {
-      flex: 0 0 auto;
-      text-align: left;
-      min-width: 120px;
-    }
-    
-    .res-label {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 6px;
-      margin-bottom: 6px;
-      font-size: 0.85rem;
-      color: #666;
-      font-weight: 500;
-    }
-    
-    .reservation-card p {
-      margin: 0;
-      font-weight: 600;
-      color: #333;
-    }
-    
-    .btn-submit {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
-    }
-    #submitWrap{display:none; width:100%; justify-content:flex-end}
-    
-    .btn-submit:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(35, 65, 46, 0.5);
-    }
-    
-    .counter {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      justify-content: center;
-    }
-    
-    .counter button {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 1rem;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
-    
-    .counter button:hover {
-      transform: scale(1.1);
-    }
-    
-    .counter span {
-      font-weight: 600;
-      min-width: 30px;
-      display: inline-block;
-      text-align: center;
-      font-size: 1.1rem;
-    }
-    
-    /* Form Inputs */
-    input[type="time"] {
-      width: 100%;
-      padding: 8px;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      transition: all 0.3s ease;
-      background: #fff;
-    }
-    
-    input[type="time"]:focus {
-      outline: none;
-      border-color: #23412e;
-      box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
-    }
-    
-    /* Modal */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 2000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(5px);
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .modal-content {
-      background: rgba(255, 255, 255, 0.95);
-      color: #222;
-      padding: 30px;
-      border-radius: 14px;
-      width: 90%;
-      max-width: 450px;
-      text-align: center;
-      animation: fadeIn .5s ease-in-out;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .modal-content h2 {
-      margin: 0 0 12px;
-      font-weight: 700;
-      color: #23412e;
-    }
-    
-    .ref-code {
-      font-size: 1.4rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #f3f3f3 0%, #e8e8e8 100%);
-      padding: 10px 16px;
-      border-radius: 10px;
-      display: inline-block;
-      margin-bottom: 18px;
-      color: #23412e;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    
-    .close-btn {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
-    
-    .close-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
-    }
-    
-    .btn-secondary {
-      background: linear-gradient(135deg, #e5ddc6 0%, #d4cdb8 100%);
-      color: #222;
-      border: none;
-      padding: 10px 22px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      text-decoration: none;
-      display: inline-block;
-      transition: all 0.3s ease;
-    }
-    
-    .btn-secondary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-    .field-warning{background:#fff3cd;color:#7a5c00;border-left:4px solid #b08900;padding:8px;border-radius:10px;margin-top:6px;display:flex;align-items:center;gap:8px}
-    .field-warning .warn-icon{display:inline-block;font-weight:700}
-    .field-warning .close-warn{margin-left:auto;background:transparent;border:none;color:#7a5c00;font-size:1rem;cursor:pointer}
-    .field-warning .close-warn:hover{opacity:.8}
-    .date-line{display:flex;align-items:center;gap:8px}
-    .clear-date{background:transparent;border:1px solid #ccc;color:#fff;padding:4px 8px;border-radius:6px;cursor:pointer}
-    .clear-date:hover{background:rgba(255,255,255,0.1)}
-    button:focus-visible,input:focus-visible{outline:2px solid #23412e;outline-offset:2px}
-  
-    .btn-main {
-      background: linear-gradient(135deg, #23412e 0%, #345c40 100%);
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.9rem;
-      transition: all 0.3s ease;
-      display: inline-block;
-      box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
-    }
-    
-    .btn-main:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(35, 65, 46, 0.5);
-    }
-    .btn-main.disabled{opacity:.5;pointer-events:none}
-    .btn-submit.disabled{opacity:.6;cursor:not-allowed}
-    .ref-inline{display:inline-block;margin-left:10px;background:#f3f3f3;color:#23412e;padding:6px 10px;border-radius:8px;font-weight:600}
-    .page-header{width:100%;max-width:1400px;margin:0 auto 12px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.1)}
-    .page-title{font-size:1.6rem;font-weight:700;margin-bottom:6px}
-    .page-subtitle{color:#cfcfcf}
-    .alert-error{background:#8a2a2a;color:#fff;padding:10px 12px;border-radius:10px;margin:10px 0;border:1px solid rgba(0,0,0,.2)}
-    .reserve-instructions{background:rgba(43,38,35,.6);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px;color:#ddd}
-    .reserve-instructions strong{color:#fff}
-    .time-error{background:#8a2a2a;color:#fff;padding:8px 10px;border-radius:8px;margin-top:8px;font-size:0.9rem}
-    .selected-time-range{background:#f3f3f3;color:#23412e;padding:8px 10px;border-radius:8px;margin-top:8px;font-size:0.95rem;font-weight:600}
-    .slot-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 12px;border-radius:10px;border:1px solid #e0e0e0;background:#fff;color:#23412e;font-weight:600;box-shadow:0 4px 10px rgba(0,0,0,.06);transition:all .2s ease}
-    .slot-btn.airbnb:hover{transform:translateY(-1px);box-shadow:0 6px 12px rgba(0,0,0,.1)}
-    .slot-btn.selected{background:#23412e;color:#fff;border-color:#23412e}
-    .slot-btn.unavailable{opacity:.5;cursor:not-allowed;background:#f5f5f5;color:#888}
-    .hours-select{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:10px;background:#fff;color:#23412e;font-weight:600}
-    .counter button{background:#e5ddc6;color:#23412e;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:700}
-    .counter button:hover{filter:brightness(0.95)}
-    .clear-date{border:1px solid #d7cfb0;color:#23412e}
-    
-    /* Responsive Design */
-    @media (max-width: 768px) {
-      .layout { grid-template-columns: 1fr; }
-      .left-panel, .right-panel { width: 100%; }
-      .reservation-card { flex-direction: column; gap: 20px; }
-      .res-item { width: 100%; }
-      .hero { padding: 20px 4%; }
-      .amenities-list{grid-template-columns: 1fr}
-      .amenity-card img{width:96px;height:72px;border-radius:10px}
-      .amenity-card .info{flex-direction:column;align-items:flex-start;gap:8px}
-      .amenity-card .info .meta{width:100%;justify-content:flex-start}
-    }
-
-    @media (min-width: 769px) and (max-width: 1023px) {
-      .layout { grid-template-columns: 1fr; }
-      .amenities-list{grid-template-columns: 1fr}
-    }
-
-    @media (min-width: 1024px) {
-      .layout { grid-template-columns: 1fr; }
-      .amenities-list{grid-template-columns: repeat(2, minmax(360px, 1fr));}
-      .amenity-card img{width:180px;height:120px}
-    }
-
-  @media (min-width: 1440px) {
-    .layout { grid-template-columns: 1fr; }
-  }
-  .left-panel:has(.amenity-card.selected[data-key="pool"]) .amenity-desc .desc-img[data-key="pool"]{display:block}
-  .left-panel:has(.amenity-card.selected[data-key="clubhouse"]) .amenity-desc .desc-img[data-key="clubhouse"]{display:block}
-  .left-panel:has(.amenity-card.selected[data-key="basketball"]) .amenity-desc .desc-img[data-key="basketball"]{display:block}
-  .left-panel:has(.amenity-card.selected[data-key="tennis"]) .amenity-desc .desc-img[data-key="tennis"]{display:block}
-  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000;display:none}
-  </style>
+  <link rel="stylesheet" href="css/reserve.css">
 </head>
 <body>
   <div id="notifyLayer" class="toast"></div>
@@ -989,7 +424,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   <div class="layout">
     <div class="left-panel">
       <div class="section-header"><h2>Amenities</h2><p>Select an amenity</p></div>
-      <div class="amenity-desc">
+      <div class="amenity-desc" id="amenityDescBox">
         <div class="media">
           <img class="desc-img" data-key="pool" src="images/pool.svg" alt="Pool">
           <img class="desc-img" data-key="clubhouse" src="images/clubhouse.svg" alt="Clubhouse">
@@ -1007,7 +442,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="images/pool.svg" alt="Pool">
           <div class="info">
             <div class="title-block"><div class="name">Community Pool</div><div class="price">₱175 / person</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -1015,7 +450,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="images/clubhouse.svg" alt="Clubhouse">
           <div class="info">
             <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱200 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -1023,7 +458,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="images/basketball.svg" alt="Basketball">
           <div class="info">
             <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -1031,7 +466,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img src="images/tennis.svg" alt="Tennis">
           <div class="info">
             <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><span class="status-pill neutral" data-action="select-dates" role="button" tabindex="0">Select dates</span><button type="button" class="btn-main small" data-action="book-now">Book Now</button></div>
+            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
           </div>
           <div class="schedule-panel" data-schedule-panel></div>
         </div>
@@ -1039,7 +474,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     </div>
 
     <div class="right-panel">
-      <div class="section-header"><h2>Reservation</h2><p>Select date, time, and persons</p></div>
+      <div class="section-header"><h2 id="reservationTitle">Reserve an Amenity</h2><p id="reservationHint">Select an amenity to continue</p></div>
       <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
       <form method="POST">
         <input type="hidden" name="purpose" value="Amenity Reservation">
@@ -1047,7 +482,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
         <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
         <input type="hidden" id="submitAllowed" value="1">
-        <div class="reservation-card">
+        <div class="reservation-card" id="reservationCard" style="display:none;">
           <div class="calendar" style="width:100%">
             <div class="calendar-header">
               <button id="prevMonth">&lt;</button>
@@ -1323,18 +758,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   const amenityData={
-    pool:{title:'Community Pool',value:'Pool',img:'images/mainpage/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
-    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'images/mainpage/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
-    basketball:{title:'Basketball Court',value:'Basketball Court',img:'images/mainpage/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
-    tennis:{title:'Tennis Court',value:'Tennis Court',img:'images/mainpage/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
+    pool:{title:'Community Pool',value:'Pool',img:'images/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
+    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'images/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
+    basketball:{title:'Basketball Court',value:'Basketball Court',img:'images/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
+    tennis:{title:'Tennis Court',value:'Tennis Court',img:'images/tennis.svg',desc:'Reserve time to enjoy a game at the tennis court.'}
   };
 
   function selectAmenityByKey(key){
     const info=amenityData[key]||amenityData.pool;
     selectedAmenity=info.value;
     document.getElementById('amenityField').value=info.value;
-    document.getElementById('amenityDescTitle').textContent=info.title;
-    document.getElementById('amenityDescText').textContent=info.desc;
+    
     document.querySelectorAll('.amenity-card').forEach(c=>c.classList.remove('selected'));
     const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
     if(card) card.classList.add('selected');
@@ -1350,6 +784,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     configureFieldsForAmenity(selectedAmenity);
     renderHoursDropdownForAmenity();
     renderTimeSlotButtons();
+    try{ document.getElementById('reservationCard').style.display='flex'; document.getElementById('reservationTitle').textContent='Reservation'; document.getElementById('reservationHint').textContent='Select date, time, and persons'; if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } }catch(_){}
   }
 
   document.querySelectorAll('.amenity-card').forEach(function(card){
@@ -1447,6 +882,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   function configureFieldsForAmenity(amen){
+    if(!amen){
+      try{
+        document.getElementById('reservationCard').style.display='none';
+        document.getElementById('reservationTitle').textContent='Reserve an Amenity';
+        document.getElementById('reservationHint').textContent='Select an amenity to continue';
+      }catch(_){}
+      return;
+    }
     const personsWrap=document.getElementById('personsInput')?.closest('.res-item');
     const hoursLabel=document.getElementById('hoursLabel');
     const hoursInput=document.getElementById('hoursInput');
@@ -1464,6 +907,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hoursInput){ if(!hoursInput.value) hoursInput.value=1; }
       if(endTimeInput){ endTimeInput.readOnly=true; }
       if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
+      updateDisplayedPrice();
+      updateDownpaymentSuggestion();
+      renderHoursDropdownForAmenity();
+      renderTimeSlotButtons();
+    } else if(amen==='Pool'){
+      if(personsWrap){ personsWrap.style.display='block'; }
+      if(hoursLabel){ hoursLabel.style.display='none'; }
+      if(hoursCounter){ hoursCounter.style.display='none'; }
+      const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='inline-block'; }
+      document.getElementById('hoursSectionLabel').style.display='block';
+      document.getElementById('timeSectionLabel').style.display='block';
+      if(hoursInput && !hoursInput.value) hoursInput.value=1;
+      if(endTimeInput){ endTimeInput.readOnly=true; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1565,6 +1021,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const card=document.querySelector('.amenity-card.selected');
     if(!card) return;
     const pill=card.querySelector('.status-pill');
+    if(!pill) { return; }
     if(!s||!e||!st||!et){computeAvailability();return}
     if(s!==e){computeAvailability();return}
     if(st && et){
@@ -1641,6 +1098,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!et){ if(force||isDirty('endTimeInput')) setFieldWarning('endTimeInput','End time is required.'); } else { setFieldWarning('endTimeInput',''); }
     if(isHourBasedAmenity(amen)){
       if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
+    } else if(amen==='Pool'){
+      if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
+      if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
     } else {
       if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
     }
@@ -1657,7 +1117,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!amen||!s||!eD||!st||!et) return false;
     if(s && eD && eD < s) return false;
     if(st && et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) return false; }
-    if(isHourBasedAmenity(amen)){ if(hours<1) return false; } else { if(persons<1) return false; }
+    if(isHourBasedAmenity(amen)){ if(hours<1) return false; }
+    else if(amen==='Pool'){ if(hours<1 || persons<1) return false; }
+    else { if(persons<1) return false; }
     return true;
   }
 
@@ -1672,10 +1134,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(card){ selectAmenityByKey(card.getAttribute('data-key')); }
     });
   });
-  document.querySelectorAll('.status-pill[data-action="select-dates"]').forEach(el=>{
-    el.addEventListener('click',function(){ const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); const rc=document.querySelector('.reservation-card'); if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } } });
-    el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const card=this.closest('.amenity-card'); if(card){ selectAmenityByKey(card.getAttribute('data-key')); const rc=document.querySelector('.reservation-card'); if(rc){ rc.scrollIntoView({behavior:'smooth',block:'start'}); } } } });
+  
+  document.querySelectorAll('button[data-action="view-desc"]').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.stopPropagation();
+      const card=btn.closest('.amenity-card');
+      if(card){
+        const key=card.getAttribute('data-key');
+        const info=amenityData[key]||amenityData.pool;
+        const t=document.getElementById('amenityDescTitle'); if(t){ t.textContent=info.title; }
+        const d=document.getElementById('amenityDescText'); if(d){ d.textContent=info.desc; }
+        document.querySelectorAll('.amenity-desc .desc-img').forEach(function(img){ img.style.display='none'; });
+        const imgEl=document.querySelector('.amenity-desc .desc-img[data-key="'+key+'"]');
+        if(imgEl){ imgEl.style.display='block'; }
+      }
+    });
   });
+  
 
   ['startTimeInput','endTimeInput'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',function(){ if(isHourBasedAmenity(document.getElementById('amenityField').value) && id==='startTimeInput'){ computeEndTimeFromHours(); } else { checkTimeAvailability(); } })}});
   const hoursEl=document.getElementById('hoursInput'); if(hoursEl){ hoursEl.addEventListener('input',function(){ computeEndTimeFromHours(); updateDisplayedPrice(); updateDownpaymentSuggestion(); }); }
@@ -1806,7 +1281,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!st||!et) allowed=false;
     if(s&&eD && eD < s) allowed=false;
     if(st&&et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) allowed=false; }
-    if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; } else { if(persons<1) allowed=false; }
+    if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; }
+    else if(amenVal==='Pool'){ if(hours<1 || persons<1) allowed=false; }
+    else { if(persons<1) allowed=false; }
     
     if(submitBtn){ if(allowed){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
     const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = 'flex'; }
@@ -1846,7 +1323,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
-  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); initSingleDayToggle(); });
+  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); initSingleDayToggle(); try{ const amen=document.getElementById('amenityField').value; if(!amen){ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; } else { document.getElementById('reservationCard').style.display='flex'; document.getElementById('reservationTitle').textContent='Reservation'; document.getElementById('reservationHint').textContent='Select date, time, and persons'; } }catch(_){} });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
@@ -1869,7 +1346,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const lbl=document.getElementById('hoursSectionLabel');
     if(!sel) return;
     sel.innerHTML='';
-    if(!isHourBasedAmenity(amen)){ sel.style.display='none'; if(lbl) lbl.style.display='none'; return; }
+    if(!(isHourBasedAmenity(amen) || amen==='Pool')){ sel.style.display='none'; if(lbl) lbl.style.display='none'; return; }
     sel.style.display='inline-block'; if(lbl) lbl.style.display='block';
     const maxH=amen==='Clubhouse'?12:9;
     for(let h=1; h<=maxH; h++){ const opt=document.createElement('option'); opt.value=String(h); opt.textContent=`${h} hour${h>1?'s':''}`; sel.appendChild(opt); }
@@ -1896,7 +1373,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(btn.disabled || isPastOnToday){
         btn.disabled=true;
         btn.classList.add('unavailable');
-        if(isPastOnToday){ btn.title='Past time — cannot book starting in the past.'; }
+        if(isPastOnToday){ btn.title='This time has already passed and cannot be booked.'; }
         else { btn.title=`Partially booked — some slots still available. Need ${hours} hour${hours>1?'s':''}, only ${Math.max(0,maxPossible)} available from ${btn.textContent}`; }
       } else {
         btn.title='Available';

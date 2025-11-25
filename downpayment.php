@@ -97,6 +97,8 @@ if ($ref_code === '') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Downpayment - GCash</title>
+    <link rel="icon" type="image/png" href="images/logo.svg">
+
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body{margin:0;font-family:'Poppins',sans-serif;background:#111;color:#fff}
