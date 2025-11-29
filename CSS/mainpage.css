@@ -367,6 +367,15 @@ html { scroll-behavior: smooth; }
   text-align: center;
   text-decoration: none;
   border: none;
+}
+
+.flash-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000}
+.flash-modal{background:#1b1816;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:520px;width:92%;padding:18px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.flash-modal .title{font-weight:700;font-size:1.1rem;margin:0 0 8px;color:#e5ddc6}
+.flash-modal .text{font-size:.98rem;color:#ddd;margin:0 0 10px}
+.flash-modal .code{display:inline-block;margin-top:6px;background:#2b2623;border-radius:8px;padding:6px 10px;font-weight:700}
+.flash-close{margin-top:12px;background:#23412e;color:#fff;border:0;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer}
+.flash-close:hover{transform:translateY(-1px)}
   cursor: pointer;
   width: 95%;
   margin-bottom: 12px;

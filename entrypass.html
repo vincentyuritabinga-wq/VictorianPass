@@ -91,6 +91,7 @@
       <input type="text" id="middle_name" name="middle_name" placeholder="Middle Name">
       <input type="text" id="last_name" name="last_name" placeholder="Last Name*" required>
       <input type="text" id="address" name="address" placeholder="Address*" required>
+      <input type="email" id="email" name="email" placeholder="Email*" required>
 
       <div class="form-row">
         <select id="sex" name="sex" required>
@@ -107,11 +108,7 @@
         </div>
       </div>
 
-      <div class="phone-row" id="phoneRow">
-        <span class="ph-flag" aria-hidden="true" title="Philippines">🇵🇭</span>
-        <input type="tel" id="contact" name="contact" placeholder="Phone Number (Philippines)*" required>
-      </div>
-      <div id="phoneHelp" class="phone-help">Format: 09xxxxxxxxx or +639xxxxxxxxx</div>
+
 
       <label class="upload-box">
         <input type="file" id="valid_id" name="valid_id" accept="image/*" hidden required>
@@ -194,6 +191,7 @@
       var sex = document.getElementById('sex');
       var birthdate = document.getElementById('birthdate');
       var contact = document.getElementById('contact');
+      var email = document.getElementById('email');
       var idInput = document.getElementById('valid_id');
       var idPreviewWrap = document.getElementById('idPreviewWrap');
       var idPreview = document.getElementById('idPreview');
@@ -224,16 +222,9 @@
       }
       [first, middle, last].forEach(function(inp){ if(!inp) return; inp.addEventListener('keydown', blockDigits); inp.addEventListener('input', sanitizeNoDigits); });
 
-      if (contact){
-        contact.addEventListener('input', function(e){
-          var val = e.target.value.trim();
-          if (!/^09\d{9}$/.test(val) && !/^\+639\d{9}$/.test(val)){
-            setWarning('contact', 'Use 09xxxxxxxxx or +639xxxxxxxxx');
-          } else {
-            setWarning('contact', '');
-          }
-        });
-      }
+      function isValidEmail(val){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
+      if (email){ email.addEventListener('input', function(e){ var val=e.target.value.trim(); setWarning('email', isValidEmail(val)? '' : 'Please enter a valid email.'); }); }
+
 
       var privacyNote = document.getElementById('privacyNote');
       if (idInput) idInput.addEventListener('change', function(){
@@ -255,13 +246,14 @@
           // Names cannot contain digits; address may include digits
           if (inp !== address && /\d/.test(inp.value)){ setWarning(inp.id, 'Numbers are not allowed in this field.'); valid = false; }
         });
+        if (email){ var ev = email.value.trim(); if(!ev){ setWarning('email','This field is required.'); valid=false; } else if(!isValidEmail(ev)){ setWarning('email','Please enter a valid email.'); valid=false; } }
         if (sex && !sex.value){ setWarning('sex', 'Please select Sex.'); valid = false; }
         if (birthdate && !birthdate.value){ setWarning('birthdate', 'Please provide a birthdate.'); valid = false; }
         if (birthdate && birthdate.value){
           var todayStr = new Date().toISOString().split('T')[0];
           if (birthdate.value >= todayStr){ setWarning('birthdate', 'Birthdate must be a past date.'); valid = false; }
         }
-        if (contact){ var val = contact.value.trim(); if (!/^09\d{9}$/.test(val) && !/^\+639\d{9}$/.test(val)){ setWarning('contact', 'Use 09xxxxxxxxx or +639xxxxxxxxx'); valid = false; } }
+
         if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); valid = false; }
         if (!valid) e.preventDefault();
       });

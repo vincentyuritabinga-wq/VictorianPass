@@ -61,8 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $middle = trim($_POST['middle_name'] ?? '');
   $last = trim($_POST['last_name'] ?? '');
   $address = trim($_POST['address'] ?? '');
-  // Email removed from form; store as empty string
-  $email = '';
+  $email = trim($_POST['email'] ?? '');
   $sex = $_POST['sex'] ?? '';
   $birthdate = $_POST['birthdate'] ?? '';
   $contact = trim($_POST['contact'] ?? '');
@@ -71,9 +70,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   if ($first === '' || preg_match('/\d/', $first)) { $formErrors[] = 'Please provide a valid First Name.'; }
   if ($last === '' || preg_match('/\d/', $last)) { $formErrors[] = 'Please provide a valid Last Name.'; }
   if ($address === '') { $formErrors[] = 'Address is required.'; }
+  if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $formErrors[] = 'A valid email is required.'; }
   if ($sex === '') { $formErrors[] = 'Sex is required.'; }
   if ($birthdate === '') { $formErrors[] = 'Birthdate is required.'; }
-  if ($contact === '' || (!preg_match('/^09\d{9}$/', $contact) && !preg_match('/^\+639\d{9}$/', $contact))) { $formErrors[] = 'Use 09xxxxxxxxx or +639xxxxxxxxx for contact.'; }
+  if ($contact !== '' && (!preg_match('/^09\d{9}$/', $contact) && !preg_match('/^\+639\d{9}$/', $contact))) { $formErrors[] = 'Use 09xxxxxxxxx or +639xxxxxxxxx for contact.'; }
 
   // Handle valid ID upload (REQUIRED)
   $validIdPath = null;
@@ -127,7 +127,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </head>
 <body>
   <?php if (!empty($flash)) { ?>
-    <div class="toast"><?php echo htmlspecialchars($flash); ?><?php if(!empty($flashRef)){ echo ' <span class="code">' . htmlspecialchars($flashRef) . '</span>'; } ?></div>
+    <div class="flash-overlay" id="flashNotice">
+      <div class="flash-modal">
+        <div class="title">Notification</div>
+        <div class="text"><?php echo htmlspecialchars($flash); ?></div>
+        <?php if(!empty($flashRef)){ ?><div class="code"><?php echo htmlspecialchars($flashRef); ?></div><?php } ?>
+        <button type="button" class="flash-close" id="flashCloseBtn">Close</button>
+      </div>
+    </div>
+    <script>
+      (function(){
+        var ov=document.getElementById('flashNotice');
+        var btn=document.getElementById('flashCloseBtn');
+        function close(){ if(ov) ov.style.display='none'; }
+        if(btn) btn.addEventListener('click', close);
+        if(ov) ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
+      })();
+    </script>
   <?php } ?>
   <!-- HEADER -->
   <header class="navbar">

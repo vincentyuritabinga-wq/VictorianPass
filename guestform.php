@@ -110,7 +110,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
     </div>
     <div class="form-row">
       <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Phone Number" value="<?php echo htmlspecialchars($phoneNormalized); ?>">
     </div>
 
     <h4 style="margin:20px 0 5px;color:#23412e;">Visitor Information</h4>
@@ -130,7 +130,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       </div>
     </div>
     <div class="input-wrap">
-      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor's Phone Number*" required>
+      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor's Phone Number">
     </div>
     <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
 
@@ -254,8 +254,6 @@ function isValidPhone(el){ const val=el.value.trim(); return /^09\d{9}$/.test(va
 function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
 ['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockDigits); el.addEventListener('input',sanitizeNoDigits); });
 
-// Live phone/email warnings
-['resident_contact','visitor_contact'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidPhone(el)? '' : 'Phone must start with 09 and contain numbers only.'); }); });
 ['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
 
 // Birthdate must be a past date (not today)
@@ -300,15 +298,13 @@ if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value='
 entryForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   let valid = true;
-  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_contact','visitor_email','birthdate'];
+  const reqIds = ['resident_full_name','resident_house','resident_email','visitor_first_name','visitor_last_name','visitor_email','birthdate'];
   reqIds.forEach(function(id){ const el=document.getElementById(id); if(!el) return; if(!String(el.value||'').trim()){ setWarning(id,'This field is required.'); valid=false; }});
   if (birthdateEl && birthdateEl.value){
     var todayStr = new Date().toISOString().split('T')[0];
     if (birthdateEl.value >= todayStr){ setWarning('birthdate','Birthdate must be a past date.'); valid=false; }
   }
   const rc=document.getElementById('resident_contact'); const vc=document.getElementById('visitor_contact');
-  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Phone must start with 09 and contain numbers only.'); valid=false; }
-  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Phone must start with 09 and contain numbers only.'); valid=false; }
   const re=document.getElementById('resident_email'); const ve=document.getElementById('visitor_email');
   if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
   if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }

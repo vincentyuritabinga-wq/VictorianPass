@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Start time must be before end time.';
     } else if (($sdObj && $edObj) && (($sdObj < new DateTime('today')) || ($edObj < new DateTime('today')))) {
       $errorMsg = 'Selected dates must be today or later.';
-    } else if (in_array($amenity, ['Pool','Clubhouse'], true) && $persons < 1) {
+    } else if ($amenity === 'Pool' && $persons < 1) {
       $errorMsg = 'Persons must be at least 1.';
     } else if ($stObj && $etObj) {
       $minH = ($amenity === 'Clubhouse') ? 9 : 9;
@@ -670,7 +670,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         const maxH=parseInt(hrsRange.max.split(':')[0],10);
         const totalHours=Math.max(0,maxH-minH);
         let reservedHours=0; const marked={};
-        (booked||[]).forEach(t=>{ const bS=parseInt(String(t.start).split(':')[0],10); const bE=parseInt(String(t.end).split(':')[0],10); for(let h=bS; h<bE; h++){ if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } } } });
+        (booked||[]).forEach(t=>{
+          if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return;
+          const bS=parseInt(String(t.start).split(':')[0],10);
+          const bE=parseInt(String(t.end).split(':')[0],10);
+          for(let h=bS; h<bE; h++){
+            if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
+          }
+        });
         if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.title='Fully Booked — no time slots available for this date.'; }
         else if(reservedHours>0){ cell.classList.add('partly'); cell.title='Partially Booked — some time slots are unavailable.'; }
         else { cell.classList.add('available'); cell.title='Fully Available — all time slots are open.'; }
@@ -1077,7 +1084,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       try{
         const booked=await fetchBookedTimesFor(ds);
         let reservedHours=0; const marked={};
-        (booked||[]).forEach(t=>{ const bS=parseInt(String(t.start).split(':')[0],10); const bE=parseInt(String(t.end).split(':')[0],10); for(let h=bS; h<bE; h++){ if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } } } });
+        (booked||[]).forEach(t=>{
+          if(isHourBasedAmenity(amenSel) && (t.has_time===false || t.has_time===0)) return;
+          const bS=parseInt(String(t.start).split(':')[0],10);
+          const bE=parseInt(String(t.end).split(':')[0],10);
+          for(let h=bS; h<bE; h++){
+            if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
+          }
+        });
         if(reservedHours>=totalHours){ fullyBookedFound=true; break; }
       }catch(_){ /* ignore and treat as not fully booked */ }
     }
@@ -1128,7 +1142,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }
     const times=await fetchBookedTimesFor(s);
     const sMin2=toMinutes(st); const eMin2=toMinutes(et);
-    const overlap=times.some(function(t){ const ts=toMinutes(t.start); const te=toMinutes(t.end); return !(sMin2>=te || eMin2<=ts); });
+    const amen=document.getElementById('amenityField').value;
+    const overlap=times.some(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return false; const ts=toMinutes(t.start); const te=toMinutes(t.end); return !(sMin2>=te || eMin2<=ts); });
     if(overlap){pill.textContent='Unavailable';pill.className='status-pill unavailable'}
     else{pill.textContent='Available';pill.className='status-pill available'}
     const te=document.getElementById('timeError');
@@ -1312,7 +1327,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         const overlap=times.some(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return false; const ts=toMinutes(t.start), te=toMinutes(t.end); return !(eM<=ts || sM>=te); });
         if(overlap){
           e.preventDefault();
-          alert('Selected time overlaps an existing booking. Please choose a different time.');
+          showTimeError('Selected time overlaps an existing booking. Please choose a different time.');
           return false;
         }
       }
@@ -1361,6 +1376,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           return;
         }
         window.__verifyConfirmed=true;
+        try{ document.getElementById('clientConfirmed').value='1'; }catch(_){}
         if(vm){ vm.style.display='none'; }
         showToast('Details confirmed. Redirecting to payment…','success');
         // Actually submit the form (bypass modal)
@@ -1374,7 +1390,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       btn.addEventListener('click', function(e){
         const f=document.querySelector('form');
         if(f){
-          f.requestSubmit();
+          e.preventDefault();
+          const vm=document.getElementById('verifyModal'); if(vm){ vm.style.display='flex'; }
         }
       });
     }
@@ -1493,7 +1510,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const sh=parseInt(ds.split(':')[0],10);
       const maxPossible=computeMaxDuration(amen,sh,booked);
       const isPastOnToday = (selectedDate===todayStrLocal) && (sh<currentHour || (sh===currentHour && currentMinute>0));
-      if(btn.disabled || isPastOnToday){
+      if(btn.disabled || isPastOnToday || maxPossible<Math.max(1,hours)){
         btn.disabled=true;
         btn.classList.add('unavailable');
         btn.dataset.past = isPastOnToday ? '1' : '0';

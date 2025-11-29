@@ -2,6 +2,21 @@
 session_start();
 include 'connect.php';
 
+function admin_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/status_view.php?code='.urlencode($code); }
+function admin_send_email($to,$subject,$body){ if(!$to) return false; $headers="MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nFrom: VictorianPass <noreply@victorianpass.local>\r\n"; return @mail($to,$subject,$body,$headers); }
+
+function isAmenityPaymentVerified($con, $refCode){
+  if(!$refCode) return false;
+  $stmt = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+  $stmt->bind_param('s', $refCode);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $row = $res ? $res->fetch_assoc() : null;
+  $stmt->close();
+  $ps = strtolower($row['payment_status'] ?? '');
+  return $ps === 'verified';
+}
+
 // Ensure new guest_forms table exists for admin operations
 ensureGuestFormsTable($con);
 ensureGuestFormsWantsAmenityColumn($con);
@@ -43,9 +58,18 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
     $stmtGF->bind_param('i', $id);
     $stmtGF->execute();
         $resGF = $stmtGF->get_result();
-        if ($resGF && $row = $resGF->fetch_assoc()) {
-            $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
-            $details = [
+    if ($resGF && $row = $resGF->fetch_assoc()) {
+        $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+        $ps = null; $refCodeChk = $row['ref_code'] ?? null;
+        if ($refCodeChk) {
+          $stmtPayChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+          $stmtPayChk->bind_param('s', $refCodeChk);
+          $stmtPayChk->execute(); $rpC = $stmtPayChk->get_result();
+          if($rpC && ($prC=$rpC->fetch_assoc())){ $ps = strtolower($prC['payment_status'] ?? ''); }
+          $stmtPayChk->close();
+        }
+        if ($isAmenity && $ps !== 'verified') { echo json_encode(['success'=>false,'message'=>'Payment not verified']); exit; }
+        $details = [
             'id' => intval($row['id']),
             'user_id' => isset($row['resident_user_id']) ? intval($row['resident_user_id']) : null,
             'full_name' => $row['visitor_first_name'],
@@ -95,6 +119,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $row = $result->fetch_assoc()) {
+            $isAmenity = !empty($row['amenity']); $ps = strtolower($row['payment_status'] ?? '');
+            if ($isAmenity && $ps !== 'verified') { echo json_encode(['success'=>false,'message'=>'Payment not verified']); exit; }
             echo json_encode(['success' => true, 'details' => $row]);
             exit;
         }
@@ -139,6 +165,26 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     } else {
         echo json_encode(['success' => false, 'message' => 'Resident reservation not found']);
     }
+    exit;
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
+    $payments = getPendingPaymentCount($con);
+    $awaiting = getAmenityAwaitingPaymentCount($con);
+    $ready = getAmenityReadyForApprovalCount($con);
+    $incidents = getOpenIncidentCount($con);
+    $newreqs = getNewRequestsCount($con);
+    $items = getRecentNotifications($con);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'payments' => $payments,
+        'awaiting' => $awaiting,
+        'ready' => $ready,
+        'incidents' => $incidents,
+        'new_requests' => $newreqs,
+        'total' => ($payments + $awaiting + $ready + $incidents + $newreqs),
+        'items' => $items
+    ]);
     exit;
 }
 
@@ -265,12 +311,71 @@ function getPendingRequestsCount($con) {
 function getPaymentReceiptsCount($con) {
     // Count verified payments
     // Modify this query based on your actual database structure
-    $query = "SELECT COUNT(*) as count FROM reservations";
+    $query = "SELECT COUNT(*) as count FROM reservations WHERE payment_status = 'verified'";
     $result = $con->query($query);
     if ($result && $row = $result->fetch_assoc()) {
         return $row['count'];
     }
     return 0;
+}
+
+function getPendingPaymentCount($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status = 'pending')";
+  $r = $con->query($q);
+  if($r){ $row = $r->fetch_assoc(); if($row){ return intval($row['c']); } }
+  return 0;
+}
+function getAmenityAwaitingPaymentCount($con){
+  $q = "SELECT COUNT(*) AS c
+        FROM guest_forms gf
+        LEFT JOIN reservations r ON r.ref_code = gf.ref_code
+        WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
+          AND (r.payment_status IS NULL OR r.payment_status <> 'verified')";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getAmenityReadyForApprovalCount($con){
+  $q = "SELECT COUNT(*) AS c
+        FROM guest_forms gf
+        LEFT JOIN reservations r ON r.ref_code = gf.ref_code
+        WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
+          AND r.payment_status = 'verified'";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getOpenIncidentCount($con){
+  $q = "SELECT COUNT(*) AS c FROM incident_reports WHERE status IN ('new','in_progress')";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getPendingResidentAmenityCount($con){
+  $q = "SELECT COUNT(*) AS c FROM resident_reservations WHERE approval_status='pending'";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getPendingGuestFormCount($con){
+  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending'";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getPendingVisitorLegacyCount($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending'))";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getNewRequestsCount($con){
+  return getPendingResidentAmenityCount($con) + getPendingGuestFormCount($con) + getPendingVisitorLegacyCount($con);
+}
+function getRecentNotifications($con){
+  $items = [];
+  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') ORDER BY created_at DESC LIMIT 5");
+  if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 5");
+  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'amenity','source'=>'guest_form','title'=>'Amenity request pending payment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 5");
+  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'approval','source'=>'guest_form','title'=>'Amenity request ready for approval','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM resident_reservations WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 5");
+  if($rr){ while($row=$rr->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
+  if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports ORDER BY created_at DESC LIMIT 5");
+  if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident: '.$row['status'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
+  usort($items,function($a,$b){ return strcmp($b['time'],$a['time']); });
+  return array_slice($items,0,8);
 }
 
 // Functions to get data for different sections
@@ -707,6 +812,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $stmtUp->close();
                 if ($approval_status === 'approved') {
                     generateQrForGuestForm($con, $reservation_id);
+                    // Send status code by email only if payment verified
+                    $refCode = null; $emailTo = null; $amenityName = $amenity;
+                    $getRef = $con->prepare("SELECT ref_code, visitor_email FROM guest_forms WHERE id = ? LIMIT 1");
+                    $getRef->bind_param('i',$reservation_id); $getRef->execute(); $r=$getRef->get_result();
+                    if($r && ($rw=$r->fetch_assoc())){ $refCode=$rw['ref_code']??null; $emailTo=$rw['visitor_email']??null; }
+                    $getRef->close();
+                    if($refCode){
+                      $ps=''; $stmtPay=$con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+                      $stmtPay->bind_param('s',$refCode); $stmtPay->execute(); $rp=$stmtPay->get_result();
+                      if($rp && ($pr=$rp->fetch_assoc())){ $ps=strtolower($pr['payment_status']??''); }
+                      $stmtPay->close();
+                      if($ps!=='verified' && !empty($amenity)){
+                        header("Location: admin.php?page=requests&msg=payment_required");
+                        exit;
+                      }
+                      if($ps==='verified'){
+                        $link=admin_status_link($refCode);
+                        $subject='Amenity Approved: '.$refCode;
+                        $body="Your amenity request has been approved and payment verified.\nStatus Code: ".$refCode."\nAmenity: ".($amenityName?:'-')."\nTrack status: ".$link;
+                        admin_send_email($emailTo,$subject,$body);
+                      }
+                    }
                 }
             } else {
                 // Legacy: Update reservation approval status
@@ -750,6 +877,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     }
                     $conflict = ($cnt > 0);
                     // Do NOT override approval_status. Just warn admin via redirect if conflict.
+                }
+                // Enforce payment verification before acting on amenity requests
+                $stmtCheck = $con->prepare("SELECT amenity, payment_status, ref_code FROM reservations WHERE id = ? LIMIT 1");
+                $stmtCheck->bind_param('i', $reservation_id); $stmtCheck->execute(); $resChk = $stmtCheck->get_result();
+                $refCodeRes = null; $psRes = null; $amenRes = null;
+                if($resChk && ($rwC=$resChk->fetch_assoc())){ $amenRes = $rwC['amenity'] ?? ''; $psRes = strtolower($rwC['payment_status'] ?? ''); $refCodeRes = $rwC['ref_code'] ?? null; }
+                $stmtCheck->close();
+                if (!empty($amenRes) && $psRes !== 'verified') {
+                  header("Location: admin.php?page=visitor_requests&msg=payment_required");
+                  exit;
                 }
                 $query = "UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?";
                 $stmt = $con->prepare($query);
@@ -888,8 +1025,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("sii", $payment_status, $staff_id, $reservation_id);
             $stmt->execute();
             
-            // Redirect to prevent form resubmission
-            header("Location: admin.php?page=verify");
+            // Redirect to matching request after verification
+            $refCode = null; $entryId = null; $amenityName = null;
+            $stmtInfo = $con->prepare("SELECT ref_code, entry_pass_id, amenity FROM reservations WHERE id = ? LIMIT 1");
+            $stmtInfo->bind_param('i', $reservation_id);
+            $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
+            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; }
+            $stmtInfo->close();
+            $redirect = 'admin.php?page=verify';
+            if ($payment_status === 'verified' && !empty($refCode)) {
+              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtGF->bind_param('s', $refCode);
+              $stmtGF->execute(); $resGF = $stmtGF->get_result();
+              if($resGF && $resGF->num_rows>0){ $redirect = 'admin.php?page=requests&ref=' . urlencode($refCode); }
+              else if(!empty($entryId)){ $redirect = 'admin.php?page=visitor_requests&ref=' . urlencode($refCode); }
+              $stmtGF->close();
+            }
+            header("Location: $redirect");
             exit;
         }
     }
@@ -953,18 +1105,35 @@ body{margin:0;background:#f3efe9;color:#222;}
   background:linear-gradient(180deg,#f7f3ec 0%,#f3efe9 100%);
 }
 .header{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--header-beige);
-  padding:14px 18px;border-radius:10px;box-shadow:var(--shadow);}
+  padding:14px 18px;border-radius:10px;box-shadow:var(--shadow);position:sticky;top:0;z-index:9;} 
 .header h2{margin:0;font-weight:700;}
 .search{flex:1;margin:0 18px;display:flex;align-items:center;background:#fff;padding:10px;border-radius:999px;
-  box-shadow:0 3px 8px rgba(0,0,0,0.04);}
+  box-shadow:0 3px 8px rgba(0,0,0,0.04);} 
 .search input{border:0;background:transparent;outline:none;font-size:0.95rem;width:100%;}
 .avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:3px solid #fff;}
+.header-actions{display:flex;align-items:center;gap:12px}
+
+.notifications{position:relative;display:flex;align-items:center;gap:10px;margin-right:8px}
+.notif-btn{position:relative;background:#23412e;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)}
+.notif-btn svg{display:block}
+.notif-badge{position:absolute;top:-6px;right:-6px;background:#e74c3c;color:#fff;border-radius:999px;padding:2px 6px;font-size:0.75rem;font-weight:700}
+.notif-badge.pulse{animation:notifPulse 0.8s ease}
+@keyframes notifPulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(231,76,60,0.7)}70%{transform:scale(1.15);box-shadow:0 0 0 12px rgba(231,76,60,0)}100%{transform:scale(1)}}
+.notif-panel{position:absolute;top:48px;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,0.15);min-width:320px;max-width:380px;z-index:1000;display:none}
+.notif-item{padding:10px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:10px}
+.notif-item:last-child{border-bottom:0}
+.notif-item-link{display:flex;align-items:flex-start;gap:10px;color:inherit;text-decoration:none;width:100%}
+.notif-item-link:hover{background:#f7f7f7;border-radius:8px}
+.notif-type{font-size:0.75rem;font-weight:700;color:#23412e;background:#f0f4f2;border-radius:6px;padding:2px 6px}
+.notif-meta{font-size:0.85rem;color:#555}
+.notif-actions{display:flex;gap:8px;padding:10px;border-top:1px solid #f0f0f0}
 
 .panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);}
 .panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
 .table{width:100%;border-collapse:collapse}
 .table thead th{padding:10px 12px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee}
 .table td{padding:12px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.row-highlight{background:#fffbe6;outline:2px solid #f5a623}
 .table img.avatar-xs{width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:10px;vertical-align:middle}
 
 .badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:600;font-size:0.82rem;color:#fff;}
@@ -981,6 +1150,8 @@ body{margin:0;background:#f3efe9;color:#222;}
 .btn-reject{background:var(--status-rejected);color:#fff}
 .btn-edit{background:#2f80ed;color:#fff}
 .btn-remove{background:#a83b3b;color:#fff}
+.btn-payverify{background:#23412e;color:#fff}
+.btn-disabled{background:#ccc;color:#666;cursor:not-allowed}
 
 .receipt-thumbnail{width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid #ddd;cursor:pointer;transition:transform 0.2s;}
 .receipt-thumbnail:hover{transform:scale(1.1);}
@@ -1010,12 +1181,12 @@ body{margin:0;background:#f3efe9;color:#222;}
     </div>
     <nav class="nav-list">
        <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
-       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
+       <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
        <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
+       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
        <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
-       <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
      </nav>
     <div class="sidebar-footer">
       <a href="?logout=1" style="color:#bfb7aa;text-decoration:none;">Log Out</a>
@@ -1038,7 +1209,40 @@ body{margin:0;background:#f3efe9;color:#222;}
       $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
       <h2 id="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
       <div class="search"><input id="search-input" placeholder="Search <?php echo htmlspecialchars($pageTitle); ?>..."></div>
+      <div class="header-actions">
+      <?php 
+        $notifPayments = getPendingPaymentCount($con); 
+        $notifAwaiting = getAmenityAwaitingPaymentCount($con); 
+        $notifReady = getAmenityReadyForApprovalCount($con);
+        $notifIncidents = getOpenIncidentCount($con);
+        $notifNewReqs = getNewRequestsCount($con);
+        $notifTotal = $notifPayments + $notifAwaiting + $notifReady + $notifIncidents + $notifNewReqs;
+        $recent = getRecentNotifications($con);
+      ?>
+      <div class="notifications">
+        <button id="notifToggle" class="notif-btn" aria-label="Notifications" title="Notifications">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="#fff"/>
+          </svg>
+          <?php if($notifTotal>0){ echo "<span class='notif-badge'>".intval($notifTotal)."</span>"; } ?>
+        </button>
+        <div id="notifPanel" class="notif-panel">
+          <?php if(count($recent)>0){ foreach($recent as $it){ 
+            $type = $it['type']; $title = htmlspecialchars($it['title']); $ref = htmlspecialchars($it['ref'] ?? ''); $amen = htmlspecialchars($it['amenity'] ?? ''); $time = htmlspecialchars(date('M d, Y H:i', strtotime($it['time'])));
+            echo "<div class='notif-item'>";
+            echo "<div class='notif-type'>".strtoupper($type)."</div>";
+            echo "<div class='notif-meta'><div><strong>$title</strong>".( $amen? " — $amen" : "" )."</div>".( $ref? "<div>Ref: $ref</div>" : "" )."<div style='color:#888'>".$time."</div></div>";
+            echo "</div>";
+          } } else { echo "<div class='notif-item'><div class='notif-meta'>No notifications</div></div>"; } ?>
+          <div class="notif-actions">
+            <a href="?page=verify" class="btn btn-view">Go to Payments</a>
+            <a href="?page=requests" class="btn btn-view">Amenity Requests</a>
+            <a href="?page=report" class="btn btn-view">Incidents</a>
+          </div>
+        </div>
+      </div>
       <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
+      </div>
       <script>
         (function(){
           const input=document.getElementById('search-input');
@@ -1071,6 +1275,87 @@ body{margin:0;background:#f3efe9;color:#222;}
             });
           }
           if(input){ input.addEventListener('input',filter); }
+          const t=document.getElementById('notifToggle');
+          const p=document.getElementById('notifPanel');
+          if(t&&p){
+            t.addEventListener('click',function(){ p.style.display = (p.style.display==='block')?'none':'block'; });
+            document.addEventListener('click',function(e){ if(!p.contains(e.target) && e.target!==t){ p.style.display='none'; } });
+          }
+          var lastTotal = null;
+          function renderNotif(data){
+            if(!data) return;
+            var badge = t && t.querySelector('.notif-badge');
+            var total = parseInt(data.total||0,10)||0;
+            if(t){
+              if(total>0){ if(!badge){ badge=document.createElement('span'); badge.className='notif-badge'; t.appendChild(badge);} badge.textContent=String(total); if(lastTotal!==null && total>lastTotal){ badge.classList.add('pulse'); setTimeout(function(){ badge.classList.remove('pulse'); }, 1200); } }
+              else { if(badge){ badge.remove(); } }
+            }
+            if(p){
+              var html = '';
+              var items = Array.isArray(data.items)?data.items:[];
+              if(items.length===0){ html += "<div class='notif-item'><div class='notif-meta'>No notifications</div></div>"; }
+              for(var i=0;i<items.length;i++){
+                var it=items[i]||{}; var type=String(it.type||'').toUpperCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it);
+                html += "<div class='notif-item'><a class='notif-item-link' href='"+href+"'><div class='notif-type'>"+type+"</div><div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Ref: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div></a></div>";
+              }
+              var actions = "<div class='notif-actions'><a href='?page=verify' class='btn btn-view'>Go to Payments</a><a href='?page=requests' class='btn btn-view'>Amenity Requests</a><a href='?page=report' class='btn btn-view'>Incidents</a></div>";
+              p.innerHTML = html + actions;
+            }
+            lastTotal = total;
+          }
+          function pollNotifications(){
+            fetch('admin.php?action=get_notifications')
+              .then(function(r){ return r.json(); })
+              .then(function(data){ renderNotif(data); })
+              .catch(function(){});
+          }
+          var lastSeenEpoch = 0;
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return '?page=requests'; if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
+            el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Ref: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
+            var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ el.remove(); }); }
+            c.appendChild(el); setTimeout(function(){ if(el&&el.parentNode){ el.remove(); } }, 8000);
+          }
+          var initialized = false;
+          function handleData(data){
+            try{
+              renderNotif(data);
+              var items = Array.isArray(data.items)?data.items:[];
+              if(items.length>0){
+                var newest = items[0];
+                var t = parseInt(newest.epoch||0,10);
+                if(!initialized){ lastSeenEpoch = t||0; initialized = true; }
+                else if(!isNaN(t) && t>lastSeenEpoch){ showToast(newest); lastSeenEpoch = t; }
+              }
+            } catch(e){}
+          }
+          function poll(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(handleData).catch(function(){}); }
+          poll();
+          var pollMs = 2000; var timer = setInterval(poll, pollMs);
+          document.addEventListener('visibilitychange', function(){ if(document.hidden){ clearInterval(timer); timer = setInterval(poll, 5000); } else { clearInterval(timer); timer = setInterval(poll, pollMs); poll(); } });
+        })();
+      </script>
+      <script>
+        (function(){
+          try{
+            var params = new URLSearchParams(window.location.search);
+            var ref = params.get('ref');
+            if(ref){
+              var row = document.querySelector('tr[data-ref="'+ref+'"]');
+              if(row){
+                row.classList.add('row-highlight');
+                try{ row.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
+                var id = row.getAttribute('data-id');
+                var src = row.getAttribute('data-source');
+                if(id && src){
+                  var n = parseInt(id,10);
+                  if(src==='resident'){ if(typeof showResidentReservationDetails==='function'){ showResidentReservationDetails(n); } }
+                  else if(src==='guest_form'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'guest_form'); } }
+                  else if(src==='reservation'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'reservation'); } }
+                }
+              }
+            }
+          }catch(e){}
         })();
       </script>
     </div>
@@ -1134,7 +1419,7 @@ body{margin:0;background:#f3efe9;color:#222;}
           if ($residentRes && $residentRes->num_rows > 0) {
               while ($rr = $residentRes->fetch_assoc()) {
                   $hasRR = true;
-                  echo "<tr>";
+                  echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                   $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
                   echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
@@ -1187,6 +1472,9 @@ body{margin:0;background:#f3efe9;color:#222;}
 
     <div class="card-box">
       <h3>Guest Reservations</h3>
+      <div style="background:#fff7f3;border:1px solid #f2d3c7;color:#8a2a2a;padding:10px 12px;border-radius:8px;font-size:0.9rem;margin:8px 0 14px;">
+        Verify payment receipt first to unlock viewing and approval of amenity requests.
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -1206,7 +1494,7 @@ body{margin:0;background:#f3efe9;color:#222;}
           if ($guestRes && $guestRes->num_rows > 0) {
               while ($gr = $guestRes->fetch_assoc()) {
                   $hasGR = true;
-                  echo "<tr>";
+                  echo "<tr data-ref='" . htmlspecialchars($gr['ref_code'] ?? '') . "' data-id='" . intval($gr['gf_id'] ?? $gr['id']) . "' data-source='guest_form'>";
                   $fullName = trim(($gr['full_name'] ?? '') . ' ' . ($gr['middle_name'] ?? '') . ' ' . ($gr['last_name'] ?? ''));
                   if ($fullName === '') { $fullName = 'Guest Visitor'; }
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
@@ -1220,12 +1508,53 @@ body{margin:0;background:#f3efe9;color:#222;}
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   $viewHandler = "showVisitorDetails(" . intval($gr['gf_id'] ?? $gr['id']) . ", 'guest_form')";
-                  echo "<button type='button' class='btn btn-view' onclick='$viewHandler' style='margin-bottom: 5px;'>View Details</button><br>";
+                  $isAmenity = !empty($gr['amenity']);
+                  $disableView = ($isAmenity && $payStatus !== 'verified');
+                  if($disableView){
+                    echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View Details</button><br>";
+                  } else {
+                    echo "<button type='button' class='btn btn-view' onclick='$viewHandler' style='margin-bottom: 5px;'>View Details</button><br>";
+                  }
+
+                  // Lookup matching reservation for payment status/receipt
+                  $payStatus = null; $receiptPath = null; $resIdMatch = null;
+                  if (!empty($gr['ref_code'])) {
+                      $stmtPay = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
+                      $stmtPay->bind_param('s', $gr['ref_code']);
+                      $stmtPay->execute();
+                      $resPay = $stmtPay->get_result();
+                      if ($resPay && ($rowP = $resPay->fetch_assoc())) {
+                          $payStatus = $rowP['payment_status'] ?? null;
+                          $receiptPath = $rowP['receipt_path'] ?? null;
+                          $resIdMatch = intval($rowP['id'] ?? 0);
+                      }
+                      $stmtPay->close();
+                  }
+
+                  if (!empty($receiptPath)) {
+                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' title='View Receipt'><img class='receipt-thumbnail' src='" . htmlspecialchars($receiptPath) . "' alt='Receipt'></a>";
+                  }
+
+                  if ($resIdMatch && $payStatus !== 'verified') {
+                    echo "<form method='post' style='display:inline; margin-left:6px'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . $resIdMatch . "'>";
+                    echo "<input type='hidden' name='action' value='verify_receipt'>";
+                    echo "<button type='submit' class='btn btn-payverify'>Verify Payment Receipt</button>";
+                    echo "</form>";
+                    echo "<form method='post' style='display:inline; margin-left:6px'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . $resIdMatch . "'>";
+                    echo "<input type='hidden' name='action' value='reject_receipt'>";
+                    echo "<button type='submit' class='btn btn-reject'>Reject Receipt</button>";
+                    echo "</form>";
+                  } else if ($resIdMatch && $payStatus === 'verified') {
+                    echo "<span class='badge badge-approved' style='margin-left:6px'>Payment Verified</span>";
+                  }
                   if ($approval_status == 'pending') {
+                      $disabled = ($isAmenity && $payStatus !== 'verified');
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='reservation_id' value='" . intval($gr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_request'>";
-                      echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
                       echo "<form method='post' style='display:inline;'>";
@@ -1277,7 +1606,7 @@ body{margin:0;background:#f3efe9;color:#222;}
           $legacy = $con->query("SELECT r.*, ep.full_name, ep.middle_name, ep.last_name FROM reservations r JOIN entry_passes ep ON r.entry_pass_id = ep.id ORDER BY r.created_at DESC");
           if ($legacy && $legacy->num_rows > 0) {
             while ($row = $legacy->fetch_assoc()) {
-              echo '<tr>';
+              echo '<tr data-ref="' . htmlspecialchars($row['ref_code']) . '" data-id="' . intval($row['id']) . '" data-source="reservation">';
               echo '<td>' . htmlspecialchars($row['ref_code']) . '</td>';
               $fullName = trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
               echo '<td>' . htmlspecialchars($fullName) . '</td>';
@@ -1353,6 +1682,73 @@ body{margin:0;background:#f3efe9;color:#222;}
 </section>
 <?php endif; ?>
 
+<!-- VERIFY RECEIPTS -->
+<?php if ($currentPage == 'verify'): ?>
+<section class="panel" id="verify-panel">
+  <h3>Verify Payment Receipts</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Ref Code</th>
+        <th>Name</th>
+        <th>Amenity</th>
+        <th>Dates</th>
+        <th>Receipt</th>
+        <th>Payment Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php
+        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, ep.full_name, ep.middle_name, ep.last_name FROM reservations r LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id WHERE r.receipt_path IS NOT NULL ORDER BY r.created_at DESC");
+        if ($resList && $resList->num_rows > 0) {
+          while ($row = $resList->fetch_assoc()) {
+            echo '<tr>';
+            echo '<td>' . htmlspecialchars($row['ref_code']) . '</td>';
+            $fullName = trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            if ($fullName === '') $fullName = 'Visitor';
+            echo '<td>' . htmlspecialchars($fullName) . '</td>';
+            echo '<td>' . htmlspecialchars($row['amenity'] ?? '-') . '</td>';
+            $dateRange = (!empty($row['start_date']) && !empty($row['end_date'])) ? (date('M d', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))) : '<span class=\'muted\'>-</span>';
+            echo '<td>' . $dateRange . '</td>';
+            if (!empty($row['receipt_path'])) {
+              $rp = $row['receipt_path'];
+              $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
+              if ($isPdf) {
+                echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank">Open Receipt (PDF)</a></td>';
+              } else {
+                echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
+              }
+            } else {
+              echo '<td><span class="muted">No receipt</span></td>';
+            }
+            $ps = strtolower($row['payment_status'] ?? 'pending');
+            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
+            echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
+            echo '<td class="actions">';
+              echo '<form method="post" style="display:inline;">';
+              echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
+              echo '<input type="hidden" name="action" value="verify_receipt">';
+              echo '<button type="submit" class="btn btn-payverify">Verify Payment Receipt</button>';
+              echo '</form>';
+
+              echo '<form method="post" style="display:inline; margin-left:6px">';
+              echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
+              echo '<input type="hidden" name="action" value="reject_receipt">';
+              echo '<button type="submit" class="btn btn-reject">Reject Receipt</button>';
+              echo '</form>';
+            echo '</td>';
+            echo '</tr>';
+          }
+        } else {
+          echo '<tr><td colspan="7" style="text-align:center;">No receipts to verify</td></tr>';
+        }
+      ?>
+    </tbody>
+  </table>
+</section>
+<?php endif; ?>
+
 <!-- SECURITY GUARDS -->
 <?php if ($currentPage == 'security'): ?>
 <section class="panel" id="security-panel">
@@ -1418,7 +1814,7 @@ body{margin:0;background:#f3efe9;color:#222;}
         if ($residentRes && $residentRes->num_rows > 0) {
             while ($rr = $residentRes->fetch_assoc()) {
                 $hasRR = true;
-                echo "<tr>";
+                echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                 $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                 echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
@@ -1470,6 +1866,9 @@ body{margin:0;background:#f3efe9;color:#222;}
   <div style="background:#f2fbf5;border:1px solid #cfe5d3;color:#23412e;padding:10px 12px;border-radius:8px;font-size:0.9rem;margin:8px 0 14px;">
     Guest forms submitted by residents (linked to resident accounts)
   </div>
+  <div style="background:#fff7f3;border:1px solid #f2d3c7;color:#8a2a2a;padding:10px 12px;border-radius:8px;font-size:0.9rem;margin:8px 0 14px;">
+    For amenity requests, confirm payment receipt before viewing details or approving.
+  </div>
   <table class="table">
     <thead>
       <tr>
@@ -1490,7 +1889,7 @@ body{margin:0;background:#f3efe9;color:#222;}
       if ($residentRequests && $residentRequests->num_rows > 0) {
           while ($req = $residentRequests->fetch_assoc()) {
               $hasResidentRequests = true;
-              echo "<tr>";
+              echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='guest_form'>";
               // Visitor full name from resident-submitted guest form
               $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
               echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
@@ -1516,12 +1915,26 @@ body{margin:0;background:#f3efe9;color:#222;}
 
               // Actions
               echo "<td class='actions'>";
-              echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\" style='margin-bottom: 5px;'>View More Details</button><br>";
+              $payStatus = null; $resIdMatch = null; $receiptPath = null; $isAmenity = !empty($req['amenity']);
+              if (!empty($req['ref_code'])) {
+                $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
+                $stmtPay2->bind_param('s', $req['ref_code']);
+                $stmtPay2->execute(); $rp2 = $stmtPay2->get_result();
+                if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
+                $stmtPay2->close();
+              }
+              $disableView = ($isAmenity && $payStatus !== 'verified');
+              if($disableView){
+                echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
+              } else {
+                echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\" style='margin-bottom: 5px;'>View More Details</button><br>";
+              }
               if ($approval_status == 'pending') {
+                  $disabled = ($isAmenity && $payStatus !== 'verified');
                   echo "<form method='post' style='display:inline;'>";
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='approve_request'>";
-                  echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                   echo "</form>";
 
                   echo "<form method='post' style='display:inline;'>";
@@ -1592,9 +2005,15 @@ body{margin:0;background:#f3efe9;color:#222;}
               // Receipt preview
               echo "<td>";
               if ($payment['receipt_path']) {
-                  echo "<a href='" . $payment['receipt_path'] . "' target='_blank' class='receipt-link'>";
-                  echo "<img src='" . $payment['receipt_path'] . "' alt='Receipt' class='receipt-thumbnail'>";
-                  echo "</a>";
+                  $rp = $payment['receipt_path'];
+                  $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
+                  if ($isPdf) {
+                      echo "<a href='" . htmlspecialchars($rp) . "' target='_blank' class='receipt-link'>Open Receipt (PDF)</a>";
+                  } else {
+                      echo "<a href='" . htmlspecialchars($rp) . "' target='_blank' class='receipt-link'>";
+                      echo "<img src='" . htmlspecialchars($rp) . "' alt='Receipt' class='receipt-thumbnail'>";
+                      echo "</a>";
+                  }
               } else {
                   echo "<span class='muted'>No receipt</span>";
               }
@@ -1766,18 +2185,26 @@ body{margin:0;background:#f3efe9;color:#222;}
 
                 // Actions
                 echo "<td class='actions'>";
-                echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $request['id'] . ", 'reservation')\" style='margin-bottom: 5px;'>View More Details</button><br>";
+                $isAmenityLegacy = !empty($request['amenity']);
+                $payStatusLegacy = null; if (!empty($request['ref_code'])) { $stmtPayL = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1"); $stmtPayL->bind_param('s', $request['ref_code']); $stmtPayL->execute(); $resPL = $stmtPayL->get_result(); if($resPL && ($rwPL=$resPL->fetch_assoc())){ $payStatusLegacy = $rwPL['payment_status'] ?? null; } $stmtPayL->close(); }
+                $disableViewLegacy = ($isAmenityLegacy && $payStatusLegacy !== 'verified');
+                if($disableViewLegacy){
+                  echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
+                } else {
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $request['id'] . ", 'reservation')\" style='margin-bottom: 5px;'>View More Details</button><br>";
+                }
                 if ($approval_status == 'pending') {
+                    $disabled = ($isAmenityLegacy && $payStatusLegacy !== 'verified');
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='reservation_id' value='" . $request['id'] . "'>";
                     echo "<input type='hidden' name='action' value='approve_request'>";
-                    echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                     echo "</form>";
 
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='reservation_id' value='" . $request['id'] . "'>";
                     echo "<input type='hidden' name='action' value='deny_request'>";
-                    echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
                 } elseif ($approval_status == 'denied') {
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
@@ -2125,5 +2552,6 @@ window.addEventListener('click', function(event){
 
 </main>
 </div>
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
 </body>
 </html>
