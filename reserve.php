@@ -306,8 +306,7 @@ $stmtGate = $con->prepare("SELECT payment_status, amenity, start_date FROM reser
   $resGate = $stmtGate->get_result();
   if ($resGate && ($rw = $resGate->fetch_assoc())) {
     if (!empty($rw['amenity']) && !empty($rw['start_date'])) {
-      $_SESSION['flash_notice'] = 'A reservation already exists for this status code. Please wait for your status code via SMS.';
-      $_SESSION['flash_ref_code'] = $refFromQuery;
+      $_SESSION['flash_notice'] = 'A reservation already exists for this status code. Please wait for email notification.';
       header('Location: mainpage.php');
       exit;
     }

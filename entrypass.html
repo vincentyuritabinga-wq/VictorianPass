@@ -28,6 +28,7 @@
     .upload-box { border:2px dashed #999; padding:14px; text-align:center; margin-bottom:14px; border-radius:8px; background:#f9f9f9; font-size:0.9rem; font-weight:500; cursor:pointer; display:block; }
     .upload-box img { width:60px; margin-bottom:6px; }
     .upload-box:hover { transition:all 0.3s ease; background:#f0f0f0; transform:scale(1.02); }
+    .upload-box.error { border-color:#c0392b; background:#ffecec; }
     .form-actions { display:flex; justify-content:space-between; gap:12px; margin-top:10px; }
     .btn-back, .btn-next { display:block; text-align:center; padding:12px; border-radius:8px; font-weight:600; text-decoration:none; transition:all 0.2s; flex:1; }
     .btn-back { background:#ddd; color:#222; }
@@ -196,6 +197,7 @@
       var idPreviewWrap = document.getElementById('idPreviewWrap');
       var idPreview = document.getElementById('idPreview');
       var btnClearId = document.getElementById('btnClearId');
+      var uploadBoxEl = document.querySelector('.upload-box');
 
       // Limit birthdate to past dates only (not today)
       if (birthdate) {
@@ -229,21 +231,23 @@
       var privacyNote = document.getElementById('privacyNote');
       if (idInput) idInput.addEventListener('change', function(){
         var file = idInput.files && idInput.files[0];
-        if (!file){ idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); return; }
+        if (!file){ idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; if(uploadBoxEl) uploadBoxEl.classList.add('error'); setWarning('valid_id','Please upload a Valid ID.'); return; }
         var reader = new FileReader();
         reader.onload = function(e){ idPreview.src = e.target.result; idPreviewWrap.style.display = 'block'; };
         reader.readAsDataURL(file);
         if(privacyNote) privacyNote.style.display='block';
+        if(uploadBoxEl) uploadBoxEl.classList.remove('error');
         setWarning('valid_id', '');
       });
-      if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; setWarning('valid_id','Please upload a Valid ID.'); });
+      if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; if(privacyNote) privacyNote.style.display='none'; if(uploadBoxEl) uploadBoxEl.classList.add('error'); setWarning('valid_id','Please upload a Valid ID.'); });
 
       entryForm.addEventListener('submit', function(e){
         var valid = true;
+        if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); if(uploadBoxEl){ uploadBoxEl.classList.add('error'); uploadBoxEl.scrollIntoView({behavior:'smooth',block:'center'}); } e.preventDefault(); return; }
         [first, last, address].forEach(function(inp){
           if (!inp) return;
           if (!inp.value.trim()){ setWarning(inp.id, 'This field is required.'); valid = false; }
-          // Names cannot contain digits; address may include digits
+          
           if (inp !== address && /\d/.test(inp.value)){ setWarning(inp.id, 'Numbers are not allowed in this field.'); valid = false; }
         });
         if (email){ var ev = email.value.trim(); if(!ev){ setWarning('email','This field is required.'); valid=false; } else if(!isValidEmail(ev)){ setWarning('email','Please enter a valid email.'); valid=false; } }
@@ -253,8 +257,6 @@
           var todayStr = new Date().toISOString().split('T')[0];
           if (birthdate.value >= todayStr){ setWarning('birthdate', 'Birthdate must be a past date.'); valid = false; }
         }
-
-        if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); valid = false; }
         if (!valid) e.preventDefault();
       });
     });

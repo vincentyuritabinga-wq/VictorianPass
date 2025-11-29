@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $msg = 'Receipt uploaded. Payment submitted for review.';
       $_SESSION['flash_notice'] = 'Please wait for confirmation. The status code will be sent to your email within 12 hours.';
     }
-    $_SESSION['flash_ref_code'] = $ref_code;
+    
     header('Location: mainpage.php');
     exit;
   }
@@ -124,6 +124,13 @@ if ($ref_code === '') {
     .pay-callout{display:flex;justify-content:center;align-items:center;background:#213825;border:1px solid rgba(255,255,255,.12);color:#e7fff1;border-radius:10px;padding:12px;margin:10px 0;font-weight:700}
     .pay-callout .num{font-size:1.6rem;margin-left:8px}
     .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000}
+    .upload-area{border:2px dashed #9bd08f;background:#1f2b20;padding:20px;border-radius:12px;margin-top:14px;display:flex;flex-direction:column;gap:12px}
+    .upload-area .label{color:#e7fff1;font-weight:700;font-size:1.1rem}
+    #receiptInput{padding:14px;border:2px solid #9bd08f;border-radius:10px;background:#fff;color:#222;font-size:1rem}
+    #confirmBtn{padding:12px 18px;font-size:1rem}
+    .upload-preview{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:#162216;border:1px solid #325a37;border-radius:10px;padding:12px}
+    .upload-preview img{max-width:100%;height:auto;border-radius:8px}
+    .upload-preview .file-name{color:#e7fff1;font-weight:600}
   </style>
   </head>
 <body>
@@ -133,7 +140,6 @@ if ($ref_code === '') {
       <h2 class="title">Downpayment</h2>
       <p class="meta">Scan the QR code with GCash to pay your partial payment. Upload the receipt and click Confirm.</p>
       <?php if (!empty($msg)) { echo '<p class="meta">' . htmlspecialchars($msg) . '</p>'; } ?>
-      <p>Your Status Code: <span class="code"><?php echo htmlspecialchars($ref_code); ?></span></p>
       <div class="qr"><img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="Payment QR Code" style="max-width:280px;border-radius:8px;border:1px solid rgba(255,255,255,.2)" onerror="this.style.display='none'"></div>
       <div class="pay-callout">You will pay now:<span class="num">₱<?php echo number_format($downpayment, 2); ?></span></div>
       <div class="break">
@@ -165,8 +171,12 @@ if ($ref_code === '') {
         <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($ref_code); ?>">
         <input type="hidden" name="continue" value="<?php echo htmlspecialchars($continue); ?>">
         <input type="hidden" name="entry_pass_id" value="<?php echo intval($entry_pass_id); ?>">
-        <label for="receiptInput" class="label">Upload Payment Receipt (image or PDF)</label>
-        <input type="file" name="receipt" id="receiptInput" accept="image/*,.pdf" required>
+        <div class="upload-area">
+          <label for="receiptInput" class="label">Upload Payment Receipt (image or PDF)</label>
+          <input type="file" name="receipt" id="receiptInput" accept="image/*,.pdf" required>
+          <div class="upload-preview" id="uploadPreview" style="display:none"></div>
+          <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
+        </div>
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
       </form>
     </div>
@@ -175,8 +185,38 @@ if ($ref_code === '') {
     (function(){
       const input=document.getElementById('receiptInput');
       const btn=document.getElementById('confirmBtn');
-      function update(){ btn.disabled = !(input && input.files && input.files.length>0); }
+      const preview=document.getElementById('uploadPreview');
+      const removeBtn=document.getElementById('removeFileBtn');
+      function renderPreview(file){
+        if(!file){ preview.style.display='none'; preview.innerHTML=''; return; }
+        const name=document.createElement('div');
+        name.className='file-name';
+        name.textContent=file.name;
+        preview.innerHTML='';
+        preview.appendChild(name);
+        const type=(file.type||'').toLowerCase();
+        if(type.startsWith('image/')){
+          const img=document.createElement('img');
+          const reader=new FileReader();
+          reader.onload=function(e){ img.src=e.target.result; };
+          reader.readAsDataURL(file);
+          preview.appendChild(img);
+        } else {
+          const note=document.createElement('div');
+          note.style.color='#cfe9d3';
+          note.textContent='Selected file ready to upload.';
+          preview.appendChild(note);
+        }
+        preview.style.display='flex';
+      }
+      function update(){
+        const hasFile=!!(input && input.files && input.files.length>0);
+        btn.disabled=!hasFile;
+        removeBtn.disabled=!hasFile;
+        renderPreview(hasFile?input.files[0]:null);
+      }
       if(input){ input.addEventListener('change', update); }
+      if(removeBtn){ removeBtn.addEventListener('click', function(){ input.value=''; update(); }); }
       update();
     })();
   </script>

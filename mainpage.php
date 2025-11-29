@@ -131,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="flash-modal">
         <div class="title">Notification</div>
         <div class="text"><?php echo htmlspecialchars($flash); ?></div>
-        <?php if(!empty($flashRef)){ ?><div class="code"><?php echo htmlspecialchars($flashRef); ?></div><?php } ?>
+        
         <button type="button" class="flash-close" id="flashCloseBtn">Close</button>
       </div>
     </div>
