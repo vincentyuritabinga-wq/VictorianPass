@@ -9,12 +9,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'cancel' && $code !== '' && ($con instanceof mysqli)) {
         try {
             // Prefer guest_forms if exists
-            $stmtG = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG = $con->prepare("SELECT id, approval_status FROM guest_forms WHERE ref_code = ? LIMIT 1");
             $stmtG->bind_param('s', $code);
             $stmtG->execute();
             $resG = $stmtG->get_result();
             $stmtG->close();
             if ($resG && $resG->num_rows > 0) {
+                $row = $resG->fetch_assoc();
+                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
+                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
+                    exit;
+                }
                 $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='denied', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU->bind_param('s', $code);
                 $stmtU->execute();
@@ -23,12 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
             // Try reservations by ref_code
-            $stmtR = $con->prepare("SELECT id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR = $con->prepare("SELECT id, approval_status FROM reservations WHERE ref_code = ? LIMIT 1");
             $stmtR->bind_param('s', $code);
             $stmtR->execute();
             $resR = $stmtR->get_result();
             $stmtR->close();
             if ($resR && $resR->num_rows > 0) {
+                $row = $resR->fetch_assoc();
+                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
+                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
+                    exit;
+                }
                 $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected' WHERE ref_code = ?");
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
@@ -37,12 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
             // Fallback: resident_reservations
-            $stmtRR = $con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR = $con->prepare("SELECT id, approval_status FROM resident_reservations WHERE ref_code = ? LIMIT 1");
             $stmtRR->bind_param('s', $code);
             $stmtRR->execute();
             $resRR = $stmtRR->get_result();
             $stmtRR->close();
             if ($resRR && $resRR->num_rows > 0) {
+                $row = $resRR->fetch_assoc();
+                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
+                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
+                    exit;
+                }
                 $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='denied', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU3->bind_param('s', $code);
                 $stmtU3->execute();

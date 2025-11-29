@@ -268,7 +268,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <p class="desc">Play and practice on our outdoor basketball court.</p>
       </div>
       <div class="amenity-card">
-        <img src="images/tennis.svg" alt="Tennis Court">
+        <img src="images/tennis.jpg" alt="Tennis Court">
         <h3 class="title">Tennis Court</h3>
         <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
       </div>

@@ -280,6 +280,7 @@ html { scroll-behavior: smooth; }
 .amenity-card { background: #fff; color: #222; padding: 24px; border-radius: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.12); border: 1px solid #e9ecef; transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
 .amenity-card:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(0,0,0,0.18); border-color: #dfe4ea; }
 .amenity-card img { width: 100%; max-height: 240px; object-fit: contain; display: block; margin: 8px auto 16px; }
+.amenity-card img[src$="tennis.jpg"]{ height: 240px; object-fit: cover; }
 .amenity-card .title { font-weight: 700; font-size: 1.25rem; margin: 0 0 8px; color: #23412e; text-align: center; }
 .amenity-card .desc { color: #555; font-size: 1rem; margin: 0; text-align: center; line-height: 1.5; }
 

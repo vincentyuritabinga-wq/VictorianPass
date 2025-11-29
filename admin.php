@@ -669,20 +669,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $singleDay = ($start === $end && $st && $et);
                     $cnt = 0;
                     if ($singleDay) {
-                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
                         $stmt1->bind_param('ssss', $amenity, $start, $st, $et); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
                         $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
                         $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
                         if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
-                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
                             $stmt2->bind_param('ssss',$amenity,$start,$st,$et);
                         } else {
-                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
-                            $stmt2->bind_param('sss',$amenity,$end,$start);
+                            // No time columns; skip time-based conflict for single-day
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE 0=1");
                         }
                         $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
-                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
-                        $stmt3->bind_param('ssss',$amenity,$start,$st,$et); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                        $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
+                        $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
+                        if ($hasGt && $hasGt->num_rows>0 && $hasGe && $hasGe->num_rows>0) {
+                            $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND (TIME(?) < end_time AND TIME(?) > start_time)");
+                            $stmt3->bind_param('ssss',$amenity,$start,$st,$et);
+                        } else {
+                            $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE 0=1");
+                        }
+                        $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
                     } else {
                         $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
                         $stmt1->bind_param('sss',$amenity,$end,$start); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
@@ -713,20 +720,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $singleDay = ($start === $end && $st && $et);
                     $cnt = 0;
                     if ($singleDay) {
-                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                        $stmt1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
                         $stmt1->bind_param('ssss', $amenity, $start, $st, $et); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
                         $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
                         $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
                         if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
-                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND NOT (? >= end_time OR ? <= start_time)");
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
                             $stmt2->bind_param('ssss',$amenity,$start,$st,$et);
                         } else {
-                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
-                            $stmt2->bind_param('sss',$amenity,$end,$start);
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE 0=1");
                         }
                         $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
-                        $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND NOT (? >= end_time OR ? <= start_time)");
-                        $stmt3->bind_param('ssss',$amenity,$start,$st,$et); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
+                        $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
+                        $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
+                        if ($hasGt && $hasGt->num_rows>0 && $hasGe && $hasGe->num_rows>0) {
+                            $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND (TIME(?) < end_time AND TIME(?) > start_time)");
+                            $stmt3->bind_param('ssss',$amenity,$start,$st,$et);
+                        } else {
+                            $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE 0=1");
+                        }
+                        $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
                     } else {
                         $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
                         $stmt1->bind_param('sss',$amenity,$end,$start); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
@@ -1636,9 +1649,10 @@ body{margin:0;background:#f3efe9;color:#222;}
     <thead>
       <tr>
         <th>Reported By</th>
+        <th>Complainee</th>
         <th>Nature</th>
         <th>Address</th>
-        <th>Date</th>
+        <th>Report Date</th>
         <th>Status</th>
         <th>Proofs</th>
         <th>Actions</th>
@@ -1653,9 +1667,11 @@ body{margin:0;background:#f3efe9;color:#222;}
               $displayName = $fullName !== '' ? $fullName : $r['complainant'];
               echo '<tr>';
               echo '<td>' . htmlspecialchars($displayName) . '</td>';
+              echo '<td>' . htmlspecialchars($r['subject'] ?: '-') . '</td>';
               echo '<td>' . htmlspecialchars($r['nature'] ?: ($r['other_concern'] ?: '-')) . '</td>';
               echo '<td>' . htmlspecialchars($r['address']) . '</td>';
-              echo '<td>' . date('M d, Y', strtotime($r['created_at'])) . '</td>';
+              $rdate = !empty($r['report_date']) ? date('M d, Y', strtotime($r['report_date'])) : date('M d, Y', strtotime($r['created_at']));
+              echo '<td>' . $rdate . '</td>';
               $status = $r['status'];
               $badgeClass = $status === 'resolved' ? 'badge badge-approved' : ($status === 'rejected' ? 'badge badge-rejected' : 'badge badge-warning');
               echo '<td><span class="' . $badgeClass . '">' . ucfirst($status) . '</span></td>';
@@ -1664,7 +1680,12 @@ body{margin:0;background:#f3efe9;color:#222;}
               echo '<td>';
               if (count($files) > 0) {
                   foreach ($files as $f) {
-                      echo '<a href="' . htmlspecialchars($f) . '" target="_blank">View</a><br/>';
+                      $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+                      if (in_array($ext, ['jpg','jpeg','png','gif'])) {
+                          echo '<img src="' . htmlspecialchars($f) . '" class="receipt-thumbnail" onclick="showIncidentProofModal(\'' . htmlspecialchars($f) . '\')" alt="proof"> ';
+                      } else {
+                          echo '<a href="' . htmlspecialchars($f) . '" target="_blank">View file</a><br/>';
+                      }
                   }
               } else {
                   echo '<span class="muted">No proofs</span>';
@@ -1782,7 +1803,7 @@ body{margin:0;background:#f3efe9;color:#222;}
         ?>
       </tbody>
     </table>
-  </div>
+</div>
 </section>
 <?php endif; ?>
 
@@ -1794,6 +1815,14 @@ body{margin:0;background:#f3efe9;color:#222;}
     <div id="visitorDetailsContent">
       <!-- Content will be loaded here -->
     </div>
+  </div>
+</div>
+
+<!-- Incident Proof Modal -->
+<div id="incidentProofModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);">
+  <div class="modal-content" style="background-color: #fefefe; margin: 4% auto; padding: 10px; border: 1px solid #888; width: 85%; max-width: 900px; max-height: 85vh; overflow: auto; border-radius: 8px;">
+    <span class="close" onclick="closeIncidentProofModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+    <img id="incidentProofImg" src="" alt="Proof" style="width:100%; height:auto; border-radius:8px;" />
   </div>
 </div>
 
@@ -1815,6 +1844,14 @@ document.querySelectorAll('.nav-item').forEach(item => {
     document.getElementById('search-input').placeholder = `Search ${pageTitle}...`;
   });
 });
+
+// Incident proof modal
+function showIncidentProofModal(src){
+  var m=document.getElementById('incidentProofModal');
+  var img=document.getElementById('incidentProofImg');
+  if(m&&img){ img.src=src; m.style.display='block'; }
+}
+function closeIncidentProofModal(){ var m=document.getElementById('incidentProofModal'); if(m){ m.style.display='none'; } }
 
 // Function to show visitor details modal
 function showVisitorDetails(id, source) {

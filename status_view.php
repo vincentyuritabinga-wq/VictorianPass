@@ -49,12 +49,15 @@
     .dashboard {
       display: none;
       background: #23412e;
-      padding: 20px;
+      padding: 24px;
       width: 95%;
       max-width: 1000px;
-      border-radius: 12px;
+      border-radius: 16px;
       color: white;
       margin-top: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      position: relative;
+      overflow: hidden;
     }
     .dashboard-header {
       background: #2c2c2c;
@@ -66,19 +69,23 @@
       justify-content: space-between;
     }
     .dashboard-header img { height: 40px; }
-    .qr-btn { background: #23412e; color: #fff; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; }
-    .qr-btn:hover { opacity: 0.85; }
+    .qr-btn { background: #23412e; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; }
+    .qr-btn:hover { opacity: 0.92; }
     .qr-btn.disabled { background: #ccc; color: #666; cursor: not-allowed; }
     .qr-btn.disabled:hover { opacity: 1; }
     
-    .upload-btn { background: #007bff; color: #fff; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; }
+    .upload-btn { background: #007bff; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; }
     .upload-btn:hover { background: #0056b3; }
 
-    table { width: 100%; border-collapse: collapse; color: #000; background: #fff; border-radius: 10px; overflow: hidden; }
-    th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: center; }
+    .table-wrap { width: 100%; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.10); overflow-x: auto; }
+    .status-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; color: #000; }
+    th, td { padding: 14px 12px; border-bottom: 1px solid #eee; text-align: center; }
+    .date-time { color:#666; font-size:0.9rem; white-space: nowrap; }
     .status-badge { padding: 5px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; }
     .status-approved { background: #d6eaff; color: #0044cc; }
-    .status-pending { background: #fff9e6; color: #b68b00; }
+    .status-pending { background: #fff4cc; color: #b68b00; }
+    .cancel-btn { background:#8a2a2a; color:#fff; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; }
+    .cancel-btn:disabled { background:#ccc; color:#666; cursor:not-allowed; }
     .status-expired { background: #f0f0f0; color: #555; }
 
     /* Details Modal Styles (match site cards) */
@@ -161,23 +168,25 @@
       <img src="images/logo.svg" alt="VictorianPass Logo" />
       <button onclick="goBack()" class="qr-btn">Go Back</button>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Amenity</th>
-          <th>Date & Time</th>
-          <th>Persons</th>
-          <th>Price</th>
-          <th>Status</th>
-          <th>Details</th>
-          <th>QR Code</th>
-          <th>Proof of Payment</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="dashboardRows"></tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="status-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Amenity</th>
+            <th>Date & Time</th>
+            <th>Persons</th>
+            <th>Price</th>
+            <th>Status</th>
+            <th>Details</th>
+            <th>QR Code</th>
+            <th>Proof of Payment</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="dashboardRows"></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="modal" id="qrModal">
@@ -284,7 +293,7 @@
                   : (data.start_date && data.expires_at)
                     ? `${data.start_date} → ${data.expires_at}`
                     : (data.start_date || '-')
-                const timeDisplay = (data.start_time || data.end_time) ? (`<div style="color:#666;font-size:0.9rem">${fmtTime(data.start_time)}${data.end_time?(' → '+fmtTime(data.end_time)):''}</div>`) : '';
+                const timeDisplay = (data.start_time || data.end_time) ? (`<div class="date-time">${fmtTime(data.start_time)}${data.end_time?(' → '+fmtTime(data.end_time)):''}</div>`) : '';
                 const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(data.persons);
                 const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
                 const statusLower = (data.status||'').toLowerCase();
@@ -304,7 +313,7 @@
                         ${(data.status||'').toLowerCase() === 'approved' ? 'View QR' : 'QR Disabled'}
                     </button></td>
                     <td><button class="upload-btn" onclick="openUploadModal()">Upload Receipt</button></td>
-                    <td><button class="qr-btn" style="background:#8a2a2a" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
+                    <td><button class="cancel-btn" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
                   </tr>`;
               }, 600);
             } else {

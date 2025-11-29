@@ -12,16 +12,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
   id INT AUTO_INCREMENT PRIMARY KEY,
   complainant VARCHAR(150) NOT NULL,
+  subject VARCHAR(150) NULL,
   address VARCHAR(255) NOT NULL,
   nature VARCHAR(255) NULL,
   other_concern VARCHAR(255) NULL,
   user_id INT NULL,
+  report_date DATE NULL,
   status ENUM('new','in_progress','resolved','rejected') DEFAULT 'new',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL,
   INDEX idx_status (status),
   INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB");
+
+// Add columns if missing (idempotent migrations)
+@$con->query("ALTER TABLE incident_reports ADD COLUMN subject VARCHAR(150) NULL");
+@$con->query("ALTER TABLE incident_reports ADD COLUMN report_date DATE NULL");
 
 $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -33,12 +39,14 @@ $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
 
 // Inputs
 $complainant = trim($_POST['complainant'] ?? '');
+$subject     = trim($_POST['subject'] ?? '');
 $address     = trim($_POST['address'] ?? '');
 $other       = trim($_POST['other'] ?? '');
 $natureArr   = $_POST['nature'] ?? [];
+$reportDate  = trim($_POST['report_date'] ?? '');
 
-if ($complainant === '' || $address === '') {
-  echo json_encode(['success' => false, 'message' => 'Complainant and address are required.']);
+if ($address === '') {
+  echo json_encode(['success' => false, 'message' => 'Address is required.']);
   exit;
 }
 
@@ -51,8 +59,8 @@ if (is_array($natureArr) && count($natureArr) > 0) {
 $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
 
 // Insert report
-$stmtR = $con->prepare("INSERT INTO incident_reports (complainant, address, nature, other_concern, user_id) VALUES (?, ?, ?, ?, ?)");
-$stmtR->bind_param('ssssi', $complainant, $address, $natureStr, $other, $user_id);
+$stmtR = $con->prepare("INSERT INTO incident_reports (complainant, subject, address, nature, other_concern, user_id, report_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
+$stmtR->bind_param('sssssis', $complainant, $subject, $address, $natureStr, $other, $user_id, $reportDate);
 if (!$stmtR->execute()) {
   echo json_encode(['success' => false, 'message' => 'Failed to save report: ' . $con->error]);
   exit;

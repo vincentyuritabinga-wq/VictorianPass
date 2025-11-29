@@ -23,5 +23,17 @@ git branch -a
 git checkout organizedfiles
 git branch -a
 
+Start date is required.(warning error msg) should be below the start date just like the end date warning the start date warning should be below the start date “Fix the reservation date selection so users cannot select an end date that is earlier than the start date, and cannot select a start date that is later than the end date. The system must validate both fields in real time and prevent invalid date combinations.
 
+when viewing thr description the available time should appear as well and make it bolder and make they can see it first as well since its imprtant for them to know to
 
+“Under Pick Hours, add a brief note explaining that the selected hours define the reservation duration, and the system will only block that specific time range. Other time slots on the same day remain bookable for others.
+
+Under Start Date & Time, add a note stating that the picker shows only available time slots and automatically disables those that are fully booked or overlap with the chosen duration.
+
+When the user selects a start time and hours, display a Selected Time summary showing the exact time range (e.g., ‘2 hours — 1:00 PM to 3:00 PM’) so users clearly see what they’re reserving.” and pls fix the persons in the pool since its not allinged with the others and fix the css also
+make the persons picker below the label
+
+the calendar and etc should only show once they click the book now and hide the avaiable times only show it when they click the view description
+
+Fix the reservation time-slot validation. The system is incorrectly detecting overlaps even when the selected time range does not conflict with any existing reservation. Review and correct the overlap-checking logic (refer to the Admin page data) so that it only marks a reservation as overlapping when the time ranges actually intersect.”

@@ -51,14 +51,19 @@ $address = $user['address'] ?? '';
     .brand-text p { margin: 0; font-size: 0.8rem; color: #aaa; font-weight: 400; }
     .nav-actions { display: flex; align-items: center; gap: 12px; }
     .profile-icon { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; cursor: pointer; }
-    .container { display: flex; flex-wrap: wrap; gap: 30px; padding: 40px; justify-content: center; align-items: flex-start; }
-    .explanation { flex: 1 1 280px; background: #264734; color: white; padding: 25px; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.2); line-height: 1.6; }
-    .explanation h2 { margin-top: 0; font-size: 22px; font-weight: 600; }
-    .explanation p { font-size: 14px; margin-bottom: 15px; }
-    .explanation .btn { display: block; margin: 10px 0; padding: 10px 16px; background: #111; color: white; text-decoration: none; font-size: 14px; border-radius: 30px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); }
-    .report-card { flex: 1 1 360px; background: #fff; padding: 22px; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
-    .report-card h2 { margin: 0; font-size: 20px; color: #264734; }
-    .report-card h3 { margin-top: 10px; font-size: 18px; }
+    .container { display: grid; grid-template-columns: 420px 1fr; gap: 22px; padding: 28px 40px; align-items: start; }
+    @media (max-width: 900px){ .container{ grid-template-columns: 1fr; } }
+    .explanation { background: #2b2b2b; color: #eee; padding: 22px; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.25); line-height: 1.65; border: 1px solid #3a3a3a; }
+    .explanation .brand-line { display:flex; align-items:center; gap:10px; margin: 10px 0 12px; }
+    .explanation .brand-line .line { flex:1; height: 3px; background: #e5b84a; border-radius: 2px; }
+    .explanation h2 { margin: 0; font-size: 20px; font-weight: 700; color:#f0f0f0; }
+    .explanation p { font-size: 14px; margin-bottom: 14px; }
+    .explanation .btn { display: inline-flex; align-items:center; justify-content:center; gap:8px; margin: 10px 6px 0 0; padding: 10px 16px; background: #23412e; color: white; text-decoration: none; font-size: 14px; border-radius: 28px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08) }
+    .report-card { background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 6px 16px rgba(0,0,0,0.18); border:1px solid rgba(0,0,0,0.06) }
+    .report-header { text-align:center; margin-bottom:8px }
+    .report-header h2 { margin: 0; font-size: 20px; color: #23412e; font-weight:800 }
+    .report-sub { font-size: 12px; color:#666; margin: 2px 0 10px; }
+    .report-title { text-align:center; font-weight:800; margin: 8px 0 16px; }
     .form-group { margin-bottom: 12px; }
     .form-group label { display: block; margin-bottom: 6px; font-size: 14px; color: #222; }
     .form-group input[type="text"], .form-group input[type="email"], .form-group textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; }
@@ -69,7 +74,7 @@ $address = $user['address'] ?? '';
     .upload-box:hover { background: #f0f0f0; transform: scale(1.02); }
     .file-list { margin-top: 10px; font-size: 13px; color: #444; line-height: 1.4; }
     .file-list div { margin-bottom: 4px; word-break: break-word; }
-    .next-btn { margin-top: 25px; padding: 12px 20px; background: #264734; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; font-size: 16px; font-weight: 600; position: relative; overflow: hidden; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    .next-btn { margin-top: 25px; padding: 12px 20px; background: #23412e; color: white; border: none; border-radius: 10px; cursor: pointer; width: 160px; font-size: 16px; font-weight: 700; position: relative; overflow: hidden; transition: transform 0.25s ease, box-shadow 0.25s ease; float:right }
     .next-btn:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(229,221,198,0.4); }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
     .modal-content { background: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.3); position: relative; line-height: 1.6; }
@@ -94,7 +99,8 @@ $address = $user['address'] ?? '';
   <div class="container">
     <!-- Left Side -->
     <div class="explanation">
-      <h2>Why Reporting Matters</h2>
+      <div class="brand-line"><span class="line"></span><img src="images/logo.svg" alt="Logo" style="width:26px;height:26px"><span class="line"></span></div>
+      <h2>Resident Report</h2>
       <p>Reporting complaints ensures that every resident’s voice is heard and that community standards are properly maintained. By addressing issues early, we promote a safe, fair, and harmonious environment for all homeowners.</p>
       <p>Please be responsible when filing a complaint. Submitting truthful and well-documented concerns helps the association act effectively.</p>
       <a class="btn" href="#" onclick="openModal('termsModal')">Terms and Conditions</a>
@@ -103,13 +109,24 @@ $address = $user['address'] ?? '';
 
     <!-- Right Side -->
     <div class="report-card">
-      <h2>Victorian Heights Subdivision</h2>
-      <p><small>Magna Carta for Homeowners and Homeowners’ Associations</small></p>
-      <h3>Report a Complaint</h3>
+      <div class="report-header">
+        <h2>Victorian Heights Subdivision</h2>
+        <div class="report-sub">Dahlia Fairview, BRGY. Sauyo, Quezon City</div>
+        <div class="report-sub">Magna Carta for Homeowners and Homeowners’ Associations &nbsp; — &nbsp; REPUBLIC ACT NO. 9904</div>
+        <div class="report-title">Case Report</div>
+      </div>
 
-      <div class="form-group">
-        <label for="complainant">Complainant</label>
-        <input type="text" id="complainant" name="complainant" placeholder="Enter your name" value="<?php echo htmlspecialchars($fullName); ?>" required>
+      <input type="hidden" id="complainant" name="complainant" value="<?php echo htmlspecialchars($fullName); ?>">
+
+      <div style="display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:8px">
+        <div class="form-group" style="margin:0">
+          <label for="subject">Complainee</label>
+          <input type="text" id="subject" name="subject" placeholder="Name" required>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label for="reportDate">Date</label>
+          <input type="date" id="reportDate" name="report_date" placeholder="Date">
+        </div>
       </div>
 
       <div class="form-group">
@@ -143,7 +160,7 @@ $address = $user['address'] ?? '';
         <div id="fileList" class="file-list"></div>
       </div>
 
-      <button id="submitBtn" class="next-btn">Submit</button>
+      <button id="submitBtn" class="next-btn">Next</button>
     </div>
   </div>
 
@@ -166,6 +183,14 @@ $address = $user['address'] ?? '';
     </div>
   </div>
 
+  <!-- Image Preview Modal -->
+  <div class="modal" id="imgPreviewModal">
+    <div class="modal-content" style="max-width:860px">
+      <span class="close-btn" onclick="closeModal('imgPreviewModal')">&times;</span>
+      <img id="imgPreviewTag" src="" alt="Preview" style="width:100%;height:auto;border-radius:10px" />
+    </div>
+  </div>
+
   <script>
     function openModal(id){ document.getElementById(id).style.display="flex"; }
     function closeModal(id){ document.getElementById(id).style.display="none"; }
@@ -180,23 +205,39 @@ $address = $user['address'] ?? '';
       fileList.innerHTML = '';
       [...proofInput.files].forEach(f => {
         const item = document.createElement('div');
-        item.textContent = `• ${f.name}`;
+        const isImg = (f.type||'').startsWith('image/');
+        if(isImg){
+          const url = URL.createObjectURL(f);
+          const thumb = document.createElement('img');
+          thumb.src = url;
+          thumb.style.width='64px'; thumb.style.height='64px'; thumb.style.objectFit='cover';
+          thumb.style.borderRadius='8px'; thumb.style.marginRight='8px'; thumb.style.cursor='pointer';
+          thumb.addEventListener('click',()=>{ document.getElementById('imgPreviewTag').src=url; openModal('imgPreviewModal'); });
+          const name=document.createElement('span'); name.textContent=f.name;
+          item.appendChild(thumb); item.appendChild(name);
+        } else {
+          item.textContent = `• ${f.name}`;
+        }
         fileList.appendChild(item);
       });
     });
 
     document.getElementById('submitBtn').addEventListener('click', async () => {
       const complainant = document.getElementById('complainant').value.trim();
+      const subject = document.getElementById('subject').value.trim();
       const addr = document.getElementById('address').value.trim();
+      const rdate = document.getElementById('reportDate').value.trim();
       const other = document.getElementById('other').value.trim();
 
-      if (!complainant || !addr) {
-        alert('Please provide complainant name and address.');
+      if (!subject || !addr) {
+        alert('Please provide complainee name and address.');
         return;
       }
 
       const formData = new FormData();
       formData.append('complainant', complainant);
+      formData.append('subject', subject);
+      formData.append('report_date', rdate);
       formData.append('address', addr);
       formData.append('other', other);
       document.querySelectorAll('input[name="nature[]"]:checked').forEach(cb => {
