@@ -104,6 +104,17 @@ html { scroll-behavior: smooth; }
   cursor: pointer;
 }
 
+.profile-icon-wrap{position:relative;display:inline-flex;align-items:center}
+.profile-icon:hover{transform:scale(1.03);box-shadow:0 0 0 3px rgba(255,255,255,0.2)}
+.profile-dropdown{position:absolute;right:0;top:44px;background:#fff;color:#222;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,0.18);border:1px solid #e9ecef;padding:12px;min-width:240px;display:none;z-index:1100}
+.profile-dropdown .mini-profile{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.profile-dropdown .mini-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover}
+.profile-dropdown .mini-text .mini-name{font-weight:700}
+.profile-dropdown .actions{display:flex;gap:8px;justify-content:flex-end}
+.profile-dropdown .btn{padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:600;cursor:pointer}
+.profile-dropdown .btn-view{background:#23412e;color:#fff}
+.profile-dropdown .btn-logout{background:#a83b3b;color:#fff}
+
 /* Instructions box anchored to bottom-left of navbar */
 .nav-instructions {
   position: absolute;

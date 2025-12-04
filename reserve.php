@@ -202,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $existsStmt->close();
 
             if ($existsRes && $existsRes->num_rows > 0) {
-              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, approval_status = 'pending' WHERE ref_code = ?");
+              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, account_type = COALESCE(account_type, 'visitor'), approval_status = 'pending' WHERE ref_code = ?");
               $upd->bind_param('sssssiddiiss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $newRef);
               $upd->execute();
               $upd->close();
@@ -219,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               }
             } else {
               $payStatus = $paidOk ? 'verified' : 'pending';
-              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status, account_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'visitor')");
               $ins->bind_param('ssssssiddiiss', $newRef, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $payStatus);
               $ins->execute();
               $ins->close();

@@ -2,100 +2,192 @@
 session_start();
 include 'connect.php';
 
+// PHPMailer imports
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+$p1 = __DIR__ . '/PHPMailer-master/src/Exception.php';
+$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/Exception.php';
+require file_exists($p1) ? $p1 : $p2;
+$p1 = __DIR__ . '/PHPMailer-master/src/PHPMailer.php';
+$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/PHPMailer.php';
+require file_exists($p1) ? $p1 : $p2;
+$p1 = __DIR__ . '/PHPMailer-master/src/SMTP.php';
+$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/SMTP.php';
+require file_exists($p1) ? $p1 : $p2;
+
+// FETCH USER EMAIL FROM ENTRYPASS
+$entry_pass_id = intval($_GET['entry_pass_id'] ?? 0);
+$user_email_prefill = '';
+if($entry_pass_id > 0){
+    $stmt = $con->prepare("SELECT email FROM entry_passes WHERE id = ? LIMIT 1");
+    $stmt->bind_param("i", $entry_pass_id);
+    $stmt->execute();
+    $stmt->bind_result($user_email);
+    if($stmt->fetch()){
+        $user_email_prefill = $user_email;
+    }
+    $stmt->close();
+}
+
+// Helpers and CSRF
 if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); }
 function vp_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/status_view.php?code='.urlencode($code); }
-function ensureReservationReceiptColumn($con){ if(!($con instanceof mysqli)) return; $c=$con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_path'"); if(!$c || $c->num_rows===0){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL AFTER downpayment"); } }
-ensureReservationReceiptColumn($con);
+function ensureReservationsCommonColumns($con){ if(!($con instanceof mysqli)) return; $cols=['downpayment','receipt_path','payment_status','account_type']; foreach($cols as $col){ $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'"); if(!$c || $c->num_rows===0){ if($col==='downpayment'){ @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL"); } else if($col==='receipt_path'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL"); } else if($col==='payment_status'){ @$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL"); } else if($col==='account_type'){ @$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL"); } } } }
+ensureReservationsCommonColumns($con);
 
+// Pull pending reservation context
 $continue = isset($_GET['continue']) ? $_GET['continue'] : 'reserve';
-$entry_pass_id = isset($_GET['entry_pass_id']) ? intval($_GET['entry_pass_id']) : 0;
-$ref_code = isset($_GET['ref_code']) ? trim($_GET['ref_code']) : '';
+// capture ref_code from URL once, then remove from address bar
+$ref_code_url = isset($_GET['ref_code']) ? trim($_GET['ref_code']) : '';
+if ($ref_code_url !== '') {
+    $_SESSION['dp_ref_code'] = $ref_code_url;
+    $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $path = $_SERVER['SCRIPT_NAME'] ?? '/VictorianPass/downpayment.php';
+    $qs = $_GET; unset($qs['ref_code']);
+    $query = http_build_query($qs);
+    header('Location: ' . $scheme . '://' . $host . $path . ($query ? ('?' . $query) : ''));
+    exit;
+}
+$ref_code = isset($_SESSION['dp_ref_code']) ? $_SESSION['dp_ref_code'] : '';
 $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
 $pending = isset($_SESSION['pending_reservation']) ? $_SESSION['pending_reservation'] : null;
 
-// Compute breakdown amounts using amenity-specific pricing basis
-$amenity = isset($pending['amenity']) ? $pending['amenity'] : '';
-$price   = isset($pending['price']) ? floatval($pending['price']) : 0.0;
-$downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
-$isHourBased = in_array($amenity, ['Basketball Court','Tennis Court','Clubhouse'], true);
-$isPersonBased = in_array($amenity, ['Pool'], true);
-// Fallback partial if not provided: 50% of total
-if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
-$remaining = max(0, round($price - $downpayment, 2));
-// Generate a dynamic QR code payload for downpayment (no hard-coded image)
-$refDisplay = $ref_code !== '' ? $ref_code : 'N/A';
-$qrData = 'VictorianPass Downpayment | Ref=' . $refDisplay . ' | Amount=' . number_format($downpayment, 2) . ' PHP';
-$qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . urlencode($qrData);
-$qrData = 'VictorianPass Downpayment | Ref: ' . ($ref_code ?: 'N/A') . ' | Amount: ' . number_format($downpayment,2) . ' PHP';
-$qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . urlencode($qrData);
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
-  $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
-  $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
-  $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
-  if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
-    $msg = 'Invalid submission.';
-  } else if ($ref_code !== '') {
-    $receiptPath = null;
-    if(!isset($_FILES['receipt']) || !is_array($_FILES['receipt']) || ($_FILES['receipt']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK){
-      $msg = 'Please upload your payment receipt before confirming.';
-    } else {
-      $allowedExt=['png','jpg','jpeg','gif','webp','bmp','pdf'];
-      $origName=$_FILES['receipt']['name']??'';
-      $ext=strtolower(pathinfo($origName,PATHINFO_EXTENSION));
-      if(!in_array($ext,$allowedExt,true)){
-        $msg='Unsupported receipt file type.';
-      } else if(($_FILES['receipt']['size']??0) > 10*1024*1024){
-        $msg='Receipt file is too large (max 10MB).';
+// HANDLE FORM SUBMISSION
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
+    $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
+    $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
+    $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
+    $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
+    if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
+      $msg = 'Invalid submission.';
+    } else if ($ref_code !== '') {
+      $receiptPath = null;
+      if(!isset($_FILES['receipt']) || !is_array($_FILES['receipt']) || ($_FILES['receipt']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK){
+        $msg = 'Please upload your payment receipt before confirming.';
       } else {
-        $uploadsDir=__DIR__.DIRECTORY_SEPARATOR.'uploads'.DIRECTORY_SEPARATOR.'receipts'; if(!is_dir($uploadsDir)) { @mkdir($uploadsDir,0775,true); }
-        $base=preg_replace('/[^a-zA-Z0-9_-]/','_', $ref_code);
-        $fname=$base.'-'.date('YmdHis').'.'.$ext;
-        $target=$uploadsDir.DIRECTORY_SEPARATOR.$fname;
-        $relative='uploads/receipts/'.$fname;
-        if(@move_uploaded_file($_FILES['receipt']['tmp_name'],$target)){ $receiptPath=$relative; } else { $msg='Unable to save receipt upload. Please try again.'; }
+        $allowedExt=['png','jpg','jpeg','gif','webp','bmp','pdf'];
+        $origName=$_FILES['receipt']['name']??'';
+        $ext=strtolower(pathinfo($origName,PATHINFO_EXTENSION));
+        if(!in_array($ext,$allowedExt,true)){
+          $msg='Unsupported receipt file type.';
+        } else if(($_FILES['receipt']['size']??0) > 10*1024*1024){
+          $msg='Receipt file is too large (max 10MB).';
+        } else {
+          $uploadsDir=__DIR__.DIRECTORY_SEPARATOR.'uploads'.DIRECTORY_SEPARATOR.'receipts'; if(!is_dir($uploadsDir)) { @mkdir($uploadsDir,0775,true); }
+          $base=preg_replace('/[^a-zA-Z0-9_-]/','_', $ref_code);
+          $fname=$base.'-'.date('YmdHis').'.'.$ext;
+          $target=$uploadsDir.DIRECTORY_SEPARATOR.$fname;
+          $relative='uploads/receipts/'.$fname;
+          if(@move_uploaded_file($_FILES['receipt']['tmp_name'],$target)){ $receiptPath=$relative; } else { $msg='Unable to save receipt upload. Please try again.'; }
+        }
       }
-    }
-    $amenity = isset($pending['amenity']) ? $pending['amenity'] : null;
-    $start   = isset($pending['start_date']) ? $pending['start_date'] : null;
-    $end     = isset($pending['end_date']) ? $pending['end_date'] : null;
-    $startTime = isset($pending['start_time']) ? $pending['start_time'] : null;
-    $endTime   = isset($pending['end_time']) ? $pending['end_time'] : null;
-    $persons = isset($pending['persons']) ? intval($pending['persons']) : null;
-    $price = isset($pending['price']) ? floatval($pending['price']) : null;
-    $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
-    $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id_post_form ?: null);
-    $uid = ($user_id && $user_id>0) ? $user_id : null;
-    if(empty($msg)){
-      $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), payment_status='submitted', approval_status='pending' WHERE ref_code = ?");
-      $stmt->bind_param('sssssiddsiis', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $ref_code);
-      $stmt->execute();
-      $affected = $stmt->affected_rows;
-      $stmt->close();
-      if ($affected === 0) {
-        $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, user_id, entry_pass_id, payment_status, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending')");
-        $ins->bind_param('ssssssiddsii', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post);
-        $ins->execute();
-        $ins->close();
+      $amenity = isset($pending['amenity']) ? $pending['amenity'] : null;
+      $start   = isset($pending['start_date']) ? $pending['start_date'] : null;
+      $end     = isset($pending['end_date']) ? $pending['end_date'] : null;
+      $startTime = isset($pending['start_time']) ? $pending['start_time'] : null;
+      $endTime   = isset($pending['end_time']) ? $pending['end_time'] : null;
+      $persons = isset($pending['persons']) ? intval($pending['persons']) : null;
+      $price = isset($pending['price']) ? floatval($pending['price']) : null;
+      $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
+      $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id_post_form ?: null);
+      $uid = ($user_id && $user_id>0) ? $user_id : null;
+      if(empty($msg)){
+        $acct = ($continue_post === 'reserve_resident') ? 'resident' : 'visitor';
+        $hadLegacy = false;
+        if($con instanceof mysqli){ $chk=$con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1"); $chk->bind_param('s',$ref_code); $chk->execute(); $cr=$chk->get_result(); $hadLegacy = ($cr && $cr->num_rows>0); $chk->close(); }
+        $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), account_type = COALESCE(account_type, ?), payment_status='submitted', approval_status='pending' WHERE ref_code = ?");
+        $stmt->bind_param('sssssiddsiiss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $acct, $ref_code);
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+        if ($affected === 0) {
+          $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, user_id, entry_pass_id, account_type, payment_status, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending')");
+          $ins->bind_param('ssssssiddsiiis', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $acct);
+          $ins->execute();
+          $ins->close();
+        }
+        if($hadLegacy){ $del=$con->prepare("DELETE FROM resident_reservations WHERE ref_code = ?"); $del->bind_param('s',$ref_code); $del->execute(); $del->close(); }
       }
-    }
-    $_SESSION['pending_reservation'] = null;
-    if(empty($msg)){
-      $msg = 'Receipt uploaded. Payment submitted for review.';
-      $_SESSION['flash_notice'] = 'Please wait for confirmation. The status code will be sent to your email within 12 hours.';
-    }
-    
-    header('Location: mainpage.php');
-    exit;
-  }
-}
+      $_SESSION['pending_reservation'] = null;
+      if(empty($msg)){
+        $msg = 'Receipt uploaded. Payment submitted for review.';
+        if (($continue_post ?? $continue) === 'reserve_resident') {
+          $_SESSION['flash_notice'] = 'Your reservation has been submitted. Please wait for confirmation.';
+        } else {
+          $_SESSION['flash_notice'] = 'Please wait for confirmation. The status code will be sent to your email within 12 hours.';
+          $_SESSION['flash_ref_code'] = $ref_code;
+        }
+      }
+      // Resolve recipient name/email
+      $full_name = '';
+      $email = '';
+      if ($entry_pass_id_post) {
+        $stmtInfo = $con->prepare("SELECT full_name, middle_name, last_name, email FROM entry_passes WHERE id = ? LIMIT 1");
+        $stmtInfo->bind_param('i', $entry_pass_id_post);
+        $stmtInfo->execute();
+        $stmtInfo->bind_result($fn, $mn, $ln, $em);
+        if ($stmtInfo->fetch()) {
+          $full_name = trim(($fn ?: '') . ' ' . ($mn ?: '') . ' ' . ($ln ?: ''));
+          $email = $em ?: '';
+        }
+        $stmtInfo->close();
+      }
+      if ($email === '' && $uid) {
+        $stmtU = $con->prepare("SELECT first_name, middle_name, last_name, email FROM users WHERE id = ? LIMIT 1");
+        $stmtU->bind_param('i', $uid);
+        $stmtU->execute();
+        $stmtU->bind_result($uf, $um, $ul, $ue);
+        if ($stmtU->fetch()) {
+          $full_name = trim(($uf ?: '') . ' ' . ($um ?: '') . ' ' . ($ul ?: ''));
+          $email = $ue ?: '';
+        }
+        $stmtU->close();
+      }
+      if ($email === '' && $user_email_prefill !== '') { $email = $user_email_prefill; }
+      if ($full_name === '') { $full_name = 'Guest'; }
 
-if ($ref_code === '') {
-  // Generate a code for display, but avoid inserting incomplete reservations
-  $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT);
+      if (($continue_post ?? $continue) !== 'reserve_resident') {
+        $mail = new PHPMailer(true);
+        try {
+          $mail->isSMTP();
+          $mail->Host = 'smtp.gmail.com';
+          $mail->SMTPAuth = true;
+          $mail->Username = 'victorianpass@gmail.com';
+          $mail->Password = 'vqlsqbrnikcjesia';
+          $mail->SMTPSecure = 'tls';
+          $mail->Port = 587;
+          $mail->setFrom('victorianpass@gmail.com', 'VictorianPass');
+          if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { throw new Exception('Recipient email missing'); }
+          $mail->addAddress($email);
+          $mail->isHTML(true);
+          $statusLink = vp_status_link($ref_code);
+          $mail->Subject = 'Your VictorianPass Code';
+          $mail->Body    = "<h2>Your VictorianPass Code</h2>
+<p><strong>Status Code:</strong> <span style=\"font-family:monospace;background:#f0f0f0;padding:6px 10px;border-radius:6px\">$ref_code</span></p>
+<p><strong>Name:</strong> $full_name</p>
+<p><strong>Email:</strong> $email</p>
+<p>We have successfully received your payment. Please wait while we verify and confirm your request.</p>
+<p>To check the status of your reservation, use the status code <strong>$ref_code</strong>. Simply return to the main page and enter this code in the Check Status section to view your current request status.</p>
+<p>We appreciate you reaching out. You’ll receive an update within 24 hours.</p>
+<p>Thank you for trusting VictorianPass (Victorian Heights Subdivision).</p>";
+          $mail->AltBody = "Your VictorianPass Code\nStatus Code: $ref_code\nName: $full_name\nEmail: $email\n\nWe have successfully received your payment. Please wait while we verify and confirm your request.\n\nTo check the status of your reservation, use the status code $ref_code. Return to the main page and enter this code in the Check Status section to view your current request status.\n\nYou’ll receive an update within 24 hours.\n\nThank you for trusting VictorianPass (Victorian Heights Subdivision).";
+          $mail->send();
+        } catch (Exception $e) {
+          $error_msg = "Payment recorded, but email could not be sent. Mailer Error: {$mail->ErrorInfo}";
+        }
+      }
+    }
+    if (($continue_post ?? $continue) === 'reserve_resident') {
+      header('Location: profileresident.php');
+    } else {
+      header('Location: mainpage.php');
+    }
+    exit;
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -134,18 +226,29 @@ if ($ref_code === '') {
   </style>
   </head>
 <body>
-  
+  <?php
+    // compute pricing breakdown
+    $amenity = isset($pending['amenity']) ? $pending['amenity'] : '';
+    $price   = isset($pending['price']) ? floatval($pending['price']) : 0.0;
+    $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
+    $isHourBased = in_array($amenity, ['Basketball Court','Tennis Court','Clubhouse'], true);
+    $isPersonBased = in_array($amenity, ['Pool'], true);
+    if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
+    $remaining = max(0, round($price - $downpayment, 2));
+    $refDisplay = 'N/A';
+    $qrData = 'VictorianPass Downpayment | Amount: ' . number_format($downpayment,2) . ' PHP';
+    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . urlencode($qrData);
+    if ($ref_code === '' && $continue !== 'reserve_resident') { $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
+  ?>
   <div class="wrap">
     <div class="card">
       <h2 class="title">Downpayment</h2>
       <p class="meta">Scan the QR code with GCash to pay your partial payment. Upload the receipt and click Confirm.</p>
-      <?php if (!empty($msg)) { echo '<p class="meta">' . htmlspecialchars($msg) . '</p>'; } ?>
       <div class="qr"><img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="Payment QR Code" style="max-width:280px;border-radius:8px;border:1px solid rgba(255,255,255,.2)" onerror="this.style.display='none'"></div>
       <div class="pay-callout">You will pay now:<span class="num">₱<?php echo number_format($downpayment, 2); ?></span></div>
       <div class="break">
         <div class="row"><span class="label">Amenity</span><span class="amount"><?php echo htmlspecialchars($amenity ?: 'N/A'); ?></span></div>
         <?php
-          // Calculate hours
           $hours = 1;
           if ($isHourBased) {
             if (isset($pending['hours'])) {

@@ -99,7 +99,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 <section class="hero">
   <form class="entry-form" id="entryForm">
     <div class="form-header">
-      <img src="images/ticket.svg" alt="Entry Icon">
+      <img src="images/mainpage/ticket.svg" alt="Entry Icon">
       <span>Guest Form</span>
     </div>
 
