@@ -1187,10 +1187,9 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
  .notif-dismiss{margin-left:auto;background:transparent;border:0;color:#888;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
  .notif-dismiss:hover{color:#a83b3b;background:#f6f6f6}
 
-.panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:visible}
+.panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:hidden}
 .panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
 .table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:0.9rem;line-height:1.3}
-.table-wrap{width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px}
   .table thead th{padding:8px 10px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee;word-break:break-word;white-space:normal;vertical-align:middle}
   .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
 .table thead th,.table td{overflow-wrap:anywhere}
@@ -1272,15 +1271,12 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 #verify-panel thead th:nth-child(4){width:190px}
 #verify-panel thead th:nth-child(5){width:120px;text-align:center}
 #verify-panel thead th:nth-child(6){width:150px;text-align:center}
-#verify-panel thead th:nth-child(7){width:340px}
-#verify-panel td.actions{min-width:340px}
+#verify-panel thead th:nth-child(7){width:260px}
 #verify-panel td:nth-child(5),
 #verify-panel td:nth-child(6){text-align:center}
-#verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px}
+#verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
 #verify-panel .actions > *{width:100%}
 #verify-panel .actions .btn{min-width:0;width:100%}
-@media(max-width:768px){#verify-panel thead th:nth-child(7){width:300px}#verify-panel td.actions{min-width:300px}}
-@media(max-width:560px){#verify-panel thead th:nth-child(7){width:280px}#verify-panel td.actions{min-width:280px}}
 </style>
 </head>
 <body>
@@ -1802,7 +1798,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     <div class="card-box">
       <h3>Verify Payment Receipts</h3>
       <div class="notice">Use View All Details to jump to the matching request. Verify or reject the receipt below.</div>
-      <div class="table-wrap">
       <table class="table table-verify">
     <thead>
       <tr>
@@ -1879,7 +1874,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
       ?>
     </tbody>
       </table>
-      </div>
     </div>
   </div>
 </section>

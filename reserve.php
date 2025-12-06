@@ -963,7 +963,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(endTimeInput){ endTimeInput.min=hrs.min; endTimeInput.max=hrs.max; }
     const hn=document.getElementById('hoursNotice'); if(hn){ hn.style.display='none'; hn.textContent=''; }
     if(isHourBasedAmenity(amen)){
-      if(personsWrap){ personsWrap.style.display='none'; }
+      if(personsWrap){ personsWrap.style.display='block'; }
       if(hoursLabel){ hoursLabel.style.display='none'; }
       if(hoursCounter){ hoursCounter.style.display='none'; }
       const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='inline-block'; }
@@ -1027,7 +1027,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const hrs=parseInt(document.getElementById('hoursInput').value||'0',10);
     if(!st) return;
     if(!isHourBasedAmenity(amen)){
-      const [sh,sm]=(st||'').split(':'); const endH=parseInt(sh||'0',10)+1; const et=`${String(endH).padStart(2,'0')}:${String(sm||'0').padStart(2,'0')}`; document.getElementById('endTimeInput').value=et; checkTimeAvailability(); updateActionStates(); return;
+      const units=Math.max(1,hrs||1);
+      const [sh,sm]=(st||'').split(':');
+      let endH=parseInt(sh||'0',10)+units; let endM=parseInt(sm||'0',10);
+      const allowed=getAmenityHours(amen);
+      const maxHour=parseInt(allowed.max.split(':')[0],10);
+      if(endH>maxHour){ endH=maxHour; endM=0; }
+      const et=`${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+      document.getElementById('endTimeInput').value=et;
+      checkTimeAvailability(); updateActionStates(); return;
     }
     if(!hrs||hrs<1) return;
     const [sh,sm]=(clampToRange(st)||'').split(':');
