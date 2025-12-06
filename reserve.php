@@ -1045,6 +1045,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hoursInput){ if(!hoursInput.value) hoursInput.value=1; }
       if(endTimeInput){ endTimeInput.readOnly=true; }
       if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
+      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1058,6 +1059,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       document.getElementById('timeSectionLabel').style.display='block';
       if(hoursInput && !hoursInput.value) hoursInput.value=1;
       if(endTimeInput){ endTimeInput.readOnly=true; }
+      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='inline'; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1068,6 +1070,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hoursCounter){ hoursCounter.style.display='none'; }
       const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='none'; }
       if(endTimeInput){ endTimeInput.readOnly=false; }
+      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       document.getElementById('hoursSectionLabel').style.display='none';

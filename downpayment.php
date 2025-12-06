@@ -265,7 +265,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           $persons = isset($pending['persons']) ? intval($pending['persons']) : 1;
         ?>
         <div class="row"><span class="label">Hours</span><span class="amount"><?php echo $isHourBased ? intval($hours) : '—'; ?></span></div>
-        <div class="row"><span class="label">Persons</span><span class="amount"><?php echo $isPersonBased ? intval($persons) : '—'; ?></span></div>
+        <div class="row"><span class="label">Persons</span><span class="amount"><?php echo intval($persons); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
         <div class="row"><span class="label">Onsite Payment (Remaining)</span><span class="amount">₱<?php echo number_format($remaining, 2); ?></span></div>
       </div>
