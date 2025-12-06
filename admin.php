@@ -1187,9 +1187,9 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
  .notif-dismiss{margin-left:auto;background:transparent;border:0;color:#888;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
  .notif-dismiss:hover{color:#a83b3b;background:#f6f6f6}
 
-.panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:hidden}
+.panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:auto}
 .panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
-.table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:0.9rem;line-height:1.3}
+.table{width:100%;border-collapse:collapse;table-layout:auto;font-size:0.9rem;line-height:1.3}
   .table thead th{padding:8px 10px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee;word-break:break-word;white-space:normal;vertical-align:middle}
   .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
 .table thead th,.table td{overflow-wrap:anywhere}
@@ -1230,6 +1230,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .actions > *{display:inline-flex}
 .actions .btn{flex:0 0 auto;min-width:100px;margin-bottom:0;white-space:nowrap}
+.table td.actions{min-width:240px}
 .btn{min-height:30px;padding:6px 10px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none}
 .btn-view{background:#23412e;color:#fff}
 .btn-approve{background:var(--status-approved);color:#fff}
@@ -1263,15 +1264,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   .table thead th,.table td{padding:10px}
   .actions .btn{flex:1 1 120px;min-width:120px}
 }
-/* Verify Payment Receipts specific layout */
-#verify-panel .table{table-layout:fixed}
-#verify-panel thead th:nth-child(1){width:120px}
-#verify-panel thead th:nth-child(2){width:200px}
-#verify-panel thead th:nth-child(3){width:150px}
-#verify-panel thead th:nth-child(4){width:190px}
-#verify-panel thead th:nth-child(5){width:120px;text-align:center}
-#verify-panel thead th:nth-child(6){width:150px;text-align:center}
-#verify-panel thead th:nth-child(7){width:260px}
+/* Verify Payment Receipts responsive layout */
+#verify-panel .table{table-layout:auto}
 #verify-panel td:nth-child(5),
 #verify-panel td:nth-child(6){text-align:center}
 #verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
@@ -1294,6 +1288,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
        <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
        <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
        <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
+       <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><img src="images/dashboard.svg"><span>Resident Guest Forms</span></a>
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
@@ -1309,6 +1304,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     <div class="header">
       <?php $pageTitles = [
         'requests' => 'Resident Requests',
+        'resident_guest_forms' => 'Resident Guest Forms',
         'visitor_requests' => 'Visitor Requests',
         'reservations' => 'Reservations',
         'report' => 'View Reported Incidents',
@@ -1425,7 +1421,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               .catch(function(){});
           }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return '?page=requests'; if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
             var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); renderNotif({ items: [] }); }); }
@@ -1500,6 +1496,99 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                 box-shadow:0 8px 18px rgba(0,0,0,0.08);">
       <div style="font-size:1.9rem;font-weight:800;margin:0;"><?php echo getPaymentReceiptsCount($con); ?></div>
       <div style="font-size:0.92rem;color:#8b918d;margin-top:6px">Verified Payment Receipts</div>
+    </div>
+  </div>
+</section>
+<?php endif; ?>
+
+<!-- RESIDENT GUEST FORMS -->
+<?php if ($currentPage == 'resident_guest_forms'): ?>
+<section class="panel" id="resident-guest-forms-panel">
+  <div class="content-row">
+    <div class="card-box">
+      <h3>Resident Guest Forms</h3>
+      <div class="notice">Guest forms submitted by residents (linked to resident accounts)</div>
+      <div class="notice">For amenity requests, confirm payment receipt before viewing details or approving.</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>House #</th>
+            <th>Amenity</th>
+            <th>Purpose of Visit</th>
+            <th>Persons</th>
+            <th>Status Code</th>
+            <th>Request Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $residentRequests = getResidentVisitorRequests($con);
+          $hasResidentRequests = false;
+          if ($residentRequests && $residentRequests->num_rows > 0) {
+              while ($req = $residentRequests->fetch_assoc()) {
+                  $hasResidentRequests = true;
+                  echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='guest_form'>";
+                  $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
+                  echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                  $houseNo = !empty($req['res_house_number']) ? htmlspecialchars($req['res_house_number']) : '<span class=\'muted\'>-</span>';
+                  echo "<td>" . $houseNo . "</td>";
+                  echo "<td>" . (!empty($req['amenity']) ? htmlspecialchars($req['amenity']) : "") . "</td>";
+                  echo "<td>" . (!empty($req['purpose']) ? htmlspecialchars($req['purpose']) : "") . "</td>";
+                  echo "<td>" . (!empty($req['persons']) ? intval($req['persons']) : '-') . "</td>";
+                  $approval_status = $req['approval_status'] ?? 'pending';
+                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                  echo "<td>" . htmlspecialchars($req['ref_code'] ?? '') . "</td>";
+                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  echo "<td class='actions'>";
+                  $payStatus = null; $resIdMatch = null; $receiptPath = null; $isAmenity = !empty($req['amenity']);
+                  if (!empty($req['ref_code'])) {
+                    $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtPay2->bind_param('s', $req['ref_code']);
+                    $stmtPay2->execute(); $rp2 = $stmtPay2->get_result();
+                    if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
+                    $stmtPay2->close();
+                  }
+                  $disableView = ($isAmenity && $payStatus !== 'verified');
+                  if($disableView){
+                    echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
+                  } else {
+                    echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\" style='margin-bottom: 5px;'>View More Details</button><br>";
+                  }
+                  if ($approval_status == 'pending') {
+                      $disabled = ($isAmenity && $payStatus !== 'verified');
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
+                      echo "<input type='hidden' name='action' value='approve_request'>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "</form>";
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
+                      echo "<input type='hidden' name='action' value='deny_request'>";
+                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                      echo "</form>";
+                  } elseif ($approval_status == 'denied') {
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
+                      echo "<input type='hidden' name='action' value='delete_reservation'>";
+                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "</form>";
+                  } else {
+                      $approvedBy = !empty($req['approved_by']) ? "by Staff ID " . $req['approved_by'] : "";
+                      $approvalDate = !empty($req['approval_date']) ? date('M d, Y', strtotime($req['approval_date'])) : "";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                  }
+                  echo "</td>";
+                  echo "</tr>";
+              }
+          }
+          if (!$hasResidentRequests) {
+              echo "<tr><td colspan='6' style='text-align:center;'>No resident requests found</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -1985,107 +2074,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         ?>
       </tbody>
     </table>
-  </div>
-  <div class="card-box">
-  <h3>Resident Guest Forms</h3>
-  <div class="notice">Guest forms submitted by residents (linked to resident accounts)</div>
-  <div class="notice">For amenity requests, confirm payment receipt before viewing details or approving.</div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>House #</th>
-        <th>Amenity</th>
-        <th>Purpose of Visit</th>
-        <th>Persons</th>
-        <th>Status Code</th>
-        <th>Request Status</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php
-      $residentRequests = getResidentVisitorRequests($con);
-      $hasResidentRequests = false;
-      if ($residentRequests && $residentRequests->num_rows > 0) {
-          while ($req = $residentRequests->fetch_assoc()) {
-              $hasResidentRequests = true;
-              echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='guest_form'>";
-              // Visitor full name from resident-submitted guest form
-              $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
-              echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
-
-              // Resident House Number
-              $houseNo = !empty($req['res_house_number']) ? htmlspecialchars($req['res_house_number']) : '<span class=\'muted\'>-</span>';
-              echo "<td>" . $houseNo . "</td>";
-
-              // Amenity: show only if reservation exists; leave blank otherwise
-              echo "<td>" . (!empty($req['amenity']) ? htmlspecialchars($req['amenity']) : "") . "</td>";
-
-              // Purpose of Visit: show purpose text from guest_forms
-              echo "<td>" . (!empty($req['purpose']) ? htmlspecialchars($req['purpose']) : "") . "</td>";
-
-              // Persons
-              echo "<td>" . (!empty($req['persons']) ? intval($req['persons']) : '-') . "</td>";
-
-              // Status (approval_status)
-              $approval_status = $req['approval_status'] ?? 'pending';
-              $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
-              echo "<td>" . htmlspecialchars($req['ref_code'] ?? '') . "</td>";
-              echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
-
-              // Actions
-              echo "<td class='actions'>";
-              $payStatus = null; $resIdMatch = null; $receiptPath = null; $isAmenity = !empty($req['amenity']);
-              if (!empty($req['ref_code'])) {
-                $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
-                $stmtPay2->bind_param('s', $req['ref_code']);
-                $stmtPay2->execute(); $rp2 = $stmtPay2->get_result();
-                if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
-                $stmtPay2->close();
-              }
-              $disableView = ($isAmenity && $payStatus !== 'verified');
-              if($disableView){
-                echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
-              } else {
-                echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\" style='margin-bottom: 5px;'>View More Details</button><br>";
-              }
-              if ($approval_status == 'pending') {
-                  $disabled = ($isAmenity && $payStatus !== 'verified');
-                  echo "<form method='post' style='display:inline;'>";
-                  echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
-                  echo "<input type='hidden' name='action' value='approve_request'>";
-                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
-                  echo "</form>";
-
-                  echo "<form method='post' style='display:inline;'>";
-                  echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
-                  echo "<input type='hidden' name='action' value='deny_request'>";
-                  echo "<button type='submit' class='btn btn-reject'>Deny</button>";
-                  echo "</form>";
-              } elseif ($approval_status == 'denied') {
-                  echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
-                  echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
-                  echo "<input type='hidden' name='action' value='delete_reservation'>";
-                  echo "<button type='submit' class='btn btn-remove'>Delete</button>";
-                  echo "</form>";
-              } else {
-                  $approvedBy = !empty($req['approved_by']) ? "by Staff ID " . $req['approved_by'] : "";
-                  $approvalDate = !empty($req['approval_date']) ? date('M d, Y', strtotime($req['approval_date'])) : "";
-                  echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
-              }
-              echo "</td>";
-              echo "</tr>";
-          }
-      }
-      if (!$hasResidentRequests) {
-          echo "<tr><td colspan='6' style='text-align:center;'>No resident requests found</td></tr>";
-      }
-      ?>
-    </tbody>
-  </table>
-
-  </div>
   </div>
 </section>
 <?php endif; ?>

@@ -54,31 +54,6 @@ $ref_code = isset($_SESSION['dp_ref_code']) ? $_SESSION['dp_ref_code'] : '';
 $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
 $pending = isset($_SESSION['pending_reservation']) ? $_SESSION['pending_reservation'] : null;
 
-// Fallback: if no pending context, load reservation by ref_code
-if((!is_array($pending) || empty($pending['amenity'])) && $ref_code !== '' && ($con instanceof mysqli)){
-  try{
-    $stmt = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
-    $stmt->bind_param('s', $ref_code);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    if($res && $row = $res->fetch_assoc()){
-      $pending = [
-        'amenity' => $row['amenity'] ?? null,
-        'start_date' => $row['start_date'] ?? null,
-        'end_date' => $row['end_date'] ?? null,
-        'start_time' => $row['start_time'] ?? null,
-        'end_time' => $row['end_time'] ?? null,
-        'persons' => isset($row['persons']) ? intval($row['persons']) : null,
-        'price' => isset($row['price']) ? floatval($row['price']) : null,
-        'downpayment' => isset($row['downpayment']) ? floatval($row['downpayment']) : null,
-        'entry_pass_id' => isset($row['entry_pass_id']) ? intval($row['entry_pass_id']) : null,
-        'ref_code' => $ref_code
-      ];
-    }
-    $stmt->close();
-  }catch(Throwable $e){ /* silent */ }
-}
-
 // HANDLE FORM SUBMISSION
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
@@ -258,7 +233,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $downpayment = isset($pending['downpayment']) ? floatval($pending['downpayment']) : null;
     $isHourBased = in_array($amenity, ['Basketball Court','Tennis Court','Clubhouse'], true);
     $isPersonBased = in_array($amenity, ['Pool'], true);
-    if ($downpayment === null || $downpayment <= 0) { $downpayment = round(max(0,$price) * 0.5, 2); }
+    if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
     $remaining = max(0, round($price - $downpayment, 2));
     $refDisplay = 'N/A';
     $qrData = 'VictorianPass Downpayment | Amount: ' . number_format($downpayment,2) . ' PHP';
@@ -289,9 +264,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           }
           $persons = isset($pending['persons']) ? intval($pending['persons']) : 1;
         ?>
-        <div class="row"><span class="label">Hours</span><span class="amount"><?php echo intval($hours); ?></span></div>
-        <div class="row"><span class="label">Persons</span><span class="amount"><?php echo intval($persons); ?></span></div>
-        <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
+        <div class="row"><span class="label">Hours</span><span class="amount"><?php echo $isHourBased ? intval($hours) : '—'; ?></span></div>
+        <div class="row"><span class="label">Persons</span><span class="amount"><?php echo $isPersonBased ? intval($persons) : '—'; ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
         <div class="row"><span class="label">Onsite Payment (Remaining)</span><span class="amount">₱<?php echo number_format($remaining, 2); ?></span></div>
       </div>

@@ -153,22 +153,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
           } else {
-            $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
-            $check1->bind_param("sss", $amenity, $end, $start);
-            $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
-            $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
-            $check2->bind_param("sss", $amenity, $end, $start);
-            $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
-            $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
-            $check3->bind_param("sss", $amenity, $end, $start);
-            $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
+            $hourBased = in_array($amenity, ['Basketball Court','Tennis Court','Clubhouse'], true);
+            $minH = ($amenity === 'Clubhouse') ? 9 : 9;
+            $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
+            $totalHours = max(0, $maxH - $minH);
+
+            $startDateObj = DateTime::createFromFormat('Y-m-d', $start);
+            $endDateObj = DateTime::createFromFormat('Y-m-d', $end);
+            if (!$startDateObj || !$endDateObj) { throw new Exception('Invalid date range'); }
+            $period = new DatePeriod($startDateObj, new DateInterval('P1D'), (clone $endDateObj)->modify('+1 day'));
+
+            $cnt = 0; // count of fully booked days in range
+
+            foreach ($period as $d) {
+              $ds = $d->format('Y-m-d');
+              $reservedHours = 0;
+              $marked = [];
+
+              // reservations with time overlap on this date
+              $q1 = $con->prepare("SELECT start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+              $q1->bind_param('ss', $amenity, $ds);
+              $q1->execute();
+              $res1 = $q1->get_result();
+              while ($row = $res1->fetch_assoc()) {
+                $st = !empty($row['start_time']) ? $row['start_time'] : '00:00:00';
+                $et = !empty($row['end_time']) ? $row['end_time'] : '23:59:59';
+                if ($hourBased && (empty($row['start_time']) || empty($row['end_time']))) { continue; }
+                $bS = intval(substr($st, 0, 2));
+                $bE = intval(substr($et, 0, 2));
+                for ($h = $bS; $h < $bE; $h++) {
+                  if ($h >= $minH && $h < $maxH) { if (!isset($marked[$h])) { $marked[$h] = true; $reservedHours++; } }
+                }
+              }
+              $q1->close();
+
+              // resident_reservations (may not have time columns)
+              $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+              $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+              if ($hasRt && $hasRt->num_rows > 0 && $hasRe && $hasRe->num_rows > 0) {
+                $q2 = $con->prepare("SELECT start_time, end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              } else {
+                $q2 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              }
+              $q2->bind_param('ss', $amenity, $ds);
+              $q2->execute();
+              $res2 = $q2->get_result();
+              while ($row = $res2->fetch_assoc()) {
+                $st = !empty($row['start_time']) ? $row['start_time'] : '00:00:00';
+                $et = !empty($row['end_time']) ? $row['end_time'] : '23:59:59';
+                if ($hourBased && (empty($row['start_time']) || empty($row['end_time']))) { continue; }
+                $bS = intval(substr($st, 0, 2));
+                $bE = intval(substr($et, 0, 2));
+                for ($h = $bS; $h < $bE; $h++) {
+                  if ($h >= $minH && $h < $maxH) { if (!isset($marked[$h])) { $marked[$h] = true; $reservedHours++; } }
+                }
+              }
+              $q2->close();
+
+              // guest_forms (may not have time columns)
+              $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
+              $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
+              if ($hasGt && $hasGt->num_rows > 0 && $hasGe && $hasGe->num_rows > 0) {
+                $q3 = $con->prepare("SELECT start_time, end_time FROM guest_forms WHERE amenity = ? AND (approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+              } else {
+                $q3 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time FROM guest_forms WHERE amenity = ? AND (approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+              }
+              $q3->bind_param('ss', $amenity, $ds);
+              $q3->execute();
+              $res3 = $q3->get_result();
+              while ($row = $res3->fetch_assoc()) {
+                $st = !empty($row['start_time']) ? $row['start_time'] : '00:00:00';
+                $et = !empty($row['end_time']) ? $row['end_time'] : '23:59:59';
+                if ($hourBased && (empty($row['start_time']) || empty($row['end_time']))) { continue; }
+                $bS = intval(substr($st, 0, 2));
+                $bE = intval(substr($et, 0, 2));
+                for ($h = $bS; $h < $bE; $h++) {
+                  if ($h >= $minH && $h < $maxH) { if (!isset($marked[$h])) { $marked[$h] = true; $reservedHours++; } }
+                }
+              }
+              $q3->close();
+
+              if ($reservedHours >= $totalHours) { $cnt++; break; }
+            }
           }
         } catch (Throwable $e) {
           error_log('reserve.php POST error: ' . $e->getMessage());
           $errorMsg = 'Server error. Please try again later.';
         }
         if (!$errorMsg && $cnt > 0) {
-          $errorMsg = 'Selected dates are not available. Please choose different dates.';
+          $errorMsg = 'Selected dates include a fully booked day. Please adjust your range or choose different dates.';
         }
         if (!$errorMsg) {
           $paidOk = false;
