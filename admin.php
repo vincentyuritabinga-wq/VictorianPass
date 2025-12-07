@@ -1607,7 +1607,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             <th>House #</th>
             <th>Amenity</th>
             <th>Dates</th>
-            <th>Status Code</th>
             <th>Request Status</th>
             <th>Actions</th>
           </tr>
@@ -1628,7 +1627,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
-                  echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '') . "</td>";
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -1670,162 +1668,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
       </table>
     </div>
 
-    <div class="card-box">
-      <h3>Guest Reservations</h3>
-      <div class="notice">Verify payment receipt first to unlock viewing and approval of amenity requests.</div>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Amenity</th>
-            <th>Dates</th>
-            <th>Persons</th>
-            <th>Status Code</th>
-            <th>Request Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php
-          $guestRes = getGuestAmenityReservations($con);
-          $hasGR = false;
-          if ($guestRes && $guestRes->num_rows > 0) {
-              while ($gr = $guestRes->fetch_assoc()) {
-                  $hasGR = true;
-                  echo "<tr data-ref='" . htmlspecialchars($gr['ref_code'] ?? '') . "' data-id='" . intval($gr['gf_id'] ?? $gr['id']) . "' data-source='guest_form'>";
-                  $fullName = trim(($gr['full_name'] ?? '') . ' ' . ($gr['middle_name'] ?? '') . ' ' . ($gr['last_name'] ?? ''));
-                  if ($fullName === '') { $fullName = 'Guest Visitor'; }
-                  echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
-                  echo "<td>" . htmlspecialchars($gr['amenity'] ?? '-') . "</td>";
-                  $dateRange = (!empty($gr['start_date']) && !empty($gr['end_date'])) ? (date('M d', strtotime($gr['start_date'])) . ' - ' . date('M d, Y', strtotime($gr['end_date']))) : '<span class=\'muted\'>-</span>';
-                  echo "<td>" . $dateRange . "</td>";
-                  echo "<td>" . (!empty($gr['persons']) ? intval($gr['persons']) : '-') . "</td>";
-                  $approval_status = $gr['approval_status'] ?? 'pending';
-                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
-                  echo "<td>" . htmlspecialchars($gr['ref_code'] ?? '') . "</td>";
-                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
-                  echo "<td class='actions'>";
-                  $viewHandler = "showVisitorDetails(" . intval($gr['gf_id'] ?? $gr['id']) . ", 'guest_form')";
-                  $isAmenity = !empty($gr['amenity']);
-                  $disableView = ($isAmenity && $payStatus !== 'verified');
-                  if($disableView){
-                    echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View Details</button><br>";
-                  } else {
-                    echo "<button type='button' class='btn btn-view' onclick='$viewHandler' style='margin-bottom: 5px;'>View Details</button><br>";
-                  }
+    
 
-                  // Lookup matching reservation for payment status/receipt
-                  $payStatus = null; $receiptPath = null; $resIdMatch = null;
-                  if (!empty($gr['ref_code'])) {
-                      $stmtPay = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
-                      $stmtPay->bind_param('s', $gr['ref_code']);
-                      $stmtPay->execute();
-                      $resPay = $stmtPay->get_result();
-                      if ($resPay && ($rowP = $resPay->fetch_assoc())) {
-                          $payStatus = $rowP['payment_status'] ?? null;
-                          $receiptPath = $rowP['receipt_path'] ?? null;
-                          $resIdMatch = intval($rowP['id'] ?? 0);
-                      }
-                      $stmtPay->close();
-                  }
-
-                  if (!empty($receiptPath)) {
-                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' title='View Receipt'><img class='receipt-thumbnail' src='" . htmlspecialchars($receiptPath) . "' alt='Receipt'></a>";
-                  }
-
-                  if ($resIdMatch && $payStatus !== 'verified') {
-                    echo "<form method='post' style='display:inline'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . $resIdMatch . "'>";
-                    echo "<input type='hidden' name='action' value='verify_receipt'>";
-                    echo "<button type='submit' class='btn btn-payverify'>Verify Payment Receipt</button>";
-                    echo "</form>";
-                    echo "<form method='post' style='display:inline'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . $resIdMatch . "'>";
-                    echo "<input type='hidden' name='action' value='reject_receipt'>";
-                    echo "<button type='submit' class='btn btn-reject'>Reject Receipt</button>";
-                    echo "</form>";
-                  } else if ($resIdMatch && $payStatus === 'verified') {
-                    echo "<span class='badge badge-approved'>Payment Verified</span>";
-                  }
-                  if ($approval_status == 'pending') {
-                      $disabled = ($isAmenity && $payStatus !== 'verified');
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . intval($gr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='approve_request'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
-                      echo "</form>";
-
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . intval($gr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='deny_request'>";
-                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
-                      echo "</form>";
-                  } elseif ($approval_status == 'denied') {
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . intval($gr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='delete_reservation'>";
-                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
-                      echo "</form>";
-                  } else {
-                      $approvedBy = !empty($gr['approved_by']) ? "by Staff ID " . $gr['approved_by'] : "";
-                      $approvalDate = !empty($gr['approval_date']) ? date('M d, Y', strtotime($gr['approval_date'])) : "";
-                      if ($approval_status === 'approved' && !empty($gr['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
-                      }
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
-                  }
-                  echo "</td>";
-                  echo "</tr>";
-              }
-          }
-          if (!$hasGR) {
-              echo "<tr><td colspan='6' style='text-align:center;'>No guest reservations found</td></tr>";
-          }
-          ?>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card-box">
-      <h3>Visitor Reservations (Legacy)</h3>
-      <table class="table">
-        <thead>
-              <tr>
-            <th>Status Code</th>
-            <th>Name</th>
-            <th>Amenity</th>
-            <th>Dates</th>
-            <th>Payment</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php
-          $legacy = $con->query("SELECT r.*, ep.full_name, ep.middle_name, ep.last_name FROM reservations r JOIN entry_passes ep ON r.entry_pass_id = ep.id ORDER BY r.created_at DESC");
-          if ($legacy && $legacy->num_rows > 0) {
-            while ($row = $legacy->fetch_assoc()) {
-              echo '<tr data-ref="' . htmlspecialchars($row['ref_code']) . '" data-id="' . intval($row['id']) . '" data-source="reservation">';
-              echo '<td>' . htmlspecialchars($row['ref_code']) . '</td>';
-              $fullName = trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-              echo '<td>' . htmlspecialchars($fullName) . '</td>';
-              echo '<td>' . htmlspecialchars($row['amenity'] ?? '-') . '</td>';
-              $dateRange = (!empty($row['start_date']) && !empty($row['end_date'])) ? (date('M d', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))) : '<span class=\'muted\'>-</span>';
-              echo '<td>' . $dateRange . '</td>';
-              $ps = strtolower($row['payment_status'] ?? 'pending');
-              $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
-              echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
-              $as = strtolower($row['approval_status'] ?? 'pending');
-              $asClass = $as==='approved' ? 'badge-approved' : ($as==='denied' ? 'badge-rejected' : 'badge-pending');
-              echo '<td><span class="badge ' . $asClass . '">' . ucfirst($as) . '</span></td>';
-              echo '</tr>';
-            }
-          } else {
-            echo '<tr><td colspan="6" style="text-align:center;">No visitor reservations found</td></tr>'; 
-          }
-          ?>
-        </tbody>
-      </table>
-    </div>
   </div>
 </section>
 <?php endif; ?>
@@ -2016,7 +1860,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           <th>House #</th>
           <th>Amenity</th>
           <th>Dates</th>
-          <th>Status Code</th>
           <th>Request Status</th>
           <th>Actions</th>
         </tr>
@@ -2037,7 +1880,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                 echo "<td>" . $dateRange . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
-                echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '') . "</td>";
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";

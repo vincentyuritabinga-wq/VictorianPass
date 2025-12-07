@@ -250,21 +250,19 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         <div class="row"><span class="label">Amenity</span><span class="amount"><?php echo htmlspecialchars($amenity ?: 'N/A'); ?></span></div>
         <?php
           $hours = 1;
-          if ($isHourBased) {
-            if (isset($pending['hours'])) {
-              $hours = intval($pending['hours']);
-            } else {
-              $sd = $pending['start_date'] ?? null; $ed = $pending['end_date'] ?? null; $st = $pending['start_time'] ?? null; $et = $pending['end_time'] ?? null;
-              if ($sd && $ed && $sd === $ed && $st && $et) {
-                $sh = intval(substr($st,0,2)); $eh = intval(substr($et,0,2));
-                $sm = intval(substr($st,3,2)); $em = intval(substr($et,3,2));
-                $hours = max(1, ($eh*60+$em-($sh*60+$sm))/60);
-              }
+          if (isset($pending['hours'])) {
+            $hours = max(1, intval($pending['hours']));
+          } else {
+            $sd = $pending['start_date'] ?? null; $ed = $pending['end_date'] ?? null; $st = $pending['start_time'] ?? null; $et = $pending['end_time'] ?? null;
+            if ($sd && $ed && $sd === $ed && $st && $et) {
+              $sh = intval(substr($st,0,2)); $eh = intval(substr($et,0,2));
+              $sm = intval(substr($st,3,2)); $em = intval(substr($et,3,2));
+              $hours = max(1, ($eh*60+$em-($sh*60+$sm))/60);
             }
           }
           $persons = isset($pending['persons']) ? intval($pending['persons']) : 1;
         ?>
-        <div class="row"><span class="label">Hours</span><span class="amount"><?php echo $isHourBased ? intval($hours) : '—'; ?></span></div>
+        <div class="row"><span class="label">Hours</span><span class="amount"><?php echo intval($hours); ?></span></div>
         <div class="row"><span class="label">Persons</span><span class="amount"><?php echo intval($persons); ?></span></div>
         <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>

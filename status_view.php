@@ -180,7 +180,6 @@
             <th>Status</th>
             <th>Details</th>
             <th>QR Code</th>
-            <th>Proof of Payment</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -215,27 +214,7 @@
     </div>
   </div>
 
-  <!-- Upload Receipt Modal -->
-  <div class="modal" id="uploadModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Upload Proof of Payment</h3>
-        <span class="close-btn" onclick="closeUploadModal()">&times;</span>
-      </div>
-      <form id="uploadForm" enctype="multipart/form-data">
-        <div class="upload-section">
-          <label for="receiptFile">Select Receipt Image:</label>
-          <input type="file" id="receiptFile" name="receipt" accept="image/*" required>
-          <input type="hidden" id="refCode" name="ref_code" value="">
-          <div class="upload-preview" id="uploadPreview"></div>
-        </div>
-        <div class="upload-actions">
-          <button type="button" onclick="closeUploadModal()">Cancel</button>
-          <button type="submit">Upload Receipt</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  
 
   <script>
     function fmtTime(t){
@@ -259,7 +238,9 @@
         statusDiv.textContent = "⚠️ No code provided!";
         statusDiv.className = "status-message declined";
       } else {
-        fetch(`status.php?code=${code}`)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => { try { controller.abort(); } catch(_){} }, 8000);
+        fetch(`status.php?code=${code}`, { signal: controller.signal })
           .then(response => response.json())
           .then(data => {
             statusData = data; // Store all data for later use
@@ -312,7 +293,6 @@
                         ${(data.status||'').toLowerCase() !== 'approved' ? 'disabled' : ''}>
                         ${(data.status||'').toLowerCase() === 'approved' ? 'View QR' : 'QR Disabled'}
                     </button></td>
-                    <td><button class="upload-btn" onclick="openUploadModal()">Upload Receipt</button></td>
                     <td><button class="cancel-btn" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
                   </tr>`;
               }, 600);
@@ -322,10 +302,11 @@
             }
           })
           .catch(error => {
-            statusDiv.textContent = "⚠️ Error connecting to server.";
+            statusDiv.textContent = (error && error.name === 'AbortError') ? "⚠️ Request timed out. Please try again." : "⚠️ Error connecting to server.";
             statusDiv.className = "status-message declined";
             console.error('Error:', error);
-          });
+          })
+          .finally(() => { try { clearTimeout(timeoutId); } catch(_){} });
       }
     });
 
@@ -451,58 +432,7 @@
       document.getElementById('detailsBody').innerHTML = '';
     }
 
-    function openUploadModal() {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      document.getElementById("refCode").value = code;
-      document.getElementById("uploadModal").style.display = "flex";
-    }
-
-    function closeUploadModal() {
-      document.getElementById("uploadModal").style.display = "none";
-      document.getElementById("uploadForm").reset();
-      document.getElementById("uploadPreview").innerHTML = "";
-    }
-
-    // Handle file preview
-    document.getElementById("receiptFile").addEventListener("change", function(e) {
-      const file = e.target.files[0];
-      const preview = document.getElementById("uploadPreview");
-      
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          preview.innerHTML = `<img src="${e.target.result}" alt="Receipt Preview" style="max-width: 200px; max-height: 200px;">`;
-        };
-        reader.readAsDataURL(file);
-      } else {
-        preview.innerHTML = "";
-      }
-    });
-
-    // Handle form submission
-    document.getElementById("uploadForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      
-      const formData = new FormData(this);
-      
-      fetch("upload_receipt.php", {
-        method: "POST",
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          alert("Receipt uploaded successfully!");
-          closeUploadModal();
-        } else {
-          alert("Error uploading receipt: " + data.message);
-        }
-      })
-      .catch(error => {
-        console.error("Error:", error);
-        alert("Error uploading receipt. Please try again.");
-      });
+    
 
     function confirmCancel(){
       document.getElementById('cancelModal').style.display='flex';
@@ -532,11 +462,9 @@
 
     window.onclick = function(event) {
       const qrModal = document.getElementById("qrModal");
-      const uploadModal = document.getElementById("uploadModal");
       const detailsModal = document.getElementById('detailsModal');
       const cancelModal = document.getElementById('cancelModal');
       if (event.target === qrModal) closeQR();
-      if (event.target === uploadModal) closeUploadModal();
       if (event.target === detailsModal) closeDetails();
       if (event.target === cancelModal) closeCancelModal();
     };
