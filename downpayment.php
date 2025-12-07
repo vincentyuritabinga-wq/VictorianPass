@@ -236,15 +236,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
     $remaining = max(0, round($price - $downpayment, 2));
     $refDisplay = 'N/A';
-    $qrData = 'VictorianPass Downpayment | Amount: ' . number_format($downpayment,2) . ' PHP';
-    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' . urlencode($qrData);
+    $qrUrl = 'images/downpayment.jpg';
     if ($ref_code === '' && $continue !== 'reserve_resident') { $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
   ?>
   <div class="wrap">
     <div class="card">
       <h2 class="title">Downpayment</h2>
-      <p class="meta">Scan the QR code with GCash to pay your partial payment. Upload the receipt and click Confirm.</p>
-      <div class="qr"><img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="Payment QR Code" style="max-width:280px;border-radius:8px;border:1px solid rgba(255,255,255,.2)" onerror="this.style.display='none'"></div>
+      <p class="meta">Use the GCash details shown to pay your partial payment. Upload the receipt and click Confirm.</p>
+      <div class="qr"><img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="GCash Downpayment" style="max-width:280px;border-radius:8px;border:1px solid rgba(255,255,255,.2)" onerror="this.style.display='none'"></div>
       <div class="pay-callout">You will pay now:<span class="num">₱<?php echo number_format($downpayment, 2); ?></span></div>
       <div class="break">
         <div class="row"><span class="label">Amenity</span><span class="amount"><?php echo htmlspecialchars($amenity ?: 'N/A'); ?></span></div>

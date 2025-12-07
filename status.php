@@ -2,6 +2,13 @@
 header('Content-Type: application/json');
 include 'connect.php';
 
+function ensureReservationsUpdatedAtColumn($con){
+    if (!($con instanceof mysqli)) return;
+    $c = $con->query("SHOW COLUMNS FROM reservations LIKE 'updated_at'");
+    if ($c && $c->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN updated_at TIMESTAMP NULL"); }
+}
+ensureReservationsUpdatedAtColumn($con);
+
 // Handle cancellation
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -24,6 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtU->bind_param('s', $code);
                 $stmtU->execute();
                 $stmtU->close();
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR->bind_param('s', $code);
+                $stmtUR->execute();
+                $stmtUR->close();
                 echo json_encode(['success' => true]);
                 exit;
             }
@@ -39,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
-                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected' WHERE ref_code = ?");
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
                 $stmtU2->close();
@@ -62,6 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtU3->bind_param('s', $code);
                 $stmtU3->execute();
                 $stmtU3->close();
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR2->bind_param('s', $code);
+                $stmtUR2->execute();
+                $stmtUR2->close();
                 echo json_encode(['success' => true]);
                 exit;
             }
@@ -139,6 +154,7 @@ if ($resGF && $resGF->num_rows > 0) {
         'purpose' => $row['purpose'] ?? '',
         'persons' => isset($row['persons']) ? intval($row['persons']) : null,
         'price' => $isAmenity && isset($row['price']) ? floatval($row['price']) : null,
+        'downpayment' => isset($row['downpayment']) ? floatval($row['downpayment']) : null,
         'start_date' => $isAmenity && !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
         'end_date' => $isAmenity && !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
@@ -237,6 +253,7 @@ if ($result && $result->num_rows > 0) {
         'purpose' => isset($row['purpose']) ? $row['purpose'] : '',
         'persons' => isset($row['persons']) ? intval($row['persons']) : null,
         'price' => isset($row['price']) ? floatval($row['price']) : null,
+        'downpayment' => isset($row['downpayment']) ? floatval($row['downpayment']) : null,
         'start_date' => isset($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : '',
         'end_date' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : '',
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,

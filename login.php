@@ -20,6 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($password === $row['password']) {
                 $_SESSION['email'] = $row['email'];
                 $_SESSION['role']  = $row['role'];
+                $_SESSION['staff_id'] = $row['id'];
 
                 echo "<script>alert('Login successful!');</script>";
                 if ($row['role'] === "admin") {

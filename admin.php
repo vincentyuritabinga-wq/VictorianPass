@@ -43,6 +43,13 @@ function admin_send_email($to,$subject,$body){
 }
 function ensureEmailStatusColumns($con){ if(!($con instanceof mysqli)) return; $tables=['reservations','guest_forms']; foreach($tables as $t){ $c1=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent'"); if(!$c1||$c1->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0"); } $c2=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent_at'"); if(!$c2||$c2->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent_at DATETIME NULL"); } $c3=$con->query("SHOW COLUMNS FROM $t LIKE 'email_error'"); if(!$c3||$c3->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_error TEXT NULL"); } }
 }
+function ensureReservationVerificationColumns($con){
+  if(!($con instanceof mysqli)) return;
+  $v1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'verified_by'");
+  if($v1 && $v1->num_rows===0){ @$con->query("ALTER TABLE reservations ADD COLUMN verified_by INT NULL AFTER payment_status"); }
+  $v2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'verification_date'");
+  if($v2 && $v2->num_rows===0){ @$con->query("ALTER TABLE reservations ADD COLUMN verification_date DATETIME NULL AFTER verified_by"); }
+}
 function send_status_email_template($to,$code){
   if(!$to||!filter_var($to,FILTER_VALIDATE_EMAIL)) return ['ok'=>false,'err'=>'invalid_email'];
   $subject='Your VictorianPass Status Code & QR Approval';
@@ -95,6 +102,7 @@ ensureGuestFormsTable($con);
 ensureGuestFormsWantsAmenityColumn($con);
 ensureGuestFormsAmenityColumns($con);
 ensureEmailStatusColumns($con);
+ensureReservationVerificationColumns($con);
 
 // Handle AJAX request for user details (admin resident profile)
 if (isset($_GET['action']) && $_GET['action'] == 'get_user_details' && isset($_GET['id'])) {
@@ -234,10 +242,29 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     $stmt->bind_param('i', $rr_id);
     $stmt->execute();
     $result = $stmt->get_result();
+    header('Content-Type: application/json');
     if ($result && $row = $result->fetch_assoc()) {
         echo json_encode(['success' => true, 'details' => $row]);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Resident reservation not found']);
+        // Fallback to legacy resident_reservations table by id
+        $tbl = $con->query("SHOW TABLES LIKE 'resident_reservations'");
+        if ($tbl && $tbl->num_rows > 0) {
+            $stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
+                                    FROM resident_reservations rr
+                                    LEFT JOIN users u ON rr.user_id = u.id
+                                    WHERE rr.id = ?");
+            $stmt2->bind_param('i', $rr_id);
+            $stmt2->execute();
+            $res2 = $stmt2->get_result();
+            if ($res2 && ($row2 = $res2->fetch_assoc())) {
+                echo json_encode(['success' => true, 'details' => $row2]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Resident reservation not found']);
+            }
+            $stmt2->close();
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Resident reservation not found']);
+        }
     }
     exit;
 }
@@ -446,6 +473,10 @@ function getRecentNotifications($con){
   if($rr){ while($row=$rr->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $cn = $con->query("SELECT ref_code, amenity, updated_at FROM reservations WHERE approval_status='denied' AND COALESCE(downpayment,0) > 0 AND updated_at IS NOT NULL ORDER BY updated_at DESC LIMIT 5");
+  if($cn){ while($row=$cn->fetch_assoc()){ $items[] = ['type'=>'refund','source'=>'reservation','title'=>'Reservation cancelled — refund downpayment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['updated_at'],'epoch'=>intval(strtotime($row['updated_at']))]; } }
+  $gcn = $con->query("SELECT gf.ref_code AS ref_code, gf.amenity AS amenity, gf.updated_at AS updated_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.approval_status='denied' AND COALESCE(r.downpayment,0) > 0 AND gf.updated_at IS NOT NULL ORDER BY gf.updated_at DESC LIMIT 5");
+  if($gcn){ while($row=$gcn->fetch_assoc()){ $items[] = ['type'=>'refund','source'=>'guest_form','title'=>'Reservation cancelled — refund downpayment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['updated_at'],'epoch'=>intval(strtotime($row['updated_at']))]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident: '.$row['status'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
   usort($items,function($a,$b){ return strcmp($b['time'],$a['time']); });
@@ -618,6 +649,13 @@ function ensureIncidentTables($con) {
 ensureReservationStatusColumn($con);
 autoExpireReservations($con);
 ensureIncidentTables($con);
+function ensureReservationsUpdatedAtColumn($con){
+    $c = $con->query("SHOW COLUMNS FROM reservations LIKE 'updated_at'");
+    if ($c && $c->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN updated_at TIMESTAMP NULL AFTER created_at");
+    }
+}
+ensureReservationsUpdatedAtColumn($con);
 // Ensure resident reservations have necessary columns
 function ensureResidentApprovalColumns($con) {
     $check1 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'approved_by'");
@@ -839,12 +877,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtGFCheck->execute();
             $resGFCheck = $stmtGFCheck->get_result();
             if ($resGFCheck && $resGFCheck->num_rows > 0) {
-                // Load details for conflict check
-                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time FROM guest_forms WHERE id = ?");
+                // Load details for conflict check and payment linkage
+                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, ref_code, wants_amenity FROM guest_forms WHERE id = ? LIMIT 1");
                 $stmtInfo->bind_param('i', $reservation_id);
                 $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
-                if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
+                $refCodeGF = null; $wantsAmenityGF = 0;
+                if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; $refCodeGF=$row['ref_code']??null; $wantsAmenityGF=intval($row['wants_amenity']??0); }
                 $stmtInfo->close();
+                // Enforce payment verification for amenity guest forms before any approval decision
+                if ($wantsAmenityGF === 1 && !empty($refCodeGF)) {
+                    $payStatusGF = '';
+                    $stmtPay = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtPay->bind_param('s', $refCodeGF);
+                    $stmtPay->execute(); $resPay = $stmtPay->get_result();
+                    if($resPay && ($rp=$resPay->fetch_assoc())){ $payStatusGF = strtolower($rp['payment_status'] ?? ''); }
+                    $stmtPay->close();
+                    if ($payStatusGF !== 'verified') {
+                        header("Location: admin.php?page=verify&msg=payment_required&ref=" . urlencode($refCodeGF));
+                        exit;
+                    }
+                }
                 if ($approval_status === 'approved' && $amenity && $start && $end) {
                     $singleDay = ($start === $end && $st && $et);
                     $cnt = 0;
@@ -890,12 +942,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             } else {
                 // Legacy: Update reservation approval status
-                // Load details for conflict check
-                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time FROM reservations WHERE id = ?");
-                $stmtInfo->bind_param('i', $reservation_id);
-                $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
-                if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
-                $stmtInfo->close();
+                // Enforce payment verification before any approval decision
+                $refCodeRes = null; $payStatusRes = '';
+                $stmtPayInfo = $con->prepare("SELECT ref_code, payment_status, amenity, start_date, end_date, start_time, end_time FROM reservations WHERE id = ? LIMIT 1");
+                $stmtPayInfo->bind_param('i', $reservation_id);
+                $stmtPayInfo->execute(); $resPayInfo = $stmtPayInfo->get_result();
+                if($resPayInfo && ($row=$resPayInfo->fetch_assoc())){ $refCodeRes=$row['ref_code']??null; $payStatusRes=strtolower($row['payment_status']??''); $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
+                $stmtPayInfo->close();
+                if (!empty($refCodeRes) && $payStatusRes !== 'verified') {
+                    header("Location: admin.php?page=verify&msg=payment_required&ref=" . urlencode($refCodeRes));
+                    exit;
+                }
                 if ($approval_status === 'approved' && $amenity && $start && $end) {
                     $singleDay = ($start === $end && $st && $et);
                     $cnt = 0;
@@ -1030,6 +1087,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $staff_id = $_SESSION['staff_id'] ?? null;
 
             if ($rr_id > 0) {
+                // Enforce payment verification before any approval decision
+                $refCodeRR = null; $payStatusRR = '';
+                $stmtRR = $con->prepare("SELECT ref_code, payment_status FROM reservations WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0) LIMIT 1");
+                $stmtRR->bind_param('i', $rr_id);
+                $stmtRR->execute(); $resRR = $stmtRR->get_result();
+                if($resRR && ($row=$resRR->fetch_assoc())){ $refCodeRR=$row['ref_code']??null; $payStatusRR=strtolower($row['payment_status']??''); }
+                $stmtRR->close();
+                if (!empty($refCodeRR) && $payStatusRR !== 'verified') {
+                    header("Location: admin.php?page=verify&msg=payment_required&ref=" . urlencode($refCodeRR));
+                    exit;
+                }
                 // Ensure reservations has approval metadata
                 $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'approved_by'");
                 if($c1 && $c1->num_rows===0){ @$con->query("ALTER TABLE reservations ADD COLUMN approved_by INT NULL"); }
@@ -1125,7 +1193,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             $redirect = 'admin.php?page=verify';
             if ($payment_status === 'verified' && !empty($refCode)) {
-              $redirectPage = ($entryId) ? 'visitor_requests' : 'reservations';
+              $redirectPage = 'reservations';
+              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtGF->bind_param('s', $refCode);
+              $stmtGF->execute(); $resGF = $stmtGF->get_result();
+              $hasGF = ($resGF && $resGF->num_rows > 0);
+              $stmtGF->close();
+              if ($hasGF) { $redirectPage = 'resident_guest_forms'; }
+              else if ($entryId) { $redirectPage = 'visitor_requests'; }
               $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
             }
             header("Location: $redirect");
@@ -1451,7 +1526,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               .catch(function(){});
           }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='refund') return '?page=verify'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
             var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); renderNotif({ items: [] }); }); }
@@ -1596,7 +1671,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
-                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                   } elseif ($approval_status == 'denied') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
@@ -1659,18 +1734,26 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  $payStatusRR = null; $isAmenityRR = !empty($rr['amenity']);
+                  try { $stmtPS = $con->prepare("SELECT payment_status FROM reservations WHERE id = ? LIMIT 1"); $stmtPS->bind_param('i', $rr['id']); $stmtPS->execute(); $resPS = $stmtPS->get_result(); if($resPS && ($rwPS=$resPS->fetch_assoc())){ $payStatusRR = $rwPS['payment_status'] ?? null; } $stmtPS->close(); } catch(Throwable $e) { }
+                  $disableViewRR = ($isAmenityRR && strtolower($payStatusRR ?? '') !== 'verified');
+                  if($disableViewRR){
+                    echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
+                  } else {
+                    echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View More Details</button><br>";
+                  }
                   if ($approval_status == 'pending') {
+                      $disabledRR = ($isAmenityRR && strtolower($payStatusRR ?? '') !== 'verified');
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
-                      echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabledRR ? "btn-disabled" : "btn-approve") . "' " . ($disabledRR ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                      echo "<button type='submit' class='btn " . ($disabledRR ? "btn-disabled" : "btn-reject") . "' " . ($disabledRR ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                 } elseif ($approval_status == 'denied') {
                     $canRefund = false; $downAmt = 0; $payStatus = '';
