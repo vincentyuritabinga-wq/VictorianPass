@@ -260,7 +260,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="section-divider"></div>
     <div class="section-body">
       <p>Victorian Heights subdivision is a gated residence that offers accessibility located at Dahlia Fairview, BRGY. Sauyo, Quezon City. It is a residential development by Swire Land Corporation that provides accessibility and exclusivity with a gated community with 222 houses and an estimated 2,220 residents, making it secure against harm and vulnerability. Furthermore, beautifully designed houses that cater to thousands of residents live within reach of convenience and service while getting the experience of peace in a suburban community .</p>
-      <img src="images/about subd.png" alt="Victorian Heights Subdivision" class="about-subdivision-photo">
+      <img src="images/about subd.jpg" alt="Victorian Heights Subdivision" class="about-subdivision-photo">
     </div>
   </section>
 

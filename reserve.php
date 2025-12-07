@@ -630,6 +630,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             <span id="personCount">1</span>
             <button type="button" onclick="changePersons(1)">+</button>
           </div>
+          <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
           <small id="price">$1</small>
           <input type="hidden" name="persons" id="personsInput" value="1">
         </div>
@@ -966,11 +967,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   function changePersons(val){
     let count=parseInt(document.getElementById('personCount').textContent);
     const amen=document.getElementById('amenityField').value;
-    const max=amen==='Pool'?20:Infinity;
+    const max=getAmenityMaxPersons(amen);
     count=Math.min(max,Math.max(1,count+val));
     document.getElementById('personCount').textContent=count;
     document.getElementById('personsInput').value=count;
-    if(amen==='Pool' && count>=20){ setFieldWarning('personsInput','Maximum is 20 persons.'); } else { setFieldWarning('personsInput',''); }
+    const note=document.getElementById('personsMaxNote'); if(note){ note.textContent = max?(`Maximum: ${max} persons`):''; }
+    if(count>=max){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); } else { setFieldWarning('personsInput',''); }
     updateDisplayedPrice();
     updateDownpaymentSuggestion();
   }
@@ -1063,6 +1065,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(endTimeInput){ endTimeInput.readOnly=true; }
       if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
       const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
+      const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1077,6 +1080,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hoursInput && !hoursInput.value) hoursInput.value=1;
       if(endTimeInput){ endTimeInput.readOnly=true; }
       const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='inline'; }
+      const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       renderHoursDropdownForAmenity();
@@ -1088,12 +1092,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='none'; }
       if(endTimeInput){ endTimeInput.readOnly=false; }
       const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
+      const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
       document.getElementById('hoursSectionLabel').style.display='none';
       document.getElementById('timeSectionLabel').style.display='block';
       renderTimeSlotButtons();
     }
+  }
+
+  function getAmenityMaxPersons(amen){
+    if(amen==='Pool') return 20;
+    if(amen==='Clubhouse') return 200;
+    if(amen==='Tennis Court') return 60;
+    if(amen==='Basketball Court') return 30;
+    return Infinity;
   }
 
   function clampToRange(timeStr){
@@ -1310,11 +1323,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
     } else if(amen==='Pool'){
       if(hours<1){ if(force||isDirty('hoursInput')) setFieldWarning('hoursInput','Number of hours must be at least 1.'); } else { setFieldWarning('hoursInput',''); }
+      const max=getAmenityMaxPersons(amen);
       if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); }
-      else if(persons>20){ setFieldWarning('personsInput','Maximum is 20 persons.'); }
+      else if(persons>max){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); }
       else { setFieldWarning('personsInput',''); }
     } else {
-      if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); } else { setFieldWarning('personsInput',''); }
+      const max=getAmenityMaxPersons(amen);
+      if(persons<1){ if(force||isDirty('personsInput')) setFieldWarning('personsInput','Persons must be at least 1.'); }
+      else if(persons>max && max!==Infinity){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); }
+      else { setFieldWarning('personsInput',''); }
     }
   }
 
