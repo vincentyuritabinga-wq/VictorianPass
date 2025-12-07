@@ -317,8 +317,7 @@ entryForm.addEventListener('submit', async (e)=>{
     if (data && data.success) {
       const ref = String(data.ref_code || '');
       if (reserveCheck.checked) {
-        // Proceed to guest amenity reservation page carrying the ref_code
-        const url = 'reserve_guest.php?ref_code=' + encodeURIComponent(ref);
+        const url = 'reserve.php?ref_code=' + encodeURIComponent(ref);
         window.location.href = url;
       } else {
         openModal(ref);

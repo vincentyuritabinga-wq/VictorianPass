@@ -213,7 +213,7 @@
       </div>
       <div class="details-body">
         <p>Are you sure you want to cancel this reservation?</p>
-        <p style="font-size:0.9rem;color:#666">If you paid a downpayment, please wait for refund processing after cancellation.</p>
+        <p style="font-size:0.9rem;color:#666">Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.</p>
       </div>
       <div style="display:flex; gap:10px; padding: 0 16px 16px 16px; justify-content:flex-end;">
         <button type="button" class="qr-btn" onclick="closeCancelModal()">Keep Reservation</button>
@@ -295,11 +295,11 @@
                     <td>${priceDisplay}</td>
                     <td><span class="status-badge status-${(data.status||'').toLowerCase()}">${data.status}</span></td>
                     <td><button class="qr-btn" onclick="openDetails()">View More Details</button></td>
-                    <td><button class="qr-btn ${(data.status||'').toLowerCase() === 'approved' ? '' : 'disabled'}" 
-                        onclick="${(data.status||'').toLowerCase() === 'approved' ? `openQR('${data.name}','${data.type}','${data.status}','${data.qr_path}')` : 'return false;'}"
-                        ${(data.status||'').toLowerCase() !== 'approved' ? 'disabled' : ''}>
-                        ${(data.status||'').toLowerCase() === 'approved' ? 'View QR' : 'QR Disabled'}
-                    </button></td>
+                    <td>
+                      ${((data.status||'').toLowerCase() === 'approved')
+                        ? `<a class="qr-btn" href="qr_view.php?code=${encodeURIComponent(code)}">View QR</a>`
+                        : `<button class="qr-btn disabled" disabled>QR Disabled</button>`}
+                    </td>
                     <td><button class="cancel-btn" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
                   </tr>`;
               }, 600);
@@ -454,7 +454,7 @@
       }).then(r=>r.json()).then(data=>{
         if(data && data.success){
           closeCancelModal();
-          alert('Reservation cancelled. Please wait for refund for the downpayment.');
+          alert('Reservation cancelled. Downpayment is non-refundable.');
           try {
             try { sessionStorage.setItem('cancelled:'+code, '1'); } catch(_){}
             const d = window.statusData || {};

@@ -180,7 +180,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </div>
               </div>
               <div class="actions">
-                <a href="profileresident.php" class="btn btn-view">View More</a>
+                <a href="profileresident.php" class="btn btn-view">Dashboard</a>
                 <a href="logout.php" class="btn btn-logout">Log Out</a>
               </div>
             </div>

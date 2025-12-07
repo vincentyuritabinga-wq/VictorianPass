@@ -82,7 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $hashed = password_hash($password, PASSWORD_DEFAULT);
     $stmt = $con->prepare("INSERT INTO users 
       (first_name, middle_name, last_name, phone, email, password, sex, birthdate, house_number, address, user_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'resident')");
+      VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 'resident')");
     $stmt->bind_param("ssssssssss", 
       $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address);
 
@@ -224,7 +224,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <input type="text" name="first_name" id="first_name" placeholder="First Name*" required>
           </div>
           <div class="input-wrap">
-            <input type="text" name="middle_name" id="middle_name" placeholder="Middle Name*" required>
+            <input type="text" name="middle_name" id="middle_name" placeholder="Middle Name (optional)">
           </div>
           <div class="input-wrap">
             <input type="text" name="last_name" id="last_name" placeholder="Last Name*" required>
@@ -565,18 +565,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         form.addEventListener('submit', function(e) {
           let valid = true;
 
-          // Names: ensure no digits
-          [first, last, middle].forEach(function(inp) {
-            if (!inp) return;
-            if (/\d/.test(inp.value)) {
-              setWarning(inp.id, 'Numbers are not allowed in this field.');
-              valid = false;
-            }
-            if (!inp.value.trim()) {
-              setWarning(inp.id, 'This field is required.');
-              valid = false;
-            }
-          });
+      // Names: require first and last; middle optional but must not contain digits
+      [first, last].forEach(function(inp) {
+        if (!inp) return;
+        if (/\d/.test(inp.value)) {
+          setWarning(inp.id, 'Numbers are not allowed in this field.');
+          valid = false;
+        }
+        if (!inp.value.trim()) {
+          setWarning(inp.id, 'This field is required.');
+          valid = false;
+        }
+      });
+      if (middle) {
+        const val = middle.value || '';
+        if (/\d/.test(val)) {
+          setWarning('middle_name', 'Numbers are not allowed in this field.');
+          valid = false;
+        } else {
+          setWarning('middle_name', '');
+        }
+      }
 
           // Phone format: 09 followed by 9 digits (PH mobile)
           if (phone) {

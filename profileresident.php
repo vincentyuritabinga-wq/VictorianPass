@@ -272,7 +272,7 @@ if (!file_exists($qrAbsPath)) {
     <div class="sidebar">
       <div class="menu-top">
         <div class="menu-item"><a href="mainpage.php"><img src="images/mainpage/start.svg">Main Page</a></div><br>
-        <div class="menu-item"><a href="reserve_resident.php"><img src="images/mainpage/ticket.svg">Reserve an Amenity</a></div><div class="menu-note-pair"> Make a reservation to use an amenity for yourself as a resident.</div>
+        <div class="menu-item" id="reserveMenu"><a href="reserve.php"><img src="images/mainpage/ticket.svg">Reserve an Amenity</a></div><div class="menu-note-pair"> Make a reservation to use an amenity for yourself as a resident.</div>
         <br><div class="menu-item compact"><a href="guestform.php"><img src="images/mainpage/ticket.svg">Guest Form</a></div>
          <div class="menu-note-pair"> Submit a guest entry request for your visitor.</div>
         <br><div class="menu-item compact report"><a href="residentreport.php"><img src="images/mainpage/report.svg">Report Incident</a></div>
@@ -425,3 +425,6 @@ if (!file_exists($qrAbsPath)) {
   
 </body>
 </html>
+<script>
+  (function(){ var el=document.getElementById('reserveMenu'); if(!el) return; el.addEventListener('click', function(e){ var a=this.querySelector('a'); if(a){ window.location.href=a.getAttribute('href'); } }); })();
+</script>

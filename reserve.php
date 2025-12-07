@@ -9,15 +9,7 @@ if (empty($_SESSION['csrf_token'])) {
   $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// If a resident is logged in and not handling a visitor entry pass, redirect to resident-only reservation page (GET requests only)
-if (
-  $_SERVER['REQUEST_METHOD'] === 'GET' &&
-  isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' &&
-  (!isset($_GET['entry_pass_id']) || $_GET['entry_pass_id'] === '')
-) {
-  header('Location: reserve_resident.php');
-  exit;
-}
+// Unified reservation page for residents and visitors
 
 // Ensure reservations has entry_pass_id column to link entry pass info
 function ensureReservationEntryPassColumn($con) {
@@ -114,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL;
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
     $ref_code = isset($_POST['ref_code']) ? $_POST['ref_code'] : (isset($_GET['ref_code']) ? $_GET['ref_code'] : '');
+    $acct = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && (empty($entry_pass_id))) ? 'resident' : 'visitor';
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -292,8 +285,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $existsStmt->close();
 
             if ($existsRes && $existsRes->num_rows > 0) {
-              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, account_type = COALESCE(account_type, 'visitor'), approval_status = 'pending' WHERE ref_code = ?");
-              $upd->bind_param('sssssiddiiss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $newRef);
+              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, account_type = COALESCE(account_type, ?), approval_status = 'pending' WHERE ref_code = ?");
+              $upd->bind_param('sssssiddiisss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $acct, $newRef);
               $upd->execute();
               $upd->close();
               if ($paidOk) {
@@ -309,8 +302,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               }
             } else {
               $payStatus = $paidOk ? 'verified' : 'pending';
-              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status, account_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'visitor')");
-              $ins->bind_param('ssssssiddiiss', $newRef, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $payStatus);
+              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status, account_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+              $ins->bind_param('ssssssiddiisss', $newRef, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $payStatus, $acct);
               $ins->execute();
               $ins->close();
             }

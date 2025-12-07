@@ -17,7 +17,7 @@ if (empty($error)) {
   $stmtGF->execute();
   $resGF = $stmtGF->get_result();
   $stmtGF->close();
-  if ($resGF && $resGF->num_rows > 0) {
+    if ($resGF && $resGF->num_rows > 0) {
     $row = $resGF->fetch_assoc();
     $statusVal = ($row['approval_status'] ?? 'pending');
     $approvalDateYmd = !empty($row['approval_date']) ? date('Y-m-d', strtotime($row['approval_date'])) : null;
@@ -33,8 +33,14 @@ if (empty($error)) {
     $sex = $row['visitor_sex'] ?? '';
     $birthRaw = $row['visitor_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
-    $publishDate = !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : (!empty($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : '');
-    $expireDate = $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : '';
+    $hasAmenityDates = (!empty($row['start_date']) && !empty($row['end_date']));
+    if ($hasAmenityDates) {
+      $publishDate = date('m/d/y', strtotime($row['start_date']));
+      $expireDate = date('m/d/y', strtotime($row['end_date']));
+    } else {
+      $publishDate = !empty($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : '';
+      $expireDate = '';
+    }
     $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
     $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
     $qrImg = $qrPath ? $qrPath : ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink));
@@ -96,7 +102,7 @@ if (empty($error)) {
         $createdAt = $row['created_at'] ?? '';
       }
       $publishDate = !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : '';
-      $expireDate = $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : '';
+      $expireDate = !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ($expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : '');
       $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
       $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
       $qrImg = $qrPath ? $qrPath : ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink));
@@ -223,6 +229,16 @@ if (empty($error)) {
         <img src="images/logo.svg" alt="Victorian Heights" />
         <div class="brand">Victorian Heights</div>
       </div>
+      <div class="banner <?php echo htmlspecialchars($data['status']); ?>">
+        <?php 
+          switch($data['status']){
+            case 'approved': echo '✅ Valid Entry Pass'; break;
+            case 'expired': echo '❌ Expired Entry Pass'; break;
+            case 'denied': echo '❌ Denied Entry Pass'; break;
+            default: echo '⏳ Pending Review';
+          }
+        ?>
+      </div>
       <div class="qr-area">
         <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" />
       </div>
@@ -239,7 +255,7 @@ if (empty($error)) {
           <p><strong>Name:</strong> <?php echo htmlspecialchars($data['name']); ?></p>
           <?php if ($data['birthdate']): ?><p><strong>Birthdate:</strong> <?php echo htmlspecialchars($data['birthdate']); ?></p><?php endif; ?>
           <?php if (!empty($data['sex'])): ?><p><strong>Sex:</strong> <?php echo htmlspecialchars($data['sex']); ?></p><?php endif; ?>
-          <?php if (!empty($data['contact'])): ?><p><strong>Contact:</strong> <?php echo htmlspecialchars($data['contact']); ?></p><?php endif; ?>
+          
           <?php if (!empty($data['address'])): ?><p><strong>Address:</strong> <?php echo htmlspecialchars($data['address']); ?></p><?php endif; ?>
           <?php if (!empty($data['amenity'])): ?><p><strong>Amenity/Visit:</strong> <?php echo htmlspecialchars($data['amenity']); ?></p><?php endif; ?>
         </div>
@@ -251,24 +267,14 @@ if (empty($error)) {
         <div class="divider"></div>
         <div class="foot">
           <p><strong>Reminder:</strong><br>
-            Please present this pass upon entry. For any issues, contact the guard desk.
+            Please present this pass upon entry.
           </p>
           <div class="cols">
-            <div><strong>Contacts:</strong><br>000-000-0000</div>
             <?php if (!empty($data['created'])): ?><div><strong>Date Created:</strong><br><?php echo htmlspecialchars($data['created']); ?></div><?php endif; ?>
           </div>
         </div>
       </div>
-      <div class="banner <?php echo htmlspecialchars($data['status']); ?>">
-        <?php 
-          switch($data['status']){
-            case 'approved': echo '✅ Valid Entry Pass'; break;
-            case 'expired': echo '❌ Expired Entry Pass'; break;
-            case 'denied': echo '❌ Denied Entry Pass'; break;
-            default: echo '⏳ Pending Review';
-          }
-        ?>
-      </div>
+      
       <div class="verify"><a href="<?php echo htmlspecialchars($data['verification']); ?>" target="_blank">Open verification page</a></div>
     </div>
     <?php endif; ?>
