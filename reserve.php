@@ -53,6 +53,21 @@ function ensureReservationTimeAndDownpayment($con){
 }
 ensureReservationTimeAndDownpayment($con);
 
+// Ensure common columns used by upsert exist (payment_status, account_type, receipt_path)
+function ensureReservationCommonColumns($con){
+  if (!($con instanceof mysqli)) { return; }
+  $cols=['payment_status','account_type','receipt_path'];
+  foreach($cols as $col){
+    $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'");
+    if(!$c || $c->num_rows===0){
+      if($col==='payment_status'){@$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL");}
+      else if($col==='account_type'){@$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL");}
+      else if($col==='receipt_path'){@$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL");}
+    }
+  }
+}
+ensureReservationCommonColumns($con);
+
 // Downpayment moved on-page: do not force redirect; users can pay via GCash from the form
 
 function generateUniqueRefCode($con){
@@ -140,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
               $check2->bind_param("ssss", $amenity, $start, $startTime, $endTime);
             } else {
-              $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE 0=1");
+              $check2 = $con->prepare("SELECT 0 AS c");
             }
             $check2->execute(); $r2 = $check2->get_result(); $cnt += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0; $check2->close();
             $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
@@ -149,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (approval_status IN ('pending','approved')) AND (TIME(?) < end_time AND TIME(?) > start_time)");
               $check3->bind_param("ssss", $amenity, $start, $startTime, $endTime);
             } else {
-              $check3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE 0=1");
+              $check3 = $con->prepare("SELECT 0 AS c");
             }
             $check3->execute(); $r3 = $check3->get_result(); $cnt += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0; $check3->close();
           } else {
@@ -193,9 +208,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               if ($hasRt && $hasRt->num_rows > 0 && $hasRe && $hasRe->num_rows > 0) {
                 $q2 = $con->prepare("SELECT start_time, end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
               } else {
-                $q2 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                $q2 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time WHERE 0=1");
               }
-              $q2->bind_param('ss', $amenity, $ds);
+              if ($hasRt && $hasRt->num_rows > 0 && $hasRe && $hasRe->num_rows > 0) {
+                $q2->bind_param('ss', $amenity, $ds);
+              }
               $q2->execute();
               $res2 = $q2->get_result();
               while ($row = $res2->fetch_assoc()) {
@@ -215,10 +232,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
               if ($hasGt && $hasGt->num_rows > 0 && $hasGe && $hasGe->num_rows > 0) {
                 $q3 = $con->prepare("SELECT start_time, end_time FROM guest_forms WHERE amenity = ? AND (approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+                $q3->bind_param('ss', $amenity, $ds);
               } else {
-                $q3 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time FROM guest_forms WHERE amenity = ? AND (approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+                $q3 = $con->prepare("SELECT NULL AS start_time, NULL AS end_time WHERE 0=1");
               }
-              $q3->bind_param('ss', $amenity, $ds);
               $q3->execute();
               $res3 = $q3->get_result();
               while ($row = $res3->fetch_assoc()) {
