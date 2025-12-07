@@ -45,6 +45,7 @@
     .pending  { background: #fff9e6; color: #b68b00; border: 1px solid #b68b00; }
     .expired  { background: #f0f0f0; color: #555; border: 1px solid #999; }
     .declined { background: #ffe6e6; color: #b30000; border: 1px solid #b30000; }
+    .cancelled { background: #f7f7f7; color: #8a2a2a; border: 1px solid #8a2a2a; }
 
     .dashboard {
       display: none;
@@ -73,9 +74,6 @@
     .qr-btn:hover { opacity: 0.92; }
     .qr-btn.disabled { background: #ccc; color: #666; cursor: not-allowed; }
     .qr-btn.disabled:hover { opacity: 1; }
-    
-    .upload-btn { background: #007bff; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; }
-    .upload-btn:hover { background: #0056b3; }
 
     .table-wrap { width: 100%; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.10); overflow-x: auto; }
     .status-table { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; color: #000; }
@@ -87,6 +85,8 @@
     .cancel-btn { background:#8a2a2a; color:#fff; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; }
     .cancel-btn:disabled { background:#ccc; color:#666; cursor:not-allowed; }
     .status-expired { background: #f0f0f0; color: #555; }
+    .status-denied { background: #ffe6e6; color: #b30000; }
+    .status-cancelled { background: #ffecec; color: #8a2a2a; }
 
     /* Details Modal Styles (match site cards) */
     .details-content { width: 480px; max-width: 92vw; max-height: 85vh; overflow-y: auto; background:#fff; border-radius:14px; box-shadow:0 8px 18px rgba(0,0,0,0.12); }
@@ -145,16 +145,7 @@
       margin-right: 4px;
     }
     
-    /* Upload Modal Styles */
-    .upload-section { padding: 20px; }
-    .upload-section label { display: block; margin-bottom: 8px; font-weight: 500; }
-    .upload-section input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px; }
-    .upload-preview { text-align: center; margin-top: 10px; }
-    .upload-actions { padding: 0 20px 20px; display: flex; gap: 10px; justify-content: flex-end; }
-    .upload-actions button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-    .upload-actions button[type="button"] { background: #6c757d; color: white; }
-    .upload-actions button[type="submit"] { background: #007bff; color: white; }
-    .upload-actions button:hover { opacity: 0.9; }
+    
   </style>
 </head>
 <body>
@@ -214,8 +205,24 @@
     </div>
   </div>
 
-  
+  <div class="modal" id="cancelModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Cancel Reservation</h3>
+        <span class="close-btn" onclick="closeCancelModal()">&times;</span>
+      </div>
+      <div class="details-body">
+        <p>Are you sure you want to cancel this reservation?</p>
+        <p style="font-size:0.9rem;color:#666">If you paid a downpayment, please wait for refund processing after cancellation.</p>
+      </div>
+      <div style="display:flex; gap:10px; padding: 0 16px 16px 16px; justify-content:flex-end;">
+        <button type="button" class="qr-btn" onclick="closeCancelModal()">Keep Reservation</button>
+        <button type="button" class="cancel-btn" onclick="performCancel()">Confirm Cancel</button>
+      </div>
+    </div>
+  </div>
 
+  
   <script>
     function fmtTime(t){
       if(!t) return '';
@@ -238,9 +245,7 @@
         statusDiv.textContent = "⚠️ No code provided!";
         statusDiv.className = "status-message declined";
       } else {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => { try { controller.abort(); } catch(_){} }, 8000);
-        fetch(`status.php?code=${code}`, { signal: controller.signal })
+        fetch(`status.php?code=${code}`)
           .then(response => response.json())
           .then(data => {
             statusData = data; // Store all data for later use
@@ -253,6 +258,7 @@
                 window.location.replace(`qr_view.php?code=${encodeURIComponent(code)}`);
                 return;
               }
+              try { if (sessionStorage.getItem('cancelled:'+code)==='1') { data.status = 'cancelled'; } } catch(_){}
               const status = (data.status || '').toLowerCase();
               let bannerText = '';
               switch (status) {
@@ -260,6 +266,7 @@
                 case 'expired': bannerText = '❌ Expired Entry Pass'; break;
                 case 'pending': bannerText = '⏳ Pending Review'; break;
                 case 'denied': bannerText = '❌ Denied Entry Pass'; break;
+                case 'cancelled': bannerText = '❌ Cancelled Reservation'; break;
                 default: bannerText = `⚠️ ${data.message || 'Unknown status'}`;
               }
               statusDiv.textContent = bannerText;
@@ -302,24 +309,20 @@
             }
           })
           .catch(error => {
-            statusDiv.textContent = (error && error.name === 'AbortError') ? "⚠️ Request timed out. Please try again." : "⚠️ Error connecting to server.";
+            statusDiv.textContent = "⚠️ Error connecting to server.";
             statusDiv.className = "status-message declined";
             console.error('Error:', error);
-          })
-          .finally(() => { try { clearTimeout(timeoutId); } catch(_){} });
+          });
       }
     });
 
     function goBack() {
-      if (document.referrer && document.referrer.indexOf(location.origin) === 0) {
-        window.location.href = document.referrer;
-        return;
-      }
-      if (history.length > 1) {
-        history.back();
-        return;
-      }
-      window.location.href = "checkurstatus.php";
+      let s = String((window.statusData || {}).status || '').toLowerCase();
+      try { const params = new URLSearchParams(window.location.search); const code = params.get('code'); if (sessionStorage.getItem('cancelled:'+code)==='1') s = 'cancelled'; } catch(_){}
+      if (s === 'cancelled' || s === 'denied') { window.location.href = 'mainpage.php'; return; }
+      if (document.referrer && document.referrer.indexOf(location.origin) === 0) { window.location.href = document.referrer; return; }
+      if (history.length > 1) { history.back(); return; }
+      window.location.href = 'checkurstatus.php';
     }
 
     // Reservation button removed per request
@@ -342,6 +345,7 @@
       const banner = statusLower === 'approved' ? '✅ Valid Entry Pass'
                     : statusLower === 'expired' ? '❌ Expired Entry Pass'
                     : statusLower === 'pending' ? '⏳ Pending Review'
+                    : statusLower === 'cancelled' ? '❌ Cancelled Reservation'
                     : `⚠️ ${status}`;
 
       document.getElementById("qrDetails").innerHTML = `
@@ -395,33 +399,29 @@
       if (!isGuestEntry && data.price != null && data.price !== '') resRows.push(['Price', priceDisplay]);
       const reservationInfo = resRows.map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
 
+      let priceInfo = '';
+      if (!isGuestEntry) {
+        const fmtPhp = function(p){ const n=parseFloat(p); if(isNaN(n)) return '₱ 0.00'; try{ return new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(n); } catch(e){ return `₱ ${Number(n||0).toFixed(2)}`; } };
+        const totalPriceVal = (function(p){ const n=parseFloat(p); return isNaN(n)?0:n; })(data.price);
+        const downVal = (function(p){ const n=parseFloat(p); return isNaN(n)?0:n; })(data.downpayment);
+        const remainingVal = Math.max(0, totalPriceVal - downVal);
+        priceInfo = [
+          ['Total Price', fmtPhp(totalPriceVal)],
+          ['Online Payment (Partial)', fmtPhp(downVal)],
+          ['Onsite Payment (Remaining)', fmtPhp(remainingVal)]
+        ].map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+      }
+
       const html = `
         <div class="details-section">
           <h4>Your Information</h4>
           <table class="details-table">${yourInfo}</table>
-  </div>
-
-  <!-- Cancel Confirmation Modal -->
-  <div class="modal" id="cancelModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Cancel Reservation</h3>
-        <span class="close-btn" onclick="closeCancelModal()">&times;</span>
-      </div>
-      <div class="upload-section">
-        <p>Are you sure you want to cancel this reservation?</p>
-        <p style="font-size:0.9rem;color:#666">If you paid a downpayment, please wait for refund processing after cancellation.</p>
-      </div>
-      <div class="upload-actions">
-        <button type="button" onclick="closeCancelModal()">Keep Reservation</button>
-        <button type="button" style="background:#8a2a2a" onclick="performCancel()">Confirm Cancel</button>
-      </div>
-    </div>
-  </div>
+        </div>
         <div class="details-section">
           <h4>Reservation Details</h4>
           <table class="details-table">${reservationInfo}</table>
-        </div>`;
+        </div>
+        ${priceInfo ? (`<div class=\"details-section\"><h4>Price Details</h4><table class=\"details-table\">${priceInfo}</table></div>`) : ''}`;
 
       document.getElementById('detailsBody').innerHTML = html;
       document.getElementById('detailsModal').style.display = 'flex';
@@ -433,8 +433,9 @@
     }
 
     
-
     function confirmCancel(){
+      const statusLower = String((window.statusData || {}).status || '').toLowerCase();
+      if(statusLower !== 'pending'){ alert('Cancel only available for pending reservations.'); return; }
       document.getElementById('cancelModal').style.display='flex';
     }
     function closeCancelModal(){
@@ -443,6 +444,8 @@
     function performCancel(){
       const params=new URLSearchParams(window.location.search);
       const code=params.get('code');
+      const statusLower = String((window.statusData || {}).status || '').toLowerCase();
+      if(statusLower !== 'pending'){ alert('Unable to cancel: only pending reservations can be canceled'); return; }
       if(!code){ alert('Missing reservation code'); return; }
       fetch('status.php',{
         method:'POST',
@@ -452,13 +455,41 @@
         if(data && data.success){
           closeCancelModal();
           alert('Reservation cancelled. Please wait for refund for the downpayment.');
-          location.reload();
+          try {
+            try { sessionStorage.setItem('cancelled:'+code, '1'); } catch(_){}
+            const d = window.statusData || {};
+            d.status = 'cancelled';
+            window.statusData = d;
+            const statusDiv = document.getElementById('statusResult');
+            statusDiv.textContent = '❌ Cancelled Reservation';
+            statusDiv.className = 'status-message cancelled';
+            const dateDisplay = (d.start_date && d.end_date)
+              ? `${d.start_date} → ${d.end_date}`
+              : (d.start_date && d.expires_at)
+                ? `${d.start_date} → ${d.expires_at}`
+                : (d.start_date || '-')
+            const timeDisplay = (d.start_time || d.end_time) ? (`<div class="date-time">${fmtTime(d.start_time)}${d.end_time?(' → '+fmtTime(d.end_time)):''}</div>`) : '';
+            const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(d.persons);
+            const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${Number(n||0).toFixed(2)}`; } })(d.price);
+            const canCancel = false;
+            document.getElementById('dashboardRows').innerHTML = `
+              <tr>
+                <td>${d.name||'-'}</td>
+                <td>${d.type||'-'}</td>
+                <td>${dateDisplay}${timeDisplay}</td>
+                <td>${personsDisplay}</td>
+                <td>${priceDisplay}</td>
+                <td><span class="status-badge status-cancelled">Cancelled</span></td>
+                <td><button class="qr-btn" onclick="openDetails()">View More Details</button></td>
+                <td><button class="qr-btn disabled" disabled>QR Disabled</button></td>
+                <td><button class="cancel-btn" onclick="confirmCancel()" disabled>Cancel Disabled</button></td>
+              </tr>`;
+          } catch(_){ /* noop */ }
         } else {
           alert('Unable to cancel: '+(data && data.message ? data.message : 'Server error'));
         }
       }).catch(_=>{ alert('Network error. Please try again.'); });
     }
-    });
 
     window.onclick = function(event) {
       const qrModal = document.getElementById("qrModal");

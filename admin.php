@@ -1049,6 +1049,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit;
         }
 
+        // Handle refund action for denied reservations
+        if ($action === 'refund_reservation') {
+            $rr_id = intval($_POST['rr_id'] ?? 0);
+            $staff_id = $_SESSION['staff_id'] ?? null;
+            if ($rr_id > 0) {
+                // Ensure refund columns exist
+                $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'refunded_by'");
+                if ($c1 && $c1->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN refunded_by INT NULL"); }
+                $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'refund_date'");
+                if ($c2 && $c2->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN refund_date DATETIME NULL"); }
+
+                // Only allow refund when denied with verified payment and downpayment > 0
+                $stmt = $con->prepare("SELECT approval_status, payment_status, COALESCE(downpayment,0) AS downpayment FROM reservations WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0) LIMIT 1");
+                $stmt->bind_param('i', $rr_id);
+                $stmt->execute(); $res = $stmt->get_result();
+                if ($res && ($row = $res->fetch_assoc())) {
+                    $ok = (strtolower($row['approval_status'] ?? '') === 'denied') && (strtolower($row['payment_status'] ?? '') === 'verified') && (floatval($row['downpayment'] ?? 0) > 0);
+                    if ($ok) {
+                        $stmtU = $con->prepare("UPDATE reservations SET payment_status='refunded', refunded_by = ?, refund_date = NOW() WHERE id = ?");
+                        $stmtU->bind_param('ii', $staff_id, $rr_id);
+                        $stmtU->execute();
+                        $stmtU->close();
+                    }
+                }
+                $stmt->close();
+            }
+            header("Location: admin.php?page=reservations");
+            exit;
+        }
+
         // Handle deletion of denied resident reservations (unified reservations)
         if ($action == 'delete_resident_reservation') {
             $rr_id = intval($_POST['rr_id'] ?? 0);
@@ -1642,12 +1672,27 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
                       echo "<button type='submit' class='btn btn-reject'>Deny</button>";
                       echo "</form>";
-                  } elseif ($approval_status == 'denied') {
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
+                } elseif ($approval_status == 'denied') {
+                    $canRefund = false; $downAmt = 0; $payStatus = '';
+                    try {
+                      $stmtChk = $con->prepare("SELECT payment_status, COALESCE(downpayment, 0) AS downpayment FROM reservations WHERE id = ? LIMIT 1");
+                      $stmtChk->bind_param('i', $rr['id']);
+                      $stmtChk->execute(); $resChk = $stmtChk->get_result();
+                      if($resChk && ($rw=$resChk->fetch_assoc())){ $payStatus = strtolower($rw['payment_status']??''); $downAmt = floatval($rw['downpayment']??0); $canRefund = ($payStatus==='verified' && $downAmt>0); }
+                      $stmtChk->close();
+                    } catch(Throwable $e) { $canRefund = false; }
+                    if($canRefund){
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Mark downpayment as refunded?\")'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
-                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "<input type='hidden' name='action' value='refund_reservation'>";
+                      echo "<button type='submit' class='btn btn-view'>Refund Downpayment</button>";
                       echo "</form>";
+                    }
+                    echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
+                    echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
+                    echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                    echo "</form>";
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
                       $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
@@ -1778,7 +1823,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               echo '<td><span class="muted">No receipt</span></td>';
             }
             $ps = strtolower($row['payment_status'] ?? 'pending');
-            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
+            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : ($ps==='refunded' ? 'badge-expired' : 'badge-pending'));
             echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
             echo '<td class="actions">';
               $ref = urlencode($row['ref_code']);
@@ -1896,6 +1941,21 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                     echo "<button type='submit' class='btn btn-reject'>Deny</button>";
                     echo "</form>";
                 } elseif ($approval_status == 'denied') {
+                    $canRefund = false; $downAmt = 0; $payStatus = '';
+                    try {
+                      $stmtChk = $con->prepare("SELECT payment_status, COALESCE(downpayment, 0) AS downpayment FROM reservations WHERE id = ? LIMIT 1");
+                      $stmtChk->bind_param('i', $rr['id']);
+                      $stmtChk->execute(); $resChk = $stmtChk->get_result();
+                      if($resChk && ($rw=$resChk->fetch_assoc())){ $payStatus = strtolower($rw['payment_status']??''); $downAmt = floatval($rw['downpayment']??0); $canRefund = ($payStatus==='verified' && $downAmt>0); }
+                      $stmtChk->close();
+                    } catch(Throwable $e) { $canRefund = false; }
+                    if($canRefund){
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Mark downpayment as refunded?\")'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='refund_reservation'>";
+                      echo "<button type='submit' class='btn btn-view'>Refund Downpayment</button>";
+                      echo "</form>";
+                    }
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
