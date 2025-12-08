@@ -142,7 +142,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
           if($rpC && ($prC=$rpC->fetch_assoc())){ $ps = strtolower($prC['payment_status'] ?? ''); }
           $stmtPayChk->close();
         }
-        if ($isAmenity && $ps !== 'verified') { echo json_encode(['success'=>false,'message'=>'Payment not verified']); exit; }
+        
         $details = [
             'id' => intval($row['id']),
             'user_id' => isset($row['resident_user_id']) ? intval($row['resident_user_id']) : null,
@@ -195,7 +195,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
         $result = $stmt->get_result();
         if ($result && $row = $result->fetch_assoc()) {
             $isAmenity = !empty($row['amenity']); $ps = strtolower($row['payment_status'] ?? '');
-            if ($isAmenity && $ps !== 'verified') { echo json_encode(['success'=>false,'message'=>'Payment not verified']); exit; }
+            
             echo json_encode(['success' => true, 'details' => $row]);
             exit;
         }
@@ -278,16 +278,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-    $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 8");
-    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'amenity','source'=>'guest_form','title'=>'Amenity request pending payment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-    $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 8");
-    if($gf2){ while($row=$gf2->fetch_assoc()){ $requests[] = ['type'=>'approval','source'=>'guest_form','title'=>'Amenity request ready for approval','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
+    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 8");
     if($rr){ while($row=$rr->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 8");
     if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $items = array_merge($receipts, $requests);
-    usort($items,function($a,$b){ return strcmp($b['time'],$a['time']); });
+    usort($items, function($a, $b){
+        $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
+        $eb = isset($b['epoch']) ? intval($b['epoch']) : 0;
+        if ($eb === $ea) return 0;
+        return ($eb > $ea) ? 1 : -1;
+    });
     header('Content-Type: application/json');
     echo json_encode([
         'payments' => $payments,
@@ -480,16 +483,21 @@ function getRecentNotifications($con){
   $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 5");
-  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'amenity','source'=>'guest_form','title'=>'Amenity request pending payment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 5");
-  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'approval','source'=>'guest_form','title'=>'Amenity request ready for approval','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident: '.$row['status'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
-  usort($items,function($a,$b){ return strcmp($b['time'],$a['time']); });
+  usort($items, function($a, $b){
+    $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
+    $eb = isset($b['epoch']) ? intval($b['epoch']) : 0;
+    if ($eb === $ea) return 0;
+    return ($eb > $ea) ? 1 : -1;
+  });
   return array_slice($items,0,8);
 }
 
@@ -626,6 +634,13 @@ function ensureReservationStatusColumn($con) {
     }
 }
 
+// Ensure column to track the date/time when a receipt was uploaded
+function ensureReceiptUploadedAtColumn($con) {
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_uploaded_at'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL AFTER receipt_path");
+    }
+}
 function autoExpireReservations($con) {
     // Mark reservations expired when past end_date
     $con->query("UPDATE reservations SET status='expired' WHERE end_date < CURDATE() AND status <> 'expired'");
@@ -659,6 +674,7 @@ function ensureIncidentTables($con) {
 ensureReservationStatusColumn($con);
 autoExpireReservations($con);
 ensureIncidentTables($con);
+ensureReceiptUploadedAtColumn($con);
 // Ensure resident reservations have necessary columns
 function ensureResidentApprovalColumns($con) {
     $check1 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'approved_by'");
@@ -1090,35 +1106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit;
         }
 
-        // Handle refund action for denied reservations
-        if ($action === 'refund_reservation') {
-            $rr_id = intval($_POST['rr_id'] ?? 0);
-            $staff_id = $_SESSION['staff_id'] ?? null;
-            if ($rr_id > 0) {
-                // Ensure refund columns exist
-                $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'refunded_by'");
-                if ($c1 && $c1->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN refunded_by INT NULL"); }
-                $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'refund_date'");
-                if ($c2 && $c2->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN refund_date DATETIME NULL"); }
-
-                // Only allow refund when denied with verified payment and downpayment > 0
-                $stmt = $con->prepare("SELECT approval_status, payment_status, COALESCE(downpayment,0) AS downpayment FROM reservations WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0) LIMIT 1");
-                $stmt->bind_param('i', $rr_id);
-                $stmt->execute(); $res = $stmt->get_result();
-                if ($res && ($row = $res->fetch_assoc())) {
-                    $ok = (strtolower($row['approval_status'] ?? '') === 'denied') && (strtolower($row['payment_status'] ?? '') === 'verified') && (floatval($row['downpayment'] ?? 0) > 0);
-                    if ($ok) {
-                        $stmtU = $con->prepare("UPDATE reservations SET payment_status='refunded', refunded_by = ?, refund_date = NOW() WHERE id = ?");
-                        $stmtU->bind_param('ii', $staff_id, $rr_id);
-                        $stmtU->execute();
-                        $stmtU->close();
-                    }
-                }
-                $stmt->close();
-            }
-            header("Location: admin.php?page=reservations");
-            exit;
-        }
+        
 
         // Handle deletion of denied resident reservations (unified reservations)
         if ($action == 'delete_resident_reservation') {
@@ -1269,33 +1257,28 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 
 .panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:auto}
 .panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
-.table{width:100%;border-collapse:collapse;table-layout:auto;font-size:0.9rem;line-height:1.3}
+.table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:0.9rem;line-height:1.3;border:1px solid #e0e0e0;border-radius:10px}
   .table thead th{padding:8px 10px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee;word-break:break-word;white-space:normal;vertical-align:middle}
   .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
 .table thead th,.table td{overflow-wrap:anywhere}
 .table tbody tr:hover{background:#f9fafb}
+.table thead th,.table td{border-right:1px solid #f0f0f0}
+.table thead th:last-child,.table td:last-child{border-right:0}
 .row-highlight{background:#fff7da;outline:2px solid var(--brand-gold)}
 .table img.avatar-xs{width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:10px;vertical-align:middle}
 
-/* Verify Receipts specific column widths */
-.table-verify thead th:nth-child(1),.table-verify td:nth-child(1){width:11%}
-.table-verify thead th:nth-child(2),.table-verify td:nth-child(2){width:17%}
-.table-verify thead th:nth-child(3),.table-verify td:nth-child(3){width:15%}
-.table-verify thead th:nth-child(4),.table-verify td:nth-child(4){width:15%}
-.table-verify thead th:nth-child(5),.table-verify td:nth-child(5){width:11%}
-.table-verify thead th:nth-child(6),.table-verify td:nth-child(6){width:15%}
-.table-verify thead th:nth-child(7),.table-verify td:nth-child(7){width:16%}
-.table-verify thead th:nth-child(1),.table-verify td:nth-child(1){text-align:center}
-.table-verify thead th:nth-child(2),.table-verify td:nth-child(2){text-align:left}
-.table-verify thead th:nth-child(3),.table-verify td:nth-child(3){text-align:left}
-.table-verify thead th:nth-child(4),.table-verify td:nth-child(4){text-align:center}
-.table-verify thead th:nth-child(5),.table-verify td:nth-child(5){text-align:center}
-.table-verify thead th:nth-child(6),.table-verify td:nth-child(6){text-align:center}
-.table-verify thead th:nth-child(7),.table-verify td:nth-child(7){text-align:center}
-.table-verify td:nth-child(5) .receipt-thumbnail{display:block;margin:0 auto}
-.table-verify td:nth-child(5) .receipt-link{display:inline-block}
+/* Verify Receipts specific column widths (7 columns) */
+.table-verify thead th:nth-child(1),.table-verify td:nth-child(1){width:12%;text-align:center}
+.table-verify thead th:nth-child(2),.table-verify td:nth-child(2){width:18%;text-align:left}
+.table-verify thead th:nth-child(3),.table-verify td:nth-child(3){width:16%;text-align:center}
+.table-verify thead th:nth-child(4),.table-verify td:nth-child(4){width:16%;text-align:center}
+.table-verify thead th:nth-child(5),.table-verify td:nth-child(5){width:12%;text-align:center}
+.table-verify thead th:nth-child(6),.table-verify td:nth-child(6){width:10%;text-align:center}
+.table-verify thead th:nth-child(7),.table-verify td:nth-child(7){width:16%;text-align:center}
+.table-verify td:nth-child(3) .receipt-thumbnail{display:block;margin:0 auto}
+.table-verify td:nth-child(3) .receipt-link{display:inline-block}
 
-.badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:600;font-size:0.82rem;color:#fff;}
+.badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:600;font-size:0.82rem;color:#fff;white-space:nowrap}
 .modal{position:fixed;left:0;top:0;width:100%;height:100%;background-color:rgba(0,0,0,0.5);z-index:1000;display:none}
 .modal .modal-content{background:#fff;margin:5% auto;padding:16px;border:1px solid #ddd;width:min(90vw,800px);max-height:85vh;overflow:auto;border-radius:10px}
 .modal .close{color:#888;float:right;font-size:26px;font-weight:700;cursor:pointer}
@@ -1306,12 +1289,13 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 .badge-pending{background:var(--status-pending)}
 .badge-expired{background:var(--status-expired)}
 .badge-rejected{background:var(--status-rejected)}
+.badge-warning{background:#f39c12;color:#fff}
 
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .actions > *{display:inline-flex}
 .actions .btn{flex:0 0 auto;min-width:100px;margin-bottom:0;white-space:nowrap}
 .table td.actions{min-width:240px}
-.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center}
+.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center;box-sizing:border-box}
 .btn-view{background:#23412e;color:#fff}
 .btn-approve{background:var(--status-approved);color:#fff}
 .btn-reject{background:var(--status-rejected);color:#fff}
@@ -1350,11 +1334,77 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 }
 /* Verify Payment Receipts responsive layout */
 #verify-panel .table{table-layout:auto}
+#verify-panel td:nth-child(3),
+#verify-panel td:nth-child(4),
 #verify-panel td:nth-child(5),
-#verify-panel td:nth-child(6){text-align:center}
-#verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
-#verify-panel .actions > *{width:100%}
-#verify-panel .actions .btn{min-width:0;width:100%}
+#verify-panel td:nth-child(6),
+#verify-panel td:nth-child(7){text-align:center}
+  #verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
+  #verify-panel .actions > *{width:100%}
+  #verify-panel .actions .btn{min-width:0;width:100%}
+  
+  @media(max-width:900px){
+    #resident-guest-forms-panel .table{table-layout:auto}
+    .table-resident-guest thead th,.table-resident-guest td{padding:8px}
+    .table-resident-guest .actions{gap:5px}
+    .table-resident-guest .actions .btn{flex:1 1 110px}
+  }
+  
+  /* Section-specific table layouts */
+  .table-resident-guest thead th:nth-child(1),.table-resident-guest td:nth-child(1){width:16%;text-align:left}
+  .table-resident-guest thead th:nth-child(2),.table-resident-guest td:nth-child(2){width:10%;text-align:center}
+  .table-resident-guest thead th:nth-child(3),.table-resident-guest td:nth-child(3){width:11%;text-align:left}
+  .table-resident-guest thead th:nth-child(4),.table-resident-guest td:nth-child(4){width:10%;text-align:left}
+  .table-resident-guest thead th:nth-child(5),.table-resident-guest td:nth-child(5){width:8%;text-align:center}
+  .table-resident-guest thead th:nth-child(6),.table-resident-guest td:nth-child(6){width:9%;text-align:center}
+  .table-resident-guest thead th:nth-child(7),.table-resident-guest td:nth-child(7){width:10%;text-align:center}
+  .table-resident-guest td.actions{min-width:0;overflow:visible}
+  .table-resident-guest thead th:nth-child(8),.table-resident-guest td:nth-child(8){width:20%;text-align:center}
+  .table-resident-guest .actions{flex-direction:row;align-items:center;flex-wrap:nowrap;gap:6px;justify-content:flex-start;max-width:100%}
+  .table-resident-guest .actions > *{display:inline-flex;width:auto}
+  .table-resident-guest .actions .btn{flex:0 0 110px;min-width:110px;width:auto;white-space:nowrap;word-break:normal;padding:6px 10px;min-height:28px;font-size:0.78rem}
+  .table-resident-guest .actions form.action-form{display:inline-flex !important;width:auto}
+
+  .table-reservations thead th:nth-child(1),.table-reservations td:nth-child(1){width:22%;text-align:left}
+  .table-reservations thead th:nth-child(2),.table-reservations td:nth-child(2){width:12%;text-align:center}
+  .table-reservations thead th:nth-child(3),.table-reservations td:nth-child(3){width:14%;text-align:left}
+  .table-reservations thead th:nth-child(4),.table-reservations td:nth-child(4){width:18%;text-align:left}
+  .table-reservations thead th:nth-child(5),.table-reservations td:nth-child(5){width:10%;text-align:center}
+  .table-reservations thead th:nth-child(6),.table-reservations td:nth-child(6){width:28%;text-align:center}
+
+  .table-requests thead th:nth-child(1),.table-requests td:nth-child(1){width:22%;text-align:left}
+  .table-requests thead th:nth-child(2),.table-requests td:nth-child(2){width:12%;text-align:center}
+  .table-requests thead th:nth-child(3),.table-requests td:nth-child(3){width:14%;text-align:left}
+  .table-requests thead th:nth-child(4),.table-requests td:nth-child(4){width:18%;text-align:left}
+  .table-requests thead th:nth-child(5),.table-requests td:nth-child(5){width:10%;text-align:center}
+  .table-requests thead th:nth-child(6),.table-requests td:nth-child(6){width:24%;text-align:center}
+
+  .table-residents thead th:nth-child(1),.table-residents td:nth-child(1){width:20%;text-align:left}
+  .table-residents thead th:nth-child(2),.table-residents td:nth-child(2){width:14%;text-align:center}
+  .table-residents thead th:nth-child(3),.table-residents td:nth-child(3){width:22%;text-align:left}
+  .table-residents thead th:nth-child(4),.table-residents td:nth-child(4){width:12%;text-align:center}
+  .table-residents thead th:nth-child(5),.table-residents td:nth-child(5){width:12%;text-align:center}
+  .table-residents thead th:nth-child(6),.table-residents td:nth-child(6){width:20%;text-align:center}
+
+  .table-security thead th:nth-child(1),.table-security td:nth-child(1){width:10%;text-align:center}
+  .table-security thead th:nth-child(2),.table-security td:nth-child(2){width:40%;text-align:left}
+  .table-security thead th:nth-child(3),.table-security td:nth-child(3){width:20%;text-align:center}
+  .table-security thead th:nth-child(4),.table-security td:nth-child(4){width:20%;text-align:center}
+
+  .table-report thead th:nth-child(1),.table-report td:nth-child(1){width:14%;text-align:left}
+  .table-report thead th:nth-child(2),.table-report td:nth-child(2){width:14%;text-align:left}
+  .table-report thead th:nth-child(3),.table-report td:nth-child(3){width:16%;text-align:left}
+  .table-report thead th:nth-child(4),.table-report td:nth-child(4){width:20%;text-align:left}
+  .table-report thead th:nth-child(5),.table-report td:nth-child(5){width:10%;text-align:center}
+  .table-report thead th:nth-child(6),.table-report td:nth-child(6){width:10%;text-align:center}
+  .table-report thead th:nth-child(7),.table-report td:nth-child(7){width:8%;text-align:center}
+  .table-report thead th:nth-child(8),.table-report td:nth-child(8){width:8%;text-align:center}
+
+  .table-visitor thead th:nth-child(1),.table-visitor td:nth-child(1){width:24%;text-align:left}
+  .table-visitor thead th:nth-child(2),.table-visitor td:nth-child(2){width:18%;text-align:left}
+  .table-visitor thead th:nth-child(3),.table-visitor td:nth-child(3){width:16%;text-align:center}
+  .table-visitor thead th:nth-child(4),.table-visitor td:nth-child(4){width:12%;text-align:center}
+  .table-visitor thead th:nth-child(5),.table-visitor td:nth-child(5){width:30%;text-align:center}
 </style>
 </head>
 <body>
@@ -1372,7 +1422,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
        <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
        <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
        <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
-       <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><img src="images/dashboard.svg"><span>Resident Guest Forms</span></a>
+       <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><img src="images/dashboard.svg"><span>Resident's Guest Request</span></a>
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
@@ -1388,7 +1438,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     <div class="header">
       <?php $pageTitles = [
         'requests' => 'Resident Requests',
-        'resident_guest_forms' => 'Resident Guest Forms',
+        'resident_guest_forms' => "Resident's Guest Request",
         'visitor_requests' => 'Visitor Requests',
         'reservations' => 'Reservations',
         'report' => 'View Reported Incidents',
@@ -1413,7 +1463,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
       <div class="notifications">
         <button id="notifToggle" class="notif-btn" aria-label="Notifications" title="Notifications">
           <img alt="Notifications" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' fill='%23fff'/></svg>" />
-          <?php if($notifTotal>0){ echo "<span class='notif-badge'>".intval($notifTotal)."</span>"; } ?>
+          <?php if($notifTotal>0){ $badgeText = ($notifTotal>99) ? '99+' : (string)intval($notifTotal); echo "<span class='notif-badge'>".$badgeText."</span>"; } ?>
         </button>
         <div id="notifPanel" class="notif-panel" style="display:none"></div>
         <div id="notifModal" class="modal">
@@ -1485,21 +1535,37 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             for(var i=0;i<itemsRaw.length;i++){ var k=keyFor(itemsRaw[i]); if(!dismissed.has(k)) items.push(itemsRaw[i]); }
             var total = items.length;
             if(t){
-              if(total>0){ if(!badge){ badge=document.createElement('span'); badge.className='notif-badge'; t.appendChild(badge);} badge.textContent=String(total); if(lastTotal!==null && total>lastTotal){ badge.classList.add('pulse'); setTimeout(function(){ badge.classList.remove('pulse'); }, 1200); } }
+              if(total>0){ if(!badge){ badge=document.createElement('span'); badge.className='notif-badge'; t.appendChild(badge);} badge.textContent = (total>99 ? '99+' : String(total)); if(lastTotal!==null && total>lastTotal){ badge.classList.add('pulse'); setTimeout(function(){ badge.classList.remove('pulse'); }, 1200); } }
               else { if(badge){ badge.remove(); } }
             }
             var reqList = document.getElementById('notifRequestsList');
             var recList = document.getElementById('notifReceiptsList');
             var requests = Array.isArray(data.requests)?data.requests:[];
             var receipts = Array.isArray(data.receipts)?data.receipts:[];
-            var build = function(arr){ var html=''; if(arr.length===0){ html+="<div class='notif-item'><div class='notif-meta'>No items</div></div>"; } for(var i=0;i<arr.length;i++){ var it=arr[i]||{}; var type=String(it.type||'').toUpperCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it); html += "<div class='notif-item' data-type='"+type+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'><a class='notif-item-link' href='"+href+"'><div class='notif-type'>"+type+"</div><div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div></a></div>"; } return html; };
+            var build = function(arr){
+              var list = (arr||[]).filter(function(it){ return !dismissed.has(keyFor(it)); });
+              list.sort(function(a,b){ var ea=parseInt(a.epoch||0,10)||0; var eb=parseInt(b.epoch||0,10)||0; return eb - ea; });
+              var html='';
+              if(list.length===0){ html+="<div class='notif-item'><div class='notif-meta'>No items</div></div>"; }
+              for(var i=0;i<list.length;i++){
+                var it=list[i]||{}; var typeUpper=String(it.type||'').toUpperCase(); var badge=(it.label?String(it.label):typeUpper); var typeLower=String(it.type||'').toLowerCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it);
+                html += "<div class='notif-item' data-type='"+typeLower+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'>"
+                  + "<a class='notif-item-link' href='"+href+"'>"
+                  + "<div class='notif-type'>"+badge+"</div>"
+                  + "<div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div>"
+                  + "</a>"
+                  + "<button type='button' class='notif-dismiss'>Dismiss</button>"
+                  + "</div>";
+              }
+              return html;
+            };
             if(reqList){ reqList.innerHTML = build(requests); }
             if(recList){ recList.innerHTML = build(receipts); }
             lastTotal = total;
           }
           function pollNotifications(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(function(data){ renderNotif(data); }).catch(function(){}); }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='resident_guest') return '?page=resident_guest_forms'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
@@ -1523,7 +1589,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           poll();
           var pollMs = 2000; var timer = setInterval(poll, pollMs);
           document.addEventListener('visibilitychange', function(){ if(document.hidden){ clearInterval(timer); timer = setInterval(poll, 5000); } else { clearInterval(timer); timer = setInterval(poll, pollMs); poll(); } });
-          if(p){ p.addEventListener('click', function(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var cur=parseInt(b.textContent||'0',10)||0; b.textContent=String(Math.max(0,cur-1)); if(Math.max(0,cur-1)===0){ b.remove(); } } }); }
+          if(p){ p.addEventListener('click', function(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }); }
+          if(m){ m.addEventListener('click', function(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }); }
         })();
       </script>
       <script>
@@ -1585,10 +1652,9 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 <section class="panel" id="resident-guest-forms-panel">
   <div class="content-row">
     <div class="card-box">
-      <h3>Resident Guest Forms</h3>
+      <h3>Resident's Guest Request</h3>
       <div class="notice">Guest forms submitted by residents (linked to resident accounts)</div>
-      <div class="notice">For amenity requests, confirm payment receipt before viewing details or approving.</div>
-      <table class="table">
+      <table class="table table-resident-guest">
         <thead>
           <tr>
             <th>Name</th>
@@ -1629,23 +1695,18 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                     if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
                     $stmtPay2->close();
                   }
-                  $disableView = ($isAmenity && $payStatus !== 'verified');
-                  if($disableView){
-                    echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
-                  } else {
-                    echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\" style='margin-bottom: 5px;'>View More Details</button><br>";
-                  }
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\">View More Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = ($isAmenity && $payStatus !== 'verified');
-                      echo "<form method='post' style='display:inline;'>";
+                      echo "<form method='post' class='action-form'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='approve_request'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
-                      echo "<form method='post' style='display:inline;'>";
+                      echo "<form method='post' class='action-form'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
-                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                   } elseif ($approval_status == 'denied') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
@@ -1663,7 +1724,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               }
           }
           if (!$hasResidentRequests) {
-              echo "<tr><td colspan='6' style='text-align:center;'>No resident requests found</td></tr>";
+              echo "<tr><td colspan='8' style='text-align:center;'>No resident requests found</td></tr>";
           }
           ?>
         </tbody>
@@ -1679,7 +1740,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   <div class="content-row">
     <div class="card-box">
       <h3>Resident Reservations</h3>
-      <table class="table">
+      <table class="table table-reservations">
         <thead>
           <tr>
             <th>Name</th>
@@ -1723,21 +1784,6 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                 } elseif ($approval_status == 'denied') {
-                    $canRefund = false; $downAmt = 0; $payStatus = '';
-                    try {
-                      $stmtChk = $con->prepare("SELECT payment_status, COALESCE(downpayment, 0) AS downpayment FROM reservations WHERE id = ? LIMIT 1");
-                      $stmtChk->bind_param('i', $rr['id']);
-                      $stmtChk->execute(); $resChk = $stmtChk->get_result();
-                      if($resChk && ($rw=$resChk->fetch_assoc())){ $payStatus = strtolower($rw['payment_status']??''); $downAmt = floatval($rw['downpayment']??0); $canRefund = ($payStatus==='verified' && $downAmt>0); }
-                      $stmtChk->close();
-                    } catch(Throwable $e) { $canRefund = false; }
-                    if($canRefund){
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Mark downpayment as refunded?\")'>";
-                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='refund_reservation'>";
-                      echo "<button type='submit' class='btn btn-view'>Refund Downpayment</button>";
-                      echo "</form>";
-                    }
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
@@ -1773,7 +1819,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 <?php if ($currentPage == 'residents'): ?>
 <section class="panel" id="residents-panel">
   <h3>Registered Residents</h3>
-  <table class="table">
+  <table class="table table-residents">
     <thead>
       <tr>
         <th>Name</th>
@@ -1832,6 +1878,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         <th>User Type</th>
         <th>Name</th>
         <th>Receipt</th>
+        <th>Proof of Payment Upload Date</th>
         <th>Price Details</th>
         <th>Payment Status</th>
         <th>Actions</th>
@@ -1839,19 +1886,21 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     </thead>
     <tbody>
       <?php
-        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
-                                       r.price, r.downpayment,
+        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.payment_status, r.receipt_path, r.entry_pass_id,
+                                       r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
                                        ep.full_name, ep.middle_name, ep.last_name,
-                                       u.first_name AS res_first_name, u.last_name AS res_last_name
+                                       u.first_name AS res_first_name, u.last_name AS res_last_name,
+                                       gf.id AS gf_id
                                   FROM reservations r
                                   LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
                                   LEFT JOIN users u ON r.user_id = u.id
+                                  LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
                                   WHERE r.receipt_path IS NOT NULL
-                                  ORDER BY r.created_at DESC");
+                                  ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC");
         if ($resList && $resList->num_rows > 0) {
           while ($row = $resList->fetch_assoc()) {
             echo '<tr>';
-            $userType = !empty($row['entry_pass_id']) ? 'Visitor' : 'Resident';
+            $userType = !empty($row['entry_pass_id']) ? 'Visitor' : (!empty($row['gf_id']) ? "Resident's Guest" : 'Resident');
             echo '<td>' . $userType . '</td>';
             $fullName = !empty($row['entry_pass_id'])
               ? trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))
@@ -1865,11 +1914,14 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               if ($isPdf) {
                 echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank">Open Receipt (PDF)</a></td>';
               } else {
-                echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
+                echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
               }
             } else {
               echo '<td><span class="muted">No receipt</span></td>';
             }
+            $uploadedAt = !empty($row['receipt_uploaded_at']) ? $row['receipt_uploaded_at'] : ($row['created_at'] ?? null);
+            $uploadedStr = $uploadedAt ? date('Y-m-d H:i', strtotime($uploadedAt)) : '-';
+            echo '<td>' . htmlspecialchars($uploadedStr) . '</td>';
             $tp = isset($row['price']) ? floatval($row['price']) : 0.0;
             $dpRaw = (isset($row['downpayment']) && $row['downpayment'] !== null) ? floatval($row['downpayment']) : null;
             echo '<td>';
@@ -1882,7 +1934,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             }
             echo '</td>';
             $ps = strtolower($row['payment_status'] ?? 'pending');
-            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : ($ps==='refunded' ? 'badge-expired' : 'badge-pending'));
+            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
             echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
             echo '<td class="actions">';
               $ref = urlencode($row['ref_code']);
@@ -1906,7 +1958,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             echo '</tr>';
           }
         } else {
-          echo '<tr><td colspan="6" style="text-align:center;">No receipts to verify</td></tr>';
+          echo '<tr><td colspan="7" style="text-align:center;">No receipts to verify</td></tr>';
         }
       ?>
     </tbody>
@@ -1945,11 +1997,24 @@ function closePriceDetailsModal(){ var m=document.getElementById('priceDetailsMo
 window.addEventListener('click', function(e){ var m=document.getElementById('priceDetailsModal'); if(e.target===m){ m.style.display='none'; } });
 </script>
 
+<!-- Receipt Image Modal -->
+<div id="receiptModal" class="modal">
+  <div class="modal-content" style="max-width:90vw;width:min(90vw,800px)">
+    <span class="close" onclick="closeReceiptModal()">&times;</span>
+    <img id="receiptModalImg" alt="Receipt" style="width:100%;height:auto;border-radius:8px"/>
+  </div>
+</div>
+<script>
+function openReceiptModal(src){ var m=document.getElementById('receiptModal'); var img=document.getElementById('receiptModalImg'); if(img){ img.src = src; } if(m){ m.style.display='block'; } }
+function closeReceiptModal(){ var m=document.getElementById('receiptModal'); if(m){ m.style.display='none'; } }
+window.addEventListener('click', function(e){ var m=document.getElementById('receiptModal'); if(e.target===m){ m.style.display='none'; } });
+</script>
+
 <!-- SECURITY GUARDS -->
 <?php if ($currentPage == 'security'): ?>
 <section class="panel" id="security-panel">
   <h3>Security Guards on Duty</h3>
-  <table class="table">
+  <table class="table table-security">
     <thead>
       <tr>
         <th>ID</th>
@@ -1986,7 +2051,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
   <!-- Resident Amenity Requests (from resident_reservations) -->
   <div class="card-box">
     <h3>Resident Amenity Requests</h3>
-    <table class="table">
+    <table class="table table-requests">
       <thead>
         <tr>
           <th>Name</th>
@@ -2030,22 +2095,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
                 } elseif ($approval_status == 'denied') {
-                } elseif ($approval_status == 'denied') {
-                    $canRefund = false; $downAmt = 0; $payStatus = '';
-                    try {
-                      $stmtChk = $con->prepare("SELECT payment_status, COALESCE(downpayment, 0) AS downpayment FROM reservations WHERE id = ? LIMIT 1");
-                      $stmtChk->bind_param('i', $rr['id']);
-                      $stmtChk->execute(); $resChk = $stmtChk->get_result();
-                      if($resChk && ($rw=$resChk->fetch_assoc())){ $payStatus = strtolower($rw['payment_status']??''); $downAmt = floatval($rw['downpayment']??0); $canRefund = ($payStatus==='verified' && $downAmt>0); }
-                      $stmtChk->close();
-                    } catch(Throwable $e) { $canRefund = false; }
-                    if($canRefund){
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Mark downpayment as refunded?\")'>";
-                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='refund_reservation'>";
-                      echo "<button type='submit' class='btn btn-view'>Refund Downpayment</button>";
-                      echo "</form>";
-                    }
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
@@ -2076,7 +2125,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
 <?php if ($currentPage == 'report'): ?>
 <section class="panel" id="report-panel">
   <h3>Reported Incidents</h3>
-  <table class="table">
+  <table class="table table-report">
     <thead>
       <tr>
         <th>Reported By</th>
@@ -2143,7 +2192,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
               echo '</tr>';
           }
       } else {
-          echo '<tr><td colspan="7" style="text-align:center;">No incidents reported yet</td></tr>';
+          echo '<tr><td colspan="8" style="text-align:center;">No incidents reported yet</td></tr>';
       }
       ?>
     </tbody>
@@ -2157,7 +2206,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
   <div class="content-row">
     <h3>Visitor Requests</h3>
     <div class="notice">Visitor forms without linked resident account</div>
-    <table class="table">
+    <table class="table table-visitor">
       <thead>
         <tr>
           <th>Name</th>
@@ -2195,12 +2244,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
                 echo "<td class='actions'>";
                 $isAmenityLegacy = !empty($request['amenity']);
                 $payStatusLegacy = null; if (!empty($request['ref_code'])) { $stmtPayL = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1"); $stmtPayL->bind_param('s', $request['ref_code']); $stmtPayL->execute(); $resPL = $stmtPayL->get_result(); if($resPL && ($rwPL=$resPL->fetch_assoc())){ $payStatusLegacy = $rwPL['payment_status'] ?? null; } $stmtPayL->close(); }
-                $disableViewLegacy = ($isAmenityLegacy && $payStatusLegacy !== 'verified');
-                if($disableViewLegacy){
-                  echo "<button type='button' class='btn btn-disabled' disabled title='Verify payment receipt first' style='margin-bottom: 5px;'>View More Details</button><br>";
-                } else {
-                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $request['id'] . ", 'reservation')\" style='margin-bottom: 5px;'>View More Details</button><br>";
-                }
+                echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $request['id'] . ", 'reservation')\" style='margin-bottom: 5px;'>View More Details</button><br>";
                 if ($approval_status == 'pending') {
                     $disabled = ($isAmenityLegacy && $payStatusLegacy !== 'verified');
                     echo "<form method='post' style='display:inline;'>";
@@ -2567,5 +2611,6 @@ window.addEventListener('click', function(event){
 </main>
 </div>
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+<script src="js/logout-modal.js"></script>
 </body>
-</html>
+ </html>

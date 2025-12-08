@@ -434,9 +434,19 @@
         ].map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
       }
 
+      const residentInfoRows = [];
+      if (data.resident_name || data.resident_house_number || data.resident_email || data.resident_phone) {
+        if (data.resident_name) residentInfoRows.push(['Name', data.resident_name]);
+        if (data.resident_house_number) residentInfoRows.push(['House No.', data.resident_house_number]);
+        if (data.resident_email) residentInfoRows.push(['Email', data.resident_email]);
+        if (data.resident_phone) residentInfoRows.push(['Contact', data.resident_phone]);
+      }
+      const residentInfoHtml = residentInfoRows.length ? (`<div class=\"details-section\"><h4>Resident Information</h4><table class=\"details-table\">${residentInfoRows.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table><div class=\"form-note\" style=\"margin-top:8px;color:#23412e\">Share the Status Code with your guest so they can check their status.</div></div>`) : '';
+
       const html = `
+        ${residentInfoHtml}
         <div class="details-section">
-          <h4>Your Information</h4>
+          <h4>${residentInfoRows.length ? "Resident's Guest Information" : 'Your Information'}</h4>
           <table class="details-table">${yourInfo}</table>
         </div>
         <div class="details-section">

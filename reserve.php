@@ -103,10 +103,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
       $price = 0;
     }
-    $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL;
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
     $ref_code = isset($_POST['ref_code']) ? $_POST['ref_code'] : (isset($_GET['ref_code']) ? $_GET['ref_code'] : '');
-    $acct = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && (empty($entry_pass_id))) ? 'resident' : 'visitor';
+    $guestResidentId = null;
+    if ($ref_code !== '' && ($con instanceof mysqli)) {
+      try {
+        $stmtG = $con->prepare("SELECT resident_user_id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+        $stmtG->bind_param('s', $ref_code);
+        $stmtG->execute();
+        $resG = $stmtG->get_result();
+        if ($resG && ($gRow = $resG->fetch_assoc())) {
+          $rid = isset($gRow['resident_user_id']) ? intval($gRow['resident_user_id']) : 0;
+          if ($rid > 0) { $guestResidentId = $rid; }
+        }
+        $stmtG->close();
+      } catch (Throwable $e) {
+        error_log('reserve.php guest link lookup error: ' . $e->getMessage());
+      }
+    }
+    if ($guestResidentId) { $entry_pass_id = NULL; }
+    $user_id = $guestResidentId ?: (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL);
+    $acct = ($guestResidentId || (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && (empty($entry_pass_id)))) ? 'resident' : 'visitor';
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -336,6 +353,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $errorMsg = 'This reservation has already been submitted.';
             } else {
               $_SESSION['reservation_submitted'] = $newRef;
+              if (!empty($guestResidentId)) {
+                $_SESSION['flash_notice'] = 'Reservation created for your guest — Status Code: ' . $newRef . '. Share this code with your guest so they can check their status via the Check Status page.';
+              }
               // Redirect to downpayment page with role-aware flow and ref_code
               $redir = 'downpayment.php?continue=' . (($acct === 'resident') ? 'reserve_resident' : 'reserve');
               if (!empty($entry_pass_id)) { $redir .= '&entry_pass_id=' . urlencode((string)$entry_pass_id); }
@@ -642,18 +662,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         </div>
         <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
-          <?php $refParam = isset($_GET['ref_code']) ? $_GET['ref_code'] : ''; if (empty($refParam) && !empty($generatedCode)) { $refParam = $generatedCode; } ?>
           <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
-          <?php if (!empty($refParam)) { ?><span class="ref-inline">Status Code: <?php echo htmlspecialchars($refParam); ?></span><?php } ?>
-          <?php if (!empty($refParam) && !$canSubmit) { ?>
-            <div class="field-warning" style="margin-top:8px;">
-              <span class="warn-icon">!</span>
-              <span class="msg">Payment pending. Complete downpayment to enable submission.</span>
-              <button class="close-warn" type="button" onclick="this.closest('.field-warning').remove()">×</button>
-            </div>
-            <?php $continueKey = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' ? 'reserve_resident' : 'reserve'); ?>
-            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=<?php echo $continueKey; ?><?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($refParam) ? '&ref_code=' . urlencode($refParam) : ''); ?>">Pay Downpayment</a>
-          <?php } ?>
         </div>
       </div>
     </form>

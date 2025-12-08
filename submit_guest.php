@@ -20,6 +20,7 @@ $visitor_last_name  = trim($_POST['visitor_last_name'] ?? '');
 $visitor_sex        = trim($_POST['visitor_sex'] ?? '');
 $visitor_birthdate  = trim($_POST['visitor_birthdate'] ?? '');
 $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
+$visitor_email      = trim($_POST['visitor_email'] ?? '');
 
 
 $visit_date    = trim($_POST['visit_date'] ?? '');
@@ -65,6 +66,10 @@ if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
 }
 if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {
   echo json_encode(['success' => false, 'message' => 'Please provide a valid resident email address.']);
+  exit;
+}
+if ($visitor_email === '' || !filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
+  echo json_encode(['success' => false, 'message' => 'Please provide a valid visitor email address.']);
   exit;
 }
 
@@ -154,12 +159,12 @@ if ($resident_user_id === null) {
 $stmtGF = $con->prepare("INSERT INTO guest_forms (
   resident_user_id, resident_house, resident_email,
   visitor_first_name, visitor_middle_name, visitor_last_name,
-  visitor_sex, visitor_birthdate, visitor_contact,
+  visitor_sex, visitor_birthdate, visitor_contact, visitor_email,
   valid_id_path, visit_date, visit_time, purpose, persons, wants_amenity, ref_code, approval_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
 $stmtGF->bind_param(
-  'isssssssssssssis',
+  'issssssssssssssiis',
   $resident_user_id,
   $resident_house,
   $resident_email,
@@ -169,6 +174,7 @@ $stmtGF->bind_param(
   $visitor_sex,
   $visitor_birthdate,
   $visitor_contact,
+  $visitor_email,
   $validIdPath,
   $visit_date,
   $visit_time,
@@ -183,6 +189,8 @@ if (!$stmtGF->execute()) {
   exit;
 }
 $stmtGF->close();
+
+$_SESSION['flash_notice'] = 'Resident\'s Guest request submitted — Status Code: ' . $ref_code . '. Give this Status Code to your guest so they can also check the status of their entry.';
 
 echo json_encode(['success' => true, 'ref_code' => $ref_code]);
 exit;

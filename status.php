@@ -146,6 +146,7 @@ if ($resGF && $resGF->num_rows > 0) {
         if ($resP && ($pr=$resP->fetch_assoc())) { $pay = strtolower($pr['payment_status'] ?? ''); $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null; }
         $stmtP->close();
     }
+    $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
     $resp = [
         'success' => true,
         'code' => $row['ref_code'],
@@ -159,9 +160,13 @@ if ($resGF && $resGF->num_rows > 0) {
         'email' => $email,
         'phone' => $phone,
         'address' => $address,
-        'contact' => $email,
+        'contact' => $phone,
         'sex' => $sex,
         'birthdate' => $birthdate,
+        'resident_name' => ($residentName !== '' ? $residentName : null),
+        'resident_house_number' => ($row['res_house_number'] ?? null),
+        'resident_email' => ($row['res_email'] ?? null),
+        'resident_phone' => ($row['res_phone'] ?? null),
         'purpose' => $row['purpose'] ?? '',
         'persons' => isset($row['persons']) ? intval($row['persons']) : null,
         'price' => $isAmenity && isset($row['price']) ? floatval($row['price']) : null,

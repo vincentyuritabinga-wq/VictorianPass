@@ -426,6 +426,7 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
     </div>
   </div>
   
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>
 <script>

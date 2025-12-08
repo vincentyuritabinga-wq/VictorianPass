@@ -423,6 +423,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }catch(e){}
     });
   </script>
+  <script src="js/logout-modal.js"></script>
   <script>
     // Auto-show resident nav state after login
     document.addEventListener('DOMContentLoaded', function(){
