@@ -24,7 +24,11 @@ if (empty($error)) {
     $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
     if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) { $statusVal = 'expired'; }
 
-    $fullName = trim(($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? ''));
+    $fullName = trim(implode(' ', array_filter([
+      $row['visitor_first_name'] ?? '',
+      $row['visitor_middle_name'] ?? '',
+      $row['visitor_last_name'] ?? ''
+    ], function($v){ return $v !== null && $v !== ''; })));
     if ($fullName === '') { $fullName = 'Guest'; }
     $email = $row['visitor_email'] ?? '';
     $phone = $row['visitor_contact'] ?? '';
@@ -56,6 +60,7 @@ if (empty($error)) {
       'email' => $email,
       'address' => $address,
       'amenity' => $hasReservation ? ($row['amenity'] ?? '') : '',
+      'purpose' => $row['purpose'] ?? '',
       'publish' => $publishDate,
       'expire' => $expireDate,
       'valid_window' => $validWindow,
@@ -64,6 +69,8 @@ if (empty($error)) {
       'has_reservation' => $hasReservation,
       'is_visitor' => true,
       'is_resident' => false,
+      'is_guest' => true,
+      'resident_name' => trim(((string)($row['res_first_name'] ?? '')) . ' ' . ((string)($row['res_last_name'] ?? ''))),
       'verification' => $verificationLink
     ];
   }
@@ -85,7 +92,11 @@ if (empty($error)) {
       $isResident = !empty($row['user_id']);
       $hasReservation = !empty($row['amenity']);
       if ($isVisitor) {
-        $displayName = trim(($row['ep_full_name'] ?? '') . ' ' . ($row['ep_last_name'] ?? ''));
+        $displayName = trim(implode(' ', array_filter([
+          $row['ep_full_name'] ?? '',
+          $row['ep_middle_name'] ?? '',
+          $row['ep_last_name'] ?? ''
+        ], function($v){ return $v !== null && $v !== ''; })));
         $sex = $row['ep_sex'] ?? '';
         $birthdate = $row['ep_birthdate'] ?? '';
         $contact = $row['ep_contact'] ?? '';
@@ -93,7 +104,11 @@ if (empty($error)) {
         $email = $row['ep_email'] ?? '';
         $createdAt = $row['created_at'] ?? '';
       } else {
-        $displayName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+        $displayName = trim(implode(' ', array_filter([
+          $row['first_name'] ?? '',
+          $row['middle_name'] ?? '',
+          $row['last_name'] ?? ''
+        ], function($v){ return $v !== null && $v !== ''; })));
         $sex = $row['user_sex'] ?? '';
         $birthdate = $row['user_birthdate'] ?? '';
         $contact = $row['phone'] ?? '';
@@ -130,7 +145,7 @@ if (empty($error)) {
   }
 
   if (!$data) {
-    $stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.last_name, u.email, u.phone, u.house_number, u.sex AS user_sex, u.birthdate AS user_birthdate FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
+    $stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.sex AS user_sex, u.birthdate AS user_birthdate FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
     $stmt2->bind_param('s', $code);
     $stmt2->execute();
     $res2 = $stmt2->get_result();
@@ -139,7 +154,11 @@ if (empty($error)) {
       $row = $res2->fetch_assoc();
       $statusVal = isset($row['approval_status']) && $row['approval_status'] !== '' ? $row['approval_status'] : 'pending';
       if ($statusVal === 'approved' && !empty($row['end_date']) && $row['end_date'] < $today) { $statusVal = 'expired'; }
-      $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+      $fullName = trim(implode(' ', array_filter([
+        $row['first_name'] ?? '',
+        $row['middle_name'] ?? '',
+        $row['last_name'] ?? ''
+      ], function($v){ return $v !== null && $v !== ''; })));
       $email = $row['email'] ?? '';
       $phone = $row['phone'] ?? '';
       if (preg_match('/^\+63(9\d{9})$/', $phone)) { $phone = '0' . substr($phone, 3); }
@@ -258,19 +277,21 @@ if (empty($error)) {
       </div>
       <div class="content">
         <div class="row">
-          <div class="label">QR <?php echo $data['is_resident'] ? 'Resident' : ($data['is_visitor'] ? 'Visitor' : 'Pass'); ?></div>
+          <div class="label">QR <?php echo !empty($data['is_guest']) ? "Resident's Guest" : ($data['is_resident'] ? 'Resident' : ($data['is_visitor'] ? 'Visitor' : 'Pass')); ?></div>
           <div>
             <?php if ($data['is_resident']): ?><span class="badge resident">Resident</span><?php endif; ?>
             <?php if ($data['has_reservation']): ?><span class="badge reservation">Reservation</span><?php endif; ?>
-            <?php if ($data['is_visitor']): ?><span class="badge visitor">Visitor</span><?php endif; ?>
+            <?php if ($data['is_visitor']): ?><span class="badge visitor"><?php echo !empty($data['is_guest']) ? "Resident's Guest" : 'Visitor'; ?></span><?php endif; ?>
           </div>
         </div>
         <div class="meta">
-          <p><strong>Name:</strong> <?php echo htmlspecialchars($data['name']); ?></p>
+          <?php if (!empty($data['resident_name']) && !empty($data['is_guest'])): ?><p><strong>Resident:</strong> <?php echo htmlspecialchars($data['resident_name']); ?></p><?php endif; ?>
+          <p><strong><?php echo !empty($data['is_guest']) ? "Resident's Guest Name" : "Name"; ?>:</strong> <?php echo htmlspecialchars($data['name']); ?></p>
           <?php if ($data['birthdate']): ?><p><strong>Birthdate:</strong> <?php echo htmlspecialchars($data['birthdate']); ?></p><?php endif; ?>
           <?php if (!empty($data['sex'])): ?><p><strong>Sex:</strong> <?php echo htmlspecialchars($data['sex']); ?></p><?php endif; ?>
-          
+
           <?php if (!empty($data['address'])): ?><p><strong>Address:</strong> <?php echo htmlspecialchars($data['address']); ?></p><?php endif; ?>
+          <?php if (!empty($data['purpose'])): ?><p><strong>Purpose:</strong> <?php echo htmlspecialchars($data['purpose']); ?></p><?php endif; ?>
           <?php if (!empty($data['amenity'])): ?><p><strong>Amenity/Visit:</strong> <?php echo htmlspecialchars($data['amenity']); ?></p><?php endif; ?>
         </div>
         <div class="divider"></div>

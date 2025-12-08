@@ -46,6 +46,15 @@ if (!$wants_amenity && ($visit_date === '' || $visit_time === '' || $visit_purpo
   exit;
 }
 
+// Reject past visit dates
+if (!$wants_amenity && $visit_date !== '') {
+  $today = date('Y-m-d');
+  if (strtotime($visit_date) < strtotime($today)) {
+    echo json_encode(['success' => false, 'message' => 'Visit date cannot be in the past.']);
+    exit;
+  }
+}
+
 // Additional validation: names letters-only, contacts numbers-only with +63
 $namePattern = '/^[A-Za-z\s\-\']+$/';
 if (!preg_match($namePattern, $resident_full_name)) {
@@ -164,7 +173,7 @@ $stmtGF = $con->prepare("INSERT INTO guest_forms (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
 $stmtGF->bind_param(
-  'issssssssssssssiis',
+  'isssssssssssssiis',
   $resident_user_id,
   $resident_house,
   $resident_email,

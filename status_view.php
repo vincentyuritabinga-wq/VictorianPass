@@ -358,6 +358,7 @@
       type = type || data.type || '';
       status = status || data.status || '';
       qrPath = qrPath || data.qr_path || '';
+      const isGuestEntry = String(type || data.type || '').toLowerCase() === 'guest entry';
       const useStoredQR = qrPath && !/mainpage\/qr\.png$/i.test(qrPath);
       const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
       document.getElementById("qrImage").src = useStoredQR ? qrPath : dynamicQR;
@@ -372,13 +373,14 @@
 
       document.getElementById("qrDetails").innerHTML = `
         <p style="font-weight:600;">${banner}</p>
-        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>${isGuestEntry ? "Resident's Guest Name" : "Name"}:</strong> ${name}</p>
+        ${isGuestEntry && data.resident_name ? `<p><strong>Resident:</strong> ${data.resident_name}</p>` : ''}
         ${data.birthdate ? `<p><strong>Birthdate:</strong> ${data.birthdate}</p>` : ''}
         ${data.sex ? `<p><strong>Sex:</strong> ${data.sex}</p>` : ''}
         ${data.contact ? `<p><strong>Contact:</strong> ${data.contact}</p>` : ''}
         ${data.address ? `<p><strong>Address:</strong> ${data.address}</p>` : ''}
         ${data.purpose ? `<p><strong>Purpose:</strong> ${data.purpose}</p>` : ''}
-        <p><strong>Type:</strong> ${type}</p>
+        <p><strong>Type:</strong> ${isGuestEntry ? "Resident's Guest" : type}</p>
         <p><strong>Valid Dates:</strong> ${accessWindow}</p>
         <p><strong>Full QR Card:</strong> <a href="${verificationLink}" target="_blank" style="color:#9bd08f;">Open full QR card</a></p>
       `;
@@ -400,9 +402,8 @@
       const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
 
       const yourInfo = [
-        ['Name', data.name || '-'],
+        ['Full Name', data.name || '-'],
         ['Email', data.email || '-'],
-        ['Contact', data.contact || '-'],
         ['Address', data.address || '-'],
         ['Birthdate', data.birthdate || '-'],
         ['Sex', data.sex || '-']

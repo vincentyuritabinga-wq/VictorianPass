@@ -124,7 +124,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
                                     u.email AS res_email, u.phone AS res_phone, u.house_number AS res_house_number,
                                     r.payment_status AS r_payment_status, r.price AS r_price, r.downpayment AS r_downpayment,
                                     r.amenity AS r_amenity, r.start_date AS r_start_date, r.end_date AS r_end_date,
-                                    r.start_time AS r_start_time, r.end_time AS r_end_time, r.persons AS r_persons, r.ref_code AS r_ref_code
+                                    r.persons AS r_persons, r.ref_code AS r_ref_code
                              FROM guest_forms gf
                              LEFT JOIN users u ON gf.resident_user_id = u.id
                              LEFT JOIN reservations r ON r.ref_code = gf.ref_code
@@ -209,7 +209,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
 if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_details' && isset($_GET['id'])) {
     header('Content-Type: application/json');
     $id = intval($_GET['id']);
-    $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.persons, r.purpose,
+    $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
                                     r.price, r.downpayment, r.payment_status,
                                     u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
@@ -896,8 +896,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmtGFCheck->execute();
             $resGFCheck = $stmtGFCheck->get_result();
             if ($resGFCheck && $resGFCheck->num_rows > 0) {
-                // Load details for conflict check
-                $stmtInfo = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time FROM guest_forms WHERE id = ?");
+                // Load details for conflict check (handle DBs without time columns)
+                $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
+                $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
+                $selectFields = "amenity, start_date, end_date" . (($hasGt && $hasGt->num_rows>0)?", start_time":"") . (($hasGe && $hasGe->num_rows>0)?", end_time":"");
+                $stmtInfo = $con->prepare("SELECT $selectFields FROM guest_forms WHERE id = ?");
                 $stmtInfo->bind_param('i', $reservation_id);
                 $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
                 if($resInfo && ($row=$resInfo->fetch_assoc())){ $amenity=$row['amenity']??''; $start=$row['start_date']??''; $end=$row['end_date']??''; $st=$row['start_time']??''; $et=$row['end_time']??''; }
@@ -1156,6 +1159,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($payment_status === 'verified' && !empty($refCode)) {
               $redirectPage = ($entryId) ? 'visitor_requests' : 'reservations';
               $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
+              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtGF->bind_param('s', $refCode);
+              $stmtGF->execute();
+              $resGF = $stmtGF->get_result();
+              $stmtGF->close();
+              if ($resGF && $resGF->num_rows > 0) {
+                $redirect = 'admin.php?page=resident_guest_forms&ref=' . urlencode($refCode);
+              }
             }
             header("Location: $redirect");
             exit;
@@ -1257,7 +1268,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 
 .panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:auto}
 .panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
-.table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:0.9rem;line-height:1.3;border:1px solid #e0e0e0;border-radius:10px}
+.table{width:100%;border-collapse:collapse;table-layout:auto;font-size:0.9rem;line-height:1.3;border:1px solid #e0e0e0;border-radius:10px}
   .table thead th{padding:8px 10px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee;word-break:break-word;white-space:normal;vertical-align:middle}
   .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
 .table thead th,.table td{overflow-wrap:anywhere}
@@ -1294,8 +1305,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .actions > *{display:inline-flex}
 .actions .btn{flex:0 0 auto;min-width:100px;margin-bottom:0;white-space:nowrap}
-.table td.actions{min-width:240px}
-.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center;box-sizing:border-box}
+.table td.actions{min-width:240px;overflow:visible}
+.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center;box-sizing:border-box;max-width:100%}
 .btn-view{background:#23412e;color:#fff}
 .btn-approve{background:var(--status-approved);color:#fff}
 .btn-reject{background:var(--status-rejected);color:#fff}
@@ -1351,26 +1362,27 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   }
   
   /* Section-specific table layouts */
-  .table-resident-guest thead th:nth-child(1),.table-resident-guest td:nth-child(1){width:16%;text-align:left}
-  .table-resident-guest thead th:nth-child(2),.table-resident-guest td:nth-child(2){width:10%;text-align:center}
-  .table-resident-guest thead th:nth-child(3),.table-resident-guest td:nth-child(3){width:11%;text-align:left}
-  .table-resident-guest thead th:nth-child(4),.table-resident-guest td:nth-child(4){width:10%;text-align:left}
+  .table-resident-guest thead th:nth-child(1),.table-resident-guest td:nth-child(1){width:22%;text-align:left}
+  .table-resident-guest thead th:nth-child(2),.table-resident-guest td:nth-child(2){width:14%;text-align:left}
+  .table-resident-guest thead th:nth-child(3),.table-resident-guest td:nth-child(3){width:18%;text-align:left}
+  .table-resident-guest thead th:nth-child(4),.table-resident-guest td:nth-child(4){width:12%;text-align:center}
   .table-resident-guest thead th:nth-child(5),.table-resident-guest td:nth-child(5){width:8%;text-align:center}
-  .table-resident-guest thead th:nth-child(6),.table-resident-guest td:nth-child(6){width:9%;text-align:center}
-  .table-resident-guest thead th:nth-child(7),.table-resident-guest td:nth-child(7){width:10%;text-align:center}
-  .table-resident-guest td.actions{min-width:0;overflow:visible}
-  .table-resident-guest thead th:nth-child(8),.table-resident-guest td:nth-child(8){width:20%;text-align:center}
-  .table-resident-guest .actions{flex-direction:row;align-items:center;flex-wrap:nowrap;gap:6px;justify-content:flex-start;max-width:100%}
-  .table-resident-guest .actions > *{display:inline-flex;width:auto}
-  .table-resident-guest .actions .btn{flex:0 0 110px;min-width:110px;width:auto;white-space:nowrap;word-break:normal;padding:6px 10px;min-height:28px;font-size:0.78rem}
-  .table-resident-guest .actions form.action-form{display:inline-flex !important;width:auto}
+  .table-resident-guest thead th:nth-child(6),.table-resident-guest td:nth-child(6){width:26%;text-align:center}
+  .table-resident-guest td.actions{min-width:300px;overflow:visible}
+  .table-resident-guest .actions{display:grid;grid-template-columns:minmax(180px,1fr) 160px;align-items:center;gap:8px;justify-content:flex-start;max-width:100%}
+  .table-resident-guest .actions > *{display:block;width:100%}
+  .table-resident-guest .actions .btn{min-width:0;width:100%;word-break:normal;padding:8px 12px;min-height:32px;font-size:0.8rem}
+  .table-resident-guest .actions .btn-view{grid-column:1}
+  .table-resident-guest .actions .action-approve{grid-column:2}
+  .table-resident-guest .actions .action-deny{grid-column:1}
+  .table-resident-guest .actions form.action-form{display:block !important;width:100%}
 
   .table-reservations thead th:nth-child(1),.table-reservations td:nth-child(1){width:22%;text-align:left}
   .table-reservations thead th:nth-child(2),.table-reservations td:nth-child(2){width:12%;text-align:center}
   .table-reservations thead th:nth-child(3),.table-reservations td:nth-child(3){width:14%;text-align:left}
   .table-reservations thead th:nth-child(4),.table-reservations td:nth-child(4){width:18%;text-align:left}
   .table-reservations thead th:nth-child(5),.table-reservations td:nth-child(5){width:10%;text-align:center}
-  .table-reservations thead th:nth-child(6),.table-reservations td:nth-child(6){width:28%;text-align:center}
+  .table-reservations thead th:nth-child(6),.table-reservations td:nth-child(6){width:24%;text-align:center}
 
   .table-requests thead th:nth-child(1),.table-requests td:nth-child(1){width:22%;text-align:left}
   .table-requests thead th:nth-child(2),.table-requests td:nth-child(2){width:12%;text-align:center}
@@ -1658,10 +1670,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         <thead>
           <tr>
             <th>Name</th>
-            <th>House #</th>
             <th>Amenity</th>
             <th>Purpose of Visit</th>
-            <th>Persons</th>
             <th>Status Code</th>
             <th>Request Status</th>
             <th>Actions</th>
@@ -1677,11 +1687,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='guest_form'>";
                   $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
-                  $houseNo = !empty($req['res_house_number']) ? htmlspecialchars($req['res_house_number']) : '<span class=\'muted\'>-</span>';
-                  echo "<td>" . $houseNo . "</td>";
                   echo "<td>" . (!empty($req['amenity']) ? htmlspecialchars($req['amenity']) : "") . "</td>";
                   echo "<td>" . (!empty($req['purpose']) ? htmlspecialchars($req['purpose']) : "") . "</td>";
-                  echo "<td>" . (!empty($req['persons']) ? intval($req['persons']) : '-') . "</td>";
                   $approval_status = $req['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
                   echo "<td>" . htmlspecialchars($req['ref_code'] ?? '') . "</td>";
@@ -1698,12 +1705,12 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\">View More Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = ($isAmenity && $payStatus !== 'verified');
-                      echo "<form method='post' class='action-form'>";
+                      echo "<form method='post' class='action-form action-approve'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='approve_request'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
-                      echo "<form method='post' class='action-form'>";
+                      echo "<form method='post' class='action-form action-deny'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
@@ -1724,7 +1731,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               }
           }
           if (!$hasResidentRequests) {
-              echo "<tr><td colspan='8' style='text-align:center;'>No resident requests found</td></tr>";
+              echo "<tr><td colspan='6' style='text-align:center;'>No resident requests found</td></tr>";
           }
           ?>
         </tbody>
@@ -1886,7 +1893,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     </thead>
     <tbody>
       <?php
-        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.payment_status, r.receipt_path, r.entry_pass_id,
+        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
                                        r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
                                        ep.full_name, ep.middle_name, ep.last_name,
                                        u.first_name AS res_first_name, u.last_name AS res_last_name,

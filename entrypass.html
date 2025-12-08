@@ -28,7 +28,8 @@
     .upload-box { border:2px dashed #999; padding:14px; text-align:center; margin-bottom:14px; border-radius:8px; background:#f9f9f9; font-size:0.9rem; font-weight:500; cursor:pointer; display:block; }
     .upload-box img { width:60px; margin-bottom:6px; }
     .upload-box:hover { transition:all 0.3s ease; background:#f0f0f0; transform:scale(1.02); }
-    .upload-box.error { border-color:#c0392b; background:#ffecec; }
+    .upload-box.error { border-color:#c0392b; background:#ffecec; animation: shake 0.32s ease-in-out; }
+    @keyframes shake { 0%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} 100%{transform:translateX(0)} }
     .form-actions { display:flex; justify-content:space-between; gap:12px; margin-top:10px; }
     .btn-back, .btn-next { display:block; text-align:center; padding:12px; border-radius:8px; font-weight:600; text-decoration:none; transition:all 0.2s; flex:1; }
     .btn-back { background:#ddd; color:#222; }
@@ -89,7 +90,7 @@
       </div>
 
       <input type="text" id="first_name" name="first_name" placeholder="First Name*" required>
-      <input type="text" id="middle_name" name="middle_name" placeholder="Middle Name">
+      <input type="text" id="middle_name" name="middle_name" placeholder="Middle Name (Optional)">
       <input type="text" id="last_name" name="last_name" placeholder="Last Name*" required>
       <input type="text" id="address" name="address" placeholder="Address*" required>
       <input type="email" id="email" name="email" placeholder="Email*" required>
@@ -243,7 +244,7 @@
 
       entryForm.addEventListener('submit', function(e){
         var valid = true;
-        if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', 'Please upload a Valid ID.'); if(uploadBoxEl){ uploadBoxEl.classList.add('error'); uploadBoxEl.scrollIntoView({behavior:'smooth',block:'center'}); } e.preventDefault(); return; }
+        if (idInput && !(idInput.files && idInput.files[0])){ setWarning('valid_id', "Please upload your Valid ID before proceeding."); if(uploadBoxEl){ uploadBoxEl.classList.add('error'); uploadBoxEl.scrollIntoView({behavior:'smooth',block:'center'}); } e.preventDefault(); return; }
         [first, last, address].forEach(function(inp){
           if (!inp) return;
           if (!inp.value.trim()){ setWarning(inp.id, 'This field is required.'); valid = false; }

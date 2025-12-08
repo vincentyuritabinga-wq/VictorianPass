@@ -26,7 +26,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($row['role'] === "admin") {
                     echo "<script>window.location.href='admin.php';</script>";
                 } elseif ($row['role'] === "guard") {
-                    echo "<script>window.location.href='guard.html';</script>";
+                    $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
+                    $stmtLog = $con->prepare("INSERT INTO login_history (staff_id) VALUES (?)");
+                    $stmtLog->bind_param('i', $_SESSION['staff_id']);
+                    $stmtLog->execute();
+                    $_SESSION['login_history_id'] = $stmtLog->insert_id;
+                    $stmtLog->close();
+                    $local = explode('@', $_SESSION['email'])[0] ?? '';
+                    $s = $local;
+                    if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+                    if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+                    $s = preg_replace('/[^a-zA-Z]/', '', $s);
+                    $s = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+                    $_SESSION['guard_surname'] = $s;
+                    echo "<script>window.location.href='guard.php';</script>";
                 }
                 exit();
             } else {

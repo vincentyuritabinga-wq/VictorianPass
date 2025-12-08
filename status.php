@@ -98,7 +98,7 @@ if ($code === '') {
 
 // First, try to retrieve from guest_forms (new guest entry flow)
 $stmtGF = $con->prepare("SELECT gf.*, 
-                                u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name,
+                                u.house_number AS res_house_number, u.first_name AS res_first_name, u.middle_name AS res_middle_name, u.last_name AS res_last_name,
                                 u.email AS res_email, u.phone AS res_phone
                          FROM guest_forms gf
                          LEFT JOIN users u ON gf.resident_user_id = u.id
@@ -125,7 +125,16 @@ if ($resGF && $resGF->num_rows > 0) {
         default: $statusMessage = ucfirst($statusVal);
     }
 
-    $fullName = trim(($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? ''));
+    $fullName = '';
+    if (!empty($row['full_name'])) {
+        $fullName = trim($row['full_name']);
+    } else {
+        $fullName = trim(implode(' ', array_filter([
+            $row['visitor_first_name'] ?? '',
+            $row['visitor_middle_name'] ?? '',
+            $row['visitor_last_name'] ?? ''
+        ], function($v){ return $v !== null && $v !== ''; })));    
+    }
     if ($fullName === '') $fullName = 'Guest';
     $email = $row['visitor_email'] ?? '';
     $phone = $row['visitor_contact'] ?? '';
@@ -185,7 +194,7 @@ if ($resGF && $resGF->num_rows > 0) {
 $stmt = $con->prepare("SELECT r.*, 
                              e.full_name AS ep_full_name, e.email AS ep_email, e.contact AS ep_phone, e.address AS ep_address,
                              e.sex AS ep_sex, e.birthdate AS ep_birthdate,
-                             u.first_name, u.last_name, u.email, u.phone, u.house_number,
+                             u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number,
                              u.sex AS user_sex, u.birthdate AS user_birthdate
                        FROM reservations r
                        LEFT JOIN entry_passes e ON r.entry_pass_id = e.id
@@ -239,8 +248,12 @@ if ($result && $result->num_rows > 0) {
     $fullName = '';
     if (!empty($row['ep_full_name'])) {
         $fullName = $row['ep_full_name'];
-    } elseif (!empty($row['first_name']) || !empty($row['last_name'])) {
-        $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+    } elseif (!empty($row['first_name']) || !empty($row['last_name']) || !empty($row['middle_name'])) {
+        $fullName = trim(implode(' ', array_filter([
+            $row['first_name'] ?? '',
+            $row['middle_name'] ?? '',
+            $row['last_name'] ?? ''
+        ], function($v){ return $v !== null && $v !== ''; }))); 
     } else {
         $fullName = 'Guest';
     }
@@ -283,7 +296,7 @@ if ($result && $result->num_rows > 0) {
 
 // Not found
 // Fallback: check resident_reservations by ref_code
-$stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.last_name, u.email, u.phone, u.house_number, u.sex AS user_sex, u.birthdate AS user_birthdate
+$stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.sex AS user_sex, u.birthdate AS user_birthdate
                         FROM resident_reservations rr
                         LEFT JOIN users u ON rr.user_id = u.id
                         WHERE rr.ref_code = ?");
@@ -308,7 +321,11 @@ if ($res2 && $res2->num_rows > 0) {
         default: $statusMessage = ucfirst($statusVal);
     }
 
-    $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+    $fullName = trim(implode(' ', array_filter([
+        $row['first_name'] ?? '',
+        $row['middle_name'] ?? '',
+        $row['last_name'] ?? ''
+    ], function($v){ return $v !== null && $v !== ''; }))); 
     $email = $row['email'] ?? '';
     $phone = $row['phone'] ?? '';
     // Normalize phone to 09 format if stored as +63

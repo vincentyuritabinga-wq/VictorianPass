@@ -152,7 +152,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 
     <h4 style="margin:20px 0 5px;color:#23412e;">Visit Details</h4>
     <div class="form-row">
-      <input type="date" name="visit_date" placeholder="Date of Visit*" required>
+      <input type="date" name="visit_date" placeholder="Date of Visit*" required min="<?php echo date('Y-m-d'); ?>">
       <input type="time" name="visit_time" placeholder="Expected Time*" required>
     </div>
     <textarea rows="3" name="visit_purpose" placeholder="Purpose of Visit*" required></textarea>
@@ -185,7 +185,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       since they don’t have their own VictorianPass account.</small></p>
     <p><small><em>You can still view and manage the request in your resident dashboard.</em></small></p>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
-      <button class="close-btn" onclick="closeModal()">Close</button>
+      <button type="button" class="close-btn" onclick="window.location.href='profileresident.php'">Go to Resident Profile</button>
     </div>
   </div>
 </div>

@@ -357,7 +357,7 @@ body {
     <p>
       <small><em>You can still view and manage the request in your resident dashboard.</em></small>
     </p>
-    <button class="close-btn" onclick="closeModal()">OK</button>
+    <button class="close-btn" onclick="window.location.href='profileresident.php'">Go to Resident Profile</button>
   </div>
 </div>
 <script>
@@ -370,6 +370,14 @@ const birthdateEl = document.getElementById('birthdate');
 if (birthdateEl) {
   var d=new Date(); d.setDate(d.getDate()-1);
   birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
+}
+
+// Visit date must not be in the past (min = today)
+const visitDateEl = document.querySelector('input[name="visit_date"]');
+if (visitDateEl) {
+  var today = new Date();
+  var todayStr = today.toISOString().split('T')[0];
+  visitDateEl.setAttribute('min', todayStr);
 }
 
 reserveCheck.addEventListener('change',()=>{

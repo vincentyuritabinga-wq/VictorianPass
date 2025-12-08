@@ -2,6 +2,15 @@
 session_start();
 $confirmed = isset($_GET['confirm']) && $_GET['confirm'] === 'yes';
 if ($confirmed) {
+  require_once 'connect.php';
+  $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
+  $loginId = intval($_SESSION['login_history_id'] ?? 0);
+  if ($loginId > 0) {
+    $stmt = $con->prepare('UPDATE login_history SET logout_time = NOW() WHERE id = ? AND logout_time IS NULL');
+    $stmt->bind_param('i', $loginId);
+    $stmt->execute();
+    $stmt->close();
+  }
   $_SESSION = [];
   if (ini_get('session.use_cookies')) {
     $params = session_get_cookie_params();

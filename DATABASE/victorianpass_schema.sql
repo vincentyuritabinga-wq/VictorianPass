@@ -3,7 +3,6 @@
 
 CREATE DATABASE IF NOT EXISTS victorianpass_db;
 USE victorianpass_db;
-
 -- =====================================================
 -- STAFF TABLE (Admin and Guard accounts)
 -- =====================================================
@@ -18,7 +17,8 @@ CREATE TABLE IF NOT EXISTS staff (
 -- Pre-registered admin and guard accounts (change passwords after install)
 INSERT IGNORE INTO staff (email, password, role) VALUES
 ('admin@victorianpass.com', 'admin12345', 'admin'),
-('guard@victorianpass.com', 'guard12345', 'guard');
+('guard@victorianpass.com', 'guard12345', 'guard'),
+('guard_Domingogar@victorianpass.com', 'guard12345', 'guard');
 
 -- =====================================================
 -- HOUSES TABLE (Pre-registered house numbers)

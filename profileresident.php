@@ -242,8 +242,8 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
   .qr-container { text-align: left; padding-top: 20px; }
   .qr-container img { width: 200px; height: 200px; object-fit: contain; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
   .qr-container p { font-size: 14px; margin: 5px 0; color: #23412e; }
-  .flash-notice { background:#305c3c; color:#fff; padding:10px 12px; border-radius:10px; margin:10px 20px; box-shadow:0 4px 10px rgba(0,0,0,0.1); font-weight:600 }
-  .flash-close { margin-left:10px; background:#fff; color:#305c3c; border:1px solid rgba(255,255,255,0.3); padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer }
+  .flash-notice { background:#e8f5e9; color:#23412e; padding:10px 12px; border-left:4px solid #23412e; border-radius:10px; margin:10px 20px; box-shadow:0 4px 10px rgba(0,0,0,0.08); font-weight:600 }
+  .flash-close { margin-left:10px; background:#23412e; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer }
 
   /* RESPONSIVE */
   @media (max-width: 992px) { .main { grid-template-columns: 1fr; } }

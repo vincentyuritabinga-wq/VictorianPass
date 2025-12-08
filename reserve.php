@@ -292,45 +292,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
           }
           $newRef = $ref_code !== '' ? $ref_code : generateUniqueRefCode($con);
-          try {
-            if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-            $dpIns = ($downpayment !== null ? $downpayment : 0.0);
-            $uidIns = ($user_id && intval($user_id) > 0) ? intval($user_id) : NULL;
-            $epIns = ($entry_pass_id && intval($entry_pass_id) > 0) ? intval($entry_pass_id) : NULL;
-
-            $existsStmt = $con->prepare("SELECT id FROM reservations WHERE ref_code = ? LIMIT 1");
-            $existsStmt->bind_param('s', $newRef);
-            $existsStmt->execute();
-            $existsRes = $existsStmt->get_result();
-            $existsStmt->close();
-
-            if ($existsRes && $existsRes->num_rows > 0) {
-              $upd = $con->prepare("UPDATE reservations SET amenity = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?, persons = ?, price = ?, downpayment = ?, user_id = ?, entry_pass_id = ?, purpose = ?, account_type = COALESCE(account_type, ?), approval_status = 'pending' WHERE ref_code = ?");
-              $upd->bind_param('sssssiddiisss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $acct, $newRef);
-              $upd->execute();
-              $upd->close();
-              if ($paidOk) {
-                $psu = $con->prepare("UPDATE reservations SET payment_status = 'verified' WHERE ref_code = ?");
-                $psu->bind_param('s', $newRef);
-                $psu->execute();
-                $psu->close();
-              } else {
-                $psu = $con->prepare("UPDATE reservations SET payment_status = 'pending' WHERE ref_code = ?");
-                $psu->bind_param('s', $newRef);
-                $psu->execute();
-                $psu->close();
-              }
-            } else {
-              $payStatus = $paidOk ? 'verified' : 'pending';
-              $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, user_id, entry_pass_id, purpose, payment_status, approval_status, account_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-              $ins->bind_param('ssssssiddiisss', $newRef, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $dpIns, $uidIns, $epIns, $purpose, $payStatus, $acct);
-              $ins->execute();
-              $ins->close();
-            }
-          } catch (Throwable $e) {
-            error_log('reserve.php upsert error: ' . $e->getMessage());
-            $errorMsg = 'Server error. Please try again later.';
-          }
           if (!$errorMsg) {
             // Store reservation info in session for confirmation/debugging if needed
             $_SESSION['pending_reservation'] = [
