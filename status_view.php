@@ -159,6 +159,10 @@
       <img src="images/logo.svg" alt="VictorianPass Logo" />
       <button onclick="goBack()" class="qr-btn">Go Back</button>
     </div>
+    <div id="paymentNotice" style="display:none; margin:10px 0; padding:10px; border:1px solid #e74c3c; border-radius:8px; background:#fdecea; color:#a94442;">
+      <div id="paymentNoticeText" style="margin-bottom:8px; font-weight:600;">Payment receipt rejected. Please pay the sufficient amount and re-upload your receipt.</div>
+      <a id="paymentNoticeBtn" class="qr-btn" href="#">Go to Downpayment</a>
+    </div>
     <div class="table-wrap">
       <table class="status-table">
         <thead>
@@ -276,6 +280,21 @@
               setTimeout(() => {
                 statusCard.style.display = "none";
                 dashboard.style.display = "block";
+                try{
+                  const payStatus = String(data.payment_status||'').toLowerCase();
+                  if(payStatus === 'rejected'){
+                    const btn = document.getElementById('paymentNoticeBtn');
+                    const box = document.getElementById('paymentNotice');
+                    if(btn && box){
+                      const isVisitor = !!(data.entry_pass_id && Number(data.entry_pass_id) > 0);
+                      const cont = isVisitor ? 'reserve' : 'reserve_resident';
+                      const params = new URLSearchParams({continue: cont, ref_code: (data.code||'')});
+                      if(isVisitor){ params.set('entry_pass_id', String(data.entry_pass_id)); }
+                      btn.href = 'downpayment.php?' + params.toString();
+                      box.style.display = 'block';
+                    }
+                  }
+                }catch(_){ }
                 const dateDisplay = (data.start_date && data.end_date)
                   ? `${data.start_date} → ${data.end_date}`
                   : (data.start_date && data.expires_at)

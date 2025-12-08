@@ -137,6 +137,15 @@ if ($resGF && $resGF->num_rows > 0) {
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
 
     $isAmenity = !empty($row['amenity']);
+    // Pull payment_status and entry_pass_id from reservations for this ref_code
+    $pay = null; $epid = null;
+    if ($con instanceof mysqli) {
+        $stmtP = $con->prepare("SELECT payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+        $stmtP->bind_param('s', $row['ref_code']);
+        $stmtP->execute(); $resP = $stmtP->get_result();
+        if ($resP && ($pr=$resP->fetch_assoc())) { $pay = strtolower($pr['payment_status'] ?? ''); $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null; }
+        $stmtP->close();
+    }
     $resp = [
         'success' => true,
         'code' => $row['ref_code'],
@@ -145,6 +154,8 @@ if ($resGF && $resGF->num_rows > 0) {
         'status' => $statusVal,
         'qr_path' => (!empty($row['qr_path']) ? $row['qr_path'] : 'images/mainpage/qr.png'),
         'message' => $statusMessage,
+        'payment_status' => $pay,
+        'entry_pass_id' => $epid,
         'email' => $email,
         'phone' => $phone,
         'address' => $address,
@@ -244,6 +255,8 @@ if ($result && $result->num_rows > 0) {
         'status' => $statusVal,
         'qr_path' => (!empty($row['qr_path']) ? $row['qr_path'] : 'images/mainpage/qr.png'),
         'message' => $statusMessage,
+        'payment_status' => isset($row['payment_status']) ? strtolower($row['payment_status']) : null,
+        'entry_pass_id' => isset($row['entry_pass_id']) ? intval($row['entry_pass_id']) : null,
         'email' => $email,
         'phone' => $phone,
         'address' => $address,
@@ -299,6 +312,15 @@ if ($res2 && $res2->num_rows > 0) {
     $sex = $row['user_sex'] ?? '';
     $birthRaw = $row['user_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
+    $pay = null;
+    if ($con instanceof mysqli) {
+        $stmtPay = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+        $stmtPay->bind_param('s', $row['ref_code']);
+        $stmtPay->execute();
+        $resPay = $stmtPay->get_result();
+        if ($resPay && ($rwP = $resPay->fetch_assoc())) { $pay = strtolower($rwP['payment_status'] ?? ''); }
+        $stmtPay->close();
+    }
 
     echo json_encode([
         'success' => true,
@@ -308,6 +330,8 @@ if ($res2 && $res2->num_rows > 0) {
         'status' => $statusVal,
         'qr_path' => 'images/mainpage/qr.png',
         'message' => $statusMessage,
+        'payment_status' => $pay,
+        'entry_pass_id' => null,
         'email' => $email,
         'phone' => $phone,
         'address' => $address,

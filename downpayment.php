@@ -54,6 +54,29 @@ $ref_code = isset($_SESSION['dp_ref_code']) ? $_SESSION['dp_ref_code'] : '';
 $user_id = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
 $pending = isset($_SESSION['pending_reservation']) ? $_SESSION['pending_reservation'] : null;
 
+if ((!is_array($pending) || empty($pending)) && $ref_code !== '' && ($con instanceof mysqli)) {
+    $stmtC = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+    $stmtC->bind_param('s', $ref_code);
+    $stmtC->execute();
+    $resC = $stmtC->get_result();
+    if ($resC && ($rwC = $resC->fetch_assoc())) {
+        $pending = [
+            'amenity' => $rwC['amenity'] ?? '',
+            'start_date' => $rwC['start_date'] ?? null,
+            'end_date' => $rwC['end_date'] ?? null,
+            'start_time' => $rwC['start_time'] ?? null,
+            'end_time' => $rwC['end_time'] ?? null,
+            'persons' => isset($rwC['persons']) ? intval($rwC['persons']) : null,
+            'price' => isset($rwC['price']) ? floatval($rwC['price']) : null,
+            'downpayment' => isset($rwC['downpayment']) ? floatval($rwC['downpayment']) : null,
+            'entry_pass_id' => isset($rwC['entry_pass_id']) ? intval($rwC['entry_pass_id']) : null
+        ];
+        $_SESSION['pending_reservation'] = $pending;
+        if ($entry_pass_id <= 0 && !empty($pending['entry_pass_id'])) { $entry_pass_id = intval($pending['entry_pass_id']); }
+    }
+    $stmtC->close();
+}
+
 // HANDLE FORM SUBMISSION
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
@@ -236,6 +259,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .upload-preview{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:#162216;border:1px solid #325a37;border-radius:10px;padding:12px}
     .upload-preview img{max-width:100%;height:auto;border-radius:8px}
     .upload-preview .file-name{color:#e7fff1;font-weight:600}
+    .nonrefundable{background:#ffe6e6;color:#b30000;border:1px solid #e5a3a3;border-radius:10px;padding:8px 10px;font-weight:700;margin-top:8px}
   </style>
   </head>
 <body>
@@ -258,7 +282,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       <p class="meta">Use the GCash details shown to pay your partial payment. Upload the receipt and click Confirm.</p>
       <div class="qr"><img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="GCash Downpayment" style="max-width:280px;border-radius:8px;border:1px solid rgba(255,255,255,.2)" onerror="this.style.display='none'"></div>
       <div class="pay-callout">You will pay now:<span class="num">₱<?php echo number_format($downpayment, 2); ?></span></div>
-      <p class="meta">Note: This downpayment is non-refundable.</p>
+      <p class="nonrefundable">Downpayment is non-refundable.</p>
       <div class="break">
         <div class="row"><span class="label">Amenity</span><span class="amount"><?php echo htmlspecialchars($amenity ?: 'N/A'); ?></span></div>
         <?php

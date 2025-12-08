@@ -33,6 +33,7 @@ body { margin: 0; font-family: 'Poppins', sans-serif; background: linear-gradien
 .calendar td.active { background: linear-gradient(135deg, #23412e 0%, #345c40 100%); color: #fff; font-weight: 600; box-shadow: 0 4px 12px rgba(35,65,46,0.4); }
 .calendar td.today { border: 2px solid #23412e; border-radius: 8px; font-weight: 600; background: rgba(35,65,46,0.1); }
 .calendar td.disabled { color: #999; cursor: not-allowed; background: #f7f7f7; opacity: 0.6; }
+.calendar td.fully-booked { background: #ffe6e6; color: #b30000; border: 1px solid #e5a3a3; opacity: 1; }
 .calendar td.partly { background: linear-gradient(135deg, rgba(245,242,234,1) 50%, rgba(247,247,247,1) 50%); border: 1px dashed #b08900; }
 .calendar td.partly:hover { background: #fff4cc; }
 .section-header{display:flex;justify-content:space-between;align-items:flex-end;margin:0 0 10px}
@@ -126,6 +127,8 @@ button:focus-visible,input:focus-visible{outline:2px solid #23412e; outline-offs
 .slot-btn.selected{background:#23412e; color:#fff; border-color:#23412e}
 .slot-btn.unavailable{opacity:.5; cursor:not-allowed; background:#f5f5f5; color:#888}
 .slot-btn.available{border:2px solid #23412e; background:#f0faf2; color:#23412e; font-weight:700; box-shadow:0 6px 16px rgba(35,65,46,.16)}
+
+.nonrefundable{ background:#ffe6e6; color:#b30000; border:1px solid #e5a3a3; border-radius:8px; padding:8px 10px; font-weight:700; margin-top:8px; display:block }
 
 .avail-notice{ margin-top:8px; padding:8px 10px; border-radius:8px; font-size:.92rem; font-weight:600; display:none }
 .avail-notice.notice-available{ background:#f0faf2; color:#23412e; border:1px solid #cfe6d4 }

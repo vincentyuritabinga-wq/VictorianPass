@@ -126,7 +126,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   
 </head>
 <body>
-  <?php if (!empty($flash)) { ?>
+  <?php if (!empty($flash) && !(isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident')) { ?>
     <div class="flash-overlay" id="flashNotice">
       <div class="flash-modal">
         <div class="title">!!!</div>
@@ -226,7 +226,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="user-type-center">
         <div class="user-type-dropdown" id="userTypeDropdown">
           <button class="dropdown-btn" id="dropdownBtn">
-            <span>Select User Type</span>
+            <span>Pick User Role</span>
             <span class="dropdown-arrow">▼</span>
           </button>
           <div class="dropdown-content" id="dropdownContent">
@@ -239,10 +239,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         </div>
       </div>
-      <p class="tagline">
-        Every home holds a story.<br>
-        start yours in a place worth remembering.
-      </p>
+      <p class="tagline">Every home holds a story, start yours in a place worth remembering.</p>
 
       
 

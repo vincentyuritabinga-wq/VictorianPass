@@ -125,6 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Selected dates must be today or later.';
     } else if ($amenity === 'Pool' && $persons < 1) {
       $errorMsg = 'Persons must be at least 1.';
+    } else if ($sdObj && $edObj) {
+      $diffDays = $sdObj->diff($edObj)->days;
+      if ($diffDays > 6) { $errorMsg = 'Date range cannot exceed 7 days.'; }
     } else if ($stObj && $etObj) {
       $minH = ($amenity === 'Clubhouse') ? 9 : 9;
       $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
@@ -333,8 +336,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $errorMsg = 'This reservation has already been submitted.';
             } else {
               $_SESSION['reservation_submitted'] = $newRef;
-              // Always redirect to downpayment page with entry_pass_id and ref_code
-              $redir = 'downpayment.php?continue=reserve';
+              // Redirect to downpayment page with role-aware flow and ref_code
+              $redir = 'downpayment.php?continue=' . (($acct === 'resident') ? 'reserve_resident' : 'reserve');
               if (!empty($entry_pass_id)) { $redir .= '&entry_pass_id=' . urlencode((string)$entry_pass_id); }
               if (!empty($newRef)) { $redir .= '&ref_code=' . urlencode($newRef); }
               header('Location: ' . $redir);
@@ -390,7 +393,11 @@ $stmtGate = $con->prepare("SELECT payment_status, amenity, start_date FROM reser
   if ($resGate && ($rw = $resGate->fetch_assoc())) {
     if (!empty($rw['amenity']) && !empty($rw['start_date'])) {
       $_SESSION['flash_notice'] = 'A reservation already exists for this status code. Please wait for email notification.';
-      header('Location: mainpage.php');
+      if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
+        header('Location: profileresident.php');
+      } else {
+        header('Location: mainpage.php');
+      }
       exit;
     }
     $ps = strtolower(trim($rw['payment_status'] ?? ''));
@@ -631,6 +638,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
           <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
           <small class="dp-info" style="display:block;color:#666;margin-top:6px;">A partial downpayment is required to reserve your slot. You can pay the partial amount online now and settle the remaining balance onsite.</small>
+          <small class="nonrefundable">Downpayment is non-refundable.</small>
         </div>
         <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
@@ -643,7 +651,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
               <span class="msg">Payment pending. Complete downpayment to enable submission.</span>
               <button class="close-warn" type="button" onclick="this.closest('.field-warning').remove()">×</button>
             </div>
-            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=reserve<?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($refParam) ? '&ref_code=' . urlencode($refParam) : ''); ?>">Pay Downpayment</a>
+            <?php $continueKey = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' ? 'reserve_resident' : 'reserve'); ?>
+            <a class="btn-main" style="margin-top:8px;" href="downpayment.php?continue=<?php echo $continueKey; ?><?php echo (!empty($_GET['entry_pass_id']) ? '&entry_pass_id=' . urlencode($_GET['entry_pass_id']) : ''); ?><?php echo (!empty($refParam) ? '&ref_code=' . urlencode($refParam) : ''); ?>">Pay Downpayment</a>
           <?php } ?>
         </div>
       </div>
@@ -761,7 +770,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
           }
         });
-        if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.title='Fully Booked — no time slots available for this date.'; }
+        if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.classList.add('fully-booked'); cell.title='Fully Booked — no time slots available for this date.'; }
         else if(reservedHours>0){ cell.classList.add('partly'); cell.title='Partially Booked — some time slots are unavailable.'; }
         else { cell.classList.add('available'); cell.title='Fully Available — all time slots are open.'; }
       }
@@ -769,7 +778,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   function handleDateClick(cell,dateString){
-    if(cell.classList.contains('disabled')){ if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } return; }
+    if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
     const single = document.getElementById('singleDayToggle')?.checked;
@@ -785,6 +794,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     function setEnd(ds){
       const sVal=document.getElementById('startDateInput').value||'';
       if(sVal && ds < sVal){ showDateError('End date cannot be earlier than start date.'); return false; }
+      if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); return false; } }
       selectedEnd=ds;
       document.getElementById('endDate').textContent=selectedEnd;
       document.getElementById('endDateInput').value=selectedEnd;
@@ -1260,15 +1270,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   }
 
   function isDateBooked(ds){ try { return bookedDates && bookedDates.has(ds); } catch(e){ return false; } }
-  function showStartDateError(msg){ const el=document.getElementById('startDateError'); if(el){ el.style.display = msg? 'block':'none'; el.textContent = msg || ''; } }
-  function showDateError(msg){ const el=document.getElementById('dateError'); if(el){ el.style.display = msg? 'block':'none'; el.textContent = msg || ''; } }
-  function showTimeError(msg){ const el=document.getElementById('timeError'); if(el){ el.style.display = msg? 'block':'none'; el.textContent = msg || ''; } }
+  function showStartDateError(msg){ const el=document.getElementById('startDateError'); if(!el) return; if(msg){ el.style.display='block'; let m=el.querySelector('.msg'); if(!m){ m=document.createElement('span'); m.className='msg'; el.appendChild(m);} m.textContent=msg; let close=el.querySelector('.close-warn'); if(!close){ close=document.createElement('button'); close.className='close-warn'; close.type='button'; close.textContent='\u00d7'; close.style.marginLeft='8px'; close.style.background='transparent'; close.style.border='0'; close.style.cursor='pointer'; close.style.color='#888'; el.appendChild(close); close.addEventListener('click',function(){ el.style.display='none'; m.textContent=''; }); } } else { el.style.display='none'; const m2=el.querySelector('.msg'); if(m2){ m2.textContent=''; } } }
+  function showDateError(msg){ const el=document.getElementById('dateError'); if(!el) return; if(msg){ el.style.display='block'; let m=el.querySelector('.msg'); if(!m){ m=document.createElement('span'); m.className='msg'; el.appendChild(m);} m.textContent=msg; let close=el.querySelector('.close-warn'); if(!close){ close=document.createElement('button'); close.className='close-warn'; close.type='button'; close.textContent='\u00d7'; close.style.marginLeft='8px'; close.style.background='transparent'; close.style.border='0'; close.style.cursor='pointer'; close.style.color='#888'; el.appendChild(close); close.addEventListener('click',function(){ el.style.display='none'; m.textContent=''; }); } } else { el.style.display='none'; const m2=el.querySelector('.msg'); if(m2){ m2.textContent=''; } } }
+  function showTimeError(msg){ const el=document.getElementById('timeError'); if(!el) return; if(msg){ el.style.display='block'; let m=el.querySelector('.msg'); if(!m){ m=document.createElement('span'); m.className='msg'; el.appendChild(m);} m.textContent=msg; let close=el.querySelector('.close-warn'); if(!close){ close=document.createElement('button'); close.className='close-warn'; close.type='button'; close.textContent='\u00d7'; close.style.marginLeft='8px'; close.style.background='transparent'; close.style.border='0'; close.style.cursor='pointer'; close.style.color='#888'; el.appendChild(close); close.addEventListener('click',function(){ el.style.display='none'; m.textContent=''; }); } } else { el.style.display='none'; const m2=el.querySelector('.msg'); if(m2){ m2.textContent=''; } } }
   function validateDates(){
     const s=document.getElementById('startDateInput').value;
     const e=document.getElementById('endDateInput').value;
     if(!s||!e){ showStartDateError(''); showDateError(''); return false; }
     if(e < s){ showDateError('End date cannot be earlier than start date.'); showStartDateError(''); return false; }
     if(s > e){ showStartDateError('Start date cannot be later than end date.'); showDateError(''); return false; }
+    const sD=new Date(s), eD=new Date(e); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); return false; }
     const st=document.getElementById('startTimeInput').value;
     const et=document.getElementById('endTimeInput').value;
     if(s===e){
@@ -1308,7 +1319,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     if(!amen){ if(force||isDirty('amenityField')) setFieldWarning('amenityField','Please select an amenity.'); } else { setFieldWarning('amenityField',''); }
     if(!s){ if(force||isDirty('startDateInput')) showStartDateError('Start date is required.'); } else { showStartDateError(''); }
-    if(!eD){ if(force||isDirty('endDateInput')) showDateError('End date is required.'); } else { showDateError(''); }
+    if(!eD){ if(force||isDirty('endDateInput')) showDateError('End date is required.'); }
+    else {
+      const sDVal=s; const eDVal=eD; if(sDVal){ const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); } else { showDateError(''); } } else { showDateError(''); }
+    }
     if(!st){ if(force||isDirty('startTimeInput')) setFieldWarning('startTimeInput','Start time is required.'); } else { setFieldWarning('startTimeInput',''); }
     // End time is auto-computed from start time + hours; no manual warning
     if(st && !et){ computeEndTimeFromHours(); }
@@ -1420,6 +1434,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const persons=parseInt(document.getElementById('personsInput').value||'0');
       const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
       showIncompleteWarnings(true);
+      if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ e.preventDefault(); showDateError('Date range cannot exceed 7 days.'); return false; } }
       if(s && eD && s===eD && st && et){
         const [sh,sm]=(st||'').split(':');
         const [eh,em]=(et||'').split(':');
@@ -1530,6 +1545,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!s||!eD) allowed=false;
     if(!st||!et) allowed=false;
     if(s&&eD && eD < s) allowed=false;
+    if(s&&eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6) allowed=false; }
     if(st&&et){ const [sh,sm]=(st||'').split(':'), [eh,em]=(et||'').split(':'); const sMin=(parseInt(sh||'0',10)*60)+parseInt(sm||'0',10); const eMin=(parseInt(eh||'0',10)*60)+parseInt(em||'0',10); if(eMin<=sMin) allowed=false; }
     if(isHourBasedAmenity(amenVal)){ if(hours<1) allowed=false; }
     else if(amenVal==='Pool'){ if(hours<1 || persons<1) allowed=false; }

@@ -122,7 +122,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
     $stmtGF = $con->prepare("SELECT gf.*, 
                                     u.first_name AS res_first_name, u.middle_name AS res_middle_name, u.last_name AS res_last_name,
                                     u.email AS res_email, u.phone AS res_phone, u.house_number AS res_house_number,
-                                    r.payment_status AS r_payment_status, r.price AS r_price,
+                                    r.payment_status AS r_payment_status, r.price AS r_price, r.downpayment AS r_downpayment,
                                     r.amenity AS r_amenity, r.start_date AS r_start_date, r.end_date AS r_end_date,
                                     r.start_time AS r_start_time, r.end_time AS r_end_time, r.persons AS r_persons, r.ref_code AS r_ref_code
                              FROM guest_forms gf
@@ -164,6 +164,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
             'persons' => isset($row['r_persons']) && $row['r_persons']!==null ? intval($row['r_persons']) : (!empty($row['persons']) ? intval($row['persons']) : null),
             'purpose' => $row['purpose'],
             'price' => $isAmenity ? (isset($row['price']) ? floatval($row['price']) : (isset($row['r_price']) ? floatval($row['r_price']) : null)) : null,
+            'downpayment' => $isAmenity ? (isset($row['r_downpayment']) ? floatval($row['r_downpayment']) : null) : null,
             'payment_status' => isset($row['r_payment_status']) ? strtolower($row['r_payment_status']) : null,
             'ref_code' => ($row['r_ref_code'] ?: $row['ref_code']),
             'approval_status' => $row['approval_status'],
@@ -271,7 +272,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $ready = getAmenityReadyForApprovalCount($con);
     $incidents = getOpenIncidentCount($con);
     $newreqs = getNewRequestsCount($con);
-    $items = getRecentNotifications($con);
+    $requests = [];
+    $receipts = [];
+    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') ORDER BY created_at DESC LIMIT 8");
+    if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' ORDER BY created_at DESC LIMIT 8");
+    if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 8");
+    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'amenity','source'=>'guest_form','title'=>'Amenity request pending payment','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 8");
+    if($gf2){ while($row=$gf2->fetch_assoc()){ $requests[] = ['type'=>'approval','source'=>'guest_form','title'=>'Amenity request ready for approval','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 8");
+    if($rr){ while($row=$rr->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 8");
+    if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $items = array_merge($receipts, $requests);
+    usort($items,function($a,$b){ return strcmp($b['time'],$a['time']); });
     header('Content-Type: application/json');
     echo json_encode([
         'payments' => $payments,
@@ -279,8 +295,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
         'ready' => $ready,
         'incidents' => $incidents,
         'new_requests' => $newreqs,
-        'total' => ($payments + $awaiting + $ready + $incidents + $newreqs),
-        'items' => $items
+        'total' => (count($requests) + count($receipts)),
+        'requests' => $requests,
+        'receipts' => $receipts,
+        'items' => array_slice($items,0,12)
     ]);
     exit;
 }
@@ -1186,6 +1204,7 @@ $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
   --status-expired:#95a5a6;
   --status-rejected:#e74c3c;
   --shadow:0 8px 18px rgba(0,0,0,0.08);
+  --brand-gold:#d4af37;
 }
 *{box-sizing:border-box;font-family:'Poppins',sans-serif;}
 body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
@@ -1235,6 +1254,14 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 .notif-item-link{display:flex;align-items:flex-start;gap:10px;color:inherit;text-decoration:none;width:100%}
 .notif-item-link:hover{background:#f7f7f7;border-radius:8px}
 .notif-type{font-size:0.75rem;font-weight:700;color:#23412e;background:#f0f4f2;border-radius:6px;padding:2px 6px}
+.tabs{display:flex;gap:8px;border-bottom:1px solid #eee;margin:8px 0 12px}
+.tab-btn{background:#f0f4f2;color:#23412e;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer}
+.tab-btn.active{background:var(--brand-gold);color:#2b2623}
+.tab-body .notif-item{padding:8px 0;border-bottom:1px solid #f0f0f0}
+.toast-container{position:fixed;top:80px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:10px}
+.toast{background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,0.08);padding:12px 14px;width:320px;color:#222}
+#notifModal{background-color:transparent}
+#notifModal .modal-content{position:fixed;top:70px;right:16px;width:360px;max-width:90vw;border:1px solid #e0e0e0;box-shadow:0 10px 24px rgba(0,0,0,0.15);max-height:70vh;overflow:auto}
 .notif-meta{font-size:0.85rem;color:#555}
 .notif-actions{display:flex;gap:8px;padding:10px;border-top:1px solid #f0f0f0}
  .notif-dismiss{margin-left:auto;background:transparent;border:0;color:#888;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
@@ -1247,7 +1274,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
 .table thead th,.table td{overflow-wrap:anywhere}
 .table tbody tr:hover{background:#f9fafb}
-.row-highlight{background:#eaf7ea;outline:2px solid var(--status-approved)}
+.row-highlight{background:#fff7da;outline:2px solid var(--brand-gold)}
 .table img.avatar-xs{width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:10px;vertical-align:middle}
 
 /* Verify Receipts specific column widths */
@@ -1284,11 +1311,15 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 .actions > *{display:inline-flex}
 .actions .btn{flex:0 0 auto;min-width:100px;margin-bottom:0;white-space:nowrap}
 .table td.actions{min-width:240px}
-.btn{min-height:30px;padding:6px 10px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none}
+.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center}
 .btn-view{background:#23412e;color:#fff}
 .btn-approve{background:var(--status-approved);color:#fff}
 .btn-reject{background:var(--status-rejected);color:#fff}
 .btn-edit{background:#2f80ed;color:#fff}
+.table-verify a.btn-view-details{background:var(--brand-gold);color:#2b2623}
+.table-verify a.btn-view-details:hover{filter:brightness(1.05)}
+.table-verify button.btn.btn-view{background:#1e7e34;color:#fff}
+.table-verify td.actions .btn{width:140px}
 .btn-remove{background:#a83b3b;color:#fff}
 .btn-payverify{background:#23412e;color:#fff}
 .btn-disabled{background:#ccc;color:#666;cursor:not-allowed}
@@ -1384,22 +1415,22 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           <img alt="Notifications" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' fill='%23fff'/></svg>" />
           <?php if($notifTotal>0){ echo "<span class='notif-badge'>".intval($notifTotal)."</span>"; } ?>
         </button>
-        <div id="notifPanel" class="notif-panel">
-          <?php if(count($recent)>0){ foreach($recent as $it){ 
-            $type = $it['type']; $title = htmlspecialchars($it['title']); $ref = htmlspecialchars($it['ref'] ?? ''); $amen = htmlspecialchars($it['amenity'] ?? ''); $time = htmlspecialchars(date('M d, Y H:i', strtotime($it['time'])));
-            $src = isset($it['source']) ? $it['source'] : '';
-            $href = '?page=dashboard';
-            $lt = strtolower($type);
-            if($lt==='payment'){ $href='?page=verify'; }
-            elseif($lt==='amenity' || $lt==='approval'){ $href='?page=requests'; }
-            elseif($lt==='request'){ $href = ($src==='resident') ? '?page=requests' : '?page=visitor_requests'; }
-            elseif($lt==='incident'){ $href='?page=report'; }
-            echo "<div class='notif-item' data-type='".strtoupper($type)."' data-ref='".$ref."' data-time='".$time."'>";
-            echo "<a class='notif-item-link' href='".$href."'>";
-            echo "<div class='notif-type'>".strtoupper($type)."</div>";
-            echo "<div class='notif-meta'><div><strong>$title</strong>".( $amen? " — $amen" : "" )."</div>".( $ref? "<div>Status Code: $ref</div>" : "" )."<div style='color:#888'>".$time."</div></div>";
-            echo "</a><button type='button' class='notif-dismiss' aria-label='Dismiss'>×</button></div>";
-          } } else { echo "<div class='notif-item'><div class='notif-meta'>No notifications</div></div>"; } ?>
+        <div id="notifPanel" class="notif-panel" style="display:none"></div>
+        <div id="notifModal" class="modal">
+          <div class="modal-content">
+            <span class="close" id="notifModalClose">&times;</span>
+            <h3>Notifications</h3>
+            <div class="tabs">
+              <button class="tab-btn active" data-tab="req">Requests</button>
+              <button class="tab-btn" data-tab="rec">Payment Receipts</button>
+            </div>
+            <div id="tabReq" class="tab-body">
+              <div id="notifRequestsList"></div>
+            </div>
+            <div id="tabRec" class="tab-body" style="display:none">
+              <div id="notifReceiptsList"></div>
+            </div>
+          </div>
         </div>
       </div>
       <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
@@ -1438,10 +1469,11 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           if(input){ input.addEventListener('input',filter); }
           const t=document.getElementById('notifToggle');
           const p=document.getElementById('notifPanel');
-          if(t&&p){
-            t.addEventListener('click',function(){ p.style.display = (p.style.display==='block')?'none':'block'; });
-            document.addEventListener('click',function(e){ if(!p.contains(e.target) && !t.contains(e.target)){ p.style.display='none'; } });
-          }
+          const m=document.getElementById('notifModal');
+          const mc=document.getElementById('notifModalClose');
+          if(t&&m){ t.addEventListener('click',function(){ m.style.display = (m.style.display==='block') ? 'none' : 'block'; }); }
+          if(mc&&m){ mc.addEventListener('click',function(){ m.style.display='none'; }); }
+          document.addEventListener('click',function(e){ if(m && e.target===m){ m.style.display='none'; } });
           var lastTotal = null;
           var dismissed = new Set();
           function keyFor(it){ return [String(it.type||''), String(it.ref||''), String(it.time||'')].join('|'); }
@@ -1456,25 +1488,19 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               if(total>0){ if(!badge){ badge=document.createElement('span'); badge.className='notif-badge'; t.appendChild(badge);} badge.textContent=String(total); if(lastTotal!==null && total>lastTotal){ badge.classList.add('pulse'); setTimeout(function(){ badge.classList.remove('pulse'); }, 1200); } }
               else { if(badge){ badge.remove(); } }
             }
-            if(p){
-              var html = '';
-              if(items.length===0){ html += "<div class='notif-item'><div class='notif-meta'>No notifications</div></div>"; }
-              for(var i=0;i<items.length;i++){
-                var it=items[i]||{}; var type=String(it.type||'').toUpperCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it);
-                html += "<div class='notif-item' data-type='"+type+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'><a class='notif-item-link' href='"+href+"'><div class='notif-type'>"+type+"</div><div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div></a><button type='button' class='notif-dismiss' aria-label='Dismiss'>×</button></div>";
-              }
-              p.innerHTML = html;
-            }
+            var reqList = document.getElementById('notifRequestsList');
+            var recList = document.getElementById('notifReceiptsList');
+            var requests = Array.isArray(data.requests)?data.requests:[];
+            var receipts = Array.isArray(data.receipts)?data.receipts:[];
+            var build = function(arr){ var html=''; if(arr.length===0){ html+="<div class='notif-item'><div class='notif-meta'>No items</div></div>"; } for(var i=0;i<arr.length;i++){ var it=arr[i]||{}; var type=String(it.type||'').toUpperCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it); html += "<div class='notif-item' data-type='"+type+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'><a class='notif-item-link' href='"+href+"'><div class='notif-type'>"+type+"</div><div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div></a></div>"; } return html; };
+            if(reqList){ reqList.innerHTML = build(requests); }
+            if(recList){ recList.innerHTML = build(receipts); }
             lastTotal = total;
           }
-          function pollNotifications(){
-            fetch('admin.php?action=get_notifications')
-              .then(function(r){ return r.json(); })
-              .then(function(data){ renderNotif(data); })
-              .catch(function(){});
-          }
+          function pollNotifications(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(function(data){ renderNotif(data); }).catch(function(){}); }
           var lastSeenEpoch = 0;
           function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
             var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); renderNotif({ items: [] }); }); }
@@ -1805,9 +1831,8 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
       <tr>
         <th>User Type</th>
         <th>Name</th>
-        <th>Amenity</th>
-        <th>Dates</th>
         <th>Receipt</th>
+        <th>Price Details</th>
         <th>Payment Status</th>
         <th>Actions</th>
       </tr>
@@ -1815,6 +1840,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
     <tbody>
       <?php
         $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
+                                       r.price, r.downpayment,
                                        ep.full_name, ep.middle_name, ep.last_name,
                                        u.first_name AS res_first_name, u.last_name AS res_last_name
                                   FROM reservations r
@@ -1832,9 +1858,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               : trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
             if ($fullName === '') { $fullName = $userType; }
             echo '<td>' . htmlspecialchars($fullName) . '</td>';
-            echo '<td>' . htmlspecialchars($row['amenity'] ?? '-') . '</td>';
-            $dateRange = (!empty($row['start_date']) && !empty($row['end_date'])) ? (date('M d', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))) : '<span class=\'muted\'>-</span>';
-            echo '<td>' . $dateRange . '</td>';
+            
             if (!empty($row['receipt_path'])) {
               $rp = $row['receipt_path'];
               $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
@@ -1846,13 +1870,24 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             } else {
               echo '<td><span class="muted">No receipt</span></td>';
             }
+            $tp = isset($row['price']) ? floatval($row['price']) : 0.0;
+            $dpRaw = (isset($row['downpayment']) && $row['downpayment'] !== null) ? floatval($row['downpayment']) : null;
+            echo '<td>';
+            if ($tp > 0) {
+              $tpStr = number_format($tp, 2, '.', '');
+              $dpStr = $dpRaw !== null ? number_format($dpRaw, 2, '.', '') : '';
+              echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')">View Price Details</button>';
+            } else {
+              echo '<span class="muted">-</span>';
+            }
+            echo '</td>';
             $ps = strtolower($row['payment_status'] ?? 'pending');
             $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : ($ps==='refunded' ? 'badge-expired' : 'badge-pending'));
             echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
             echo '<td class="actions">';
               $ref = urlencode($row['ref_code']);
               $targetPage = !empty($row['entry_pass_id']) ? 'visitor_requests' : 'reservations';
-              echo "<a class='btn btn-view' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
+              echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
               if($ps!=='verified'){
                 echo '<form method="post">';
                 echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
@@ -1871,7 +1906,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
             echo '</tr>';
           }
         } else {
-          echo '<tr><td colspan="7" style="text-align:center;">No receipts to verify</td></tr>';
+          echo '<tr><td colspan="6" style="text-align:center;">No receipts to verify</td></tr>';
         }
       ?>
     </tbody>
@@ -1880,6 +1915,35 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   </div>
 </section>
 <?php endif; ?>
+
+<!-- Price Details Modal -->
+<div id="priceDetailsModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closePriceDetailsModal()">&times;</span>
+    <h3>Price Details</h3>
+    <div id="priceDetailsContent"></div>
+  </div>
+  </div>
+
+<script>
+function openPriceDetails(totalStr, downStr){
+  var t = parseFloat(totalStr||'0');
+  var d = (downStr && downStr !== '') ? parseFloat(downStr) : (t>0 ? Math.max(0, t*0.5) : 0);
+  var r = Math.max(0, t - d);
+  var el = document.getElementById('priceDetailsContent');
+  if(el){
+    var fmt = function(n){ return Number(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); };
+    el.innerHTML = '<table style="width:100%;border-collapse:collapse">'
+      + '<tr><td><strong>Total Price</strong></td><td style="text-align:right">₱' + fmt(t) + '</td></tr>'
+      + '<tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱' + fmt(d) + '</td></tr>'
+      + '<tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱' + fmt(r) + '</td></tr>'
+      + '</table>';
+  }
+  var m = document.getElementById('priceDetailsModal'); if(m){ m.style.display = 'block'; }
+}
+function closePriceDetailsModal(){ var m=document.getElementById('priceDetailsModal'); if(m){ m.style.display='none'; } }
+window.addEventListener('click', function(e){ var m=document.getElementById('priceDetailsModal'); if(e.target===m){ m.style.display='none'; } });
+</script>
 
 <!-- SECURITY GUARDS -->
 <?php if ($currentPage == 'security'): ?>
@@ -2272,6 +2336,7 @@ function showVisitorDetails(id, source) {
               <p><strong>Request Date:</strong> ${new Date(details.entry_created).toLocaleString()}</p>
               ${details.approved_by ? `<p><strong>Approved By:</strong> Staff ID ${details.approved_by}</p>` : ''}
               ${details.approval_date ? `<p><strong>Approval Date:</strong> ${new Date(details.approval_date).toLocaleString()}</p>` : ''}
+              ${details.price ? (()=>{ const total=parseFloat(details.price)||0; const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); const rem=Math.max(0, total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
             </div>
           </div>
           `
@@ -2295,7 +2360,7 @@ function showVisitorDetails(id, source) {
               ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
-              ${details.price ? `<p><strong>Price:</strong> ₱${parseFloat(details.price).toLocaleString()}</p>` : ''}
+              ${details.price ? (()=>{ const total=parseFloat(details.price)||0; const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); const rem=Math.max(0, total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
               <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
               <p><strong>Request Date:</strong> ${new Date(details.entry_created).toLocaleString()}</p>
               <p><strong>Status:</strong> <span class="badge badge-${details.approval_status || 'pending'}">${(details.approval_status || 'pending').charAt(0).toUpperCase() + (details.approval_status || 'pending').slice(1)}</span></p>
@@ -2364,7 +2429,7 @@ function showReservationDetails(reservationId){
             ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
             ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
             ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
-            ${d.price?`<p><strong>Price:</strong> ₱${parseFloat(d.price).toLocaleString()}</p>`:''}
+            ${d.price?(()=>{ const total=parseFloat(d.price)||0; const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); const rem=Math.max(0,total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
             ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
             ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
             ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
@@ -2407,31 +2472,31 @@ function showResidentReservationDetails(rrId){
       const ps = ((d.payment_status||'pending')+'').toLowerCase();
       const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
-      const content = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
-            ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
-            ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-            ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
-            ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
-          </div>
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
-            ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
-            ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
-            ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
-            ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
-            ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
-            ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
-            ${d.price?`<p><strong>Price:</strong> ₱${parseFloat(d.price).toLocaleString()}</p>`:''}
-            <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
-            ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
-            ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
-            ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
-            ${d.approval_date?`<p><strong>Approval Date:</strong> ${new Date(d.approval_date).toLocaleString()}</p>`:''}
-          </div>
-        </div>`;
+        const content = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+            <div>
+              <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
+              ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
+              ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
+              ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
+              ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
+            </div>
+            <div>
+              <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
+              ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
+              ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
+              ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
+              ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
+              ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
+              ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
+              ${d.price?(()=>{ const total=parseFloat(d.price)||0; const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); const rem=Math.max(0,total-dp); return `<div style=\"margin-top:10px;\"><h4 style=\"color:#23412e;margin-bottom:8px;\">Price Details</h4><table style=\"width:100%;border-collapse:collapse\"><tr><td><strong>Total Price</strong></td><td style=\"text-align:right\">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style=\"text-align:right\">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style=\"text-align:right\">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
+              <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
+              ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
+              ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
+              ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
+              ${d.approval_date?`<p><strong>Approval Date:</strong> ${new Date(d.approval_date).toLocaleString()}</p>`:''}
+            </div>
+          </div>`;
       document.getElementById('residentReservationDetailsContent').innerHTML = content;
       document.getElementById('residentReservationModal').style.display = 'block';
     })
