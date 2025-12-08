@@ -36,17 +36,17 @@ if (!$user) {
 // Compose full name for display
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 
-// Prepare unique QR code data and local image path
-$qrData = 'VPRES:' . ($user['id'] ?? $userId) . '|' . ($user['email'] ?? '') . '|' . substr(hash('sha256', ($user['id'] ?? $userId) . '|' . ($user['email'] ?? '')), 0, 12);
-$qrRelPath = 'uploads/qr_resident_' . ($user['id'] ?? $userId) . '.png';
+// Prepare resident QR link and local image path
+$scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
+$qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
+$qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
 $qrAbsPath = __DIR__ . '/' . $qrRelPath;
 if (!file_exists($qrAbsPath)) {
-  // Generate QR via external service and cache locally
-  $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrData);
+  $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
   $img = @file_get_contents($qrUrl);
-  if ($img !== false) {
-    @file_put_contents($qrAbsPath, $img);
-  }
+  if ($img !== false) { @file_put_contents($qrAbsPath, $img); }
 }
 ?>
 <!DOCTYPE html>
@@ -417,6 +417,7 @@ if (!file_exists($qrAbsPath)) {
         <div class="qr-container">
           <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="Resident QR Code">
           <p><?php echo htmlspecialchars($fullName ?: 'Your name'); ?> <br><small>Verified User</small></p>
+          <a class="view-btn" href="<?php echo htmlspecialchars($qrLink); ?>">View Resident ID</a>
           <a class="save-btn" href="<?php echo htmlspecialchars($qrRelPath); ?>" download="VictorianPass_QR_<?php echo intval($user['id'] ?? $userId); ?>.png">Download QR Code</a>
         </div>
       </div>

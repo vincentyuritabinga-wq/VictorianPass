@@ -70,7 +70,7 @@
       justify-content: space-between;
     }
     .dashboard-header img { height: 40px; }
-    .qr-btn { background: #23412e; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; }
+    .qr-btn { background: #23412e; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; text-decoration:none; font-weight:600; min-width:110px; }
     .qr-btn:hover { opacity: 0.92; }
     .qr-btn.disabled { background: #ccc; color: #666; cursor: not-allowed; }
     .qr-btn.disabled:hover { opacity: 1; }
@@ -334,12 +334,15 @@
       const scannedCode = params.get('code') || ((window.statusData || {}).code) || '';
       const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
       const verificationLink = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(scannedCode)}`;
-
+      const data = window.statusData || {};
+      name = name || data.name || '';
+      type = type || data.type || '';
+      status = status || data.status || '';
+      qrPath = qrPath || data.qr_path || '';
       const useStoredQR = qrPath && !/mainpage\/qr\.png$/i.test(qrPath);
       const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
       document.getElementById("qrImage").src = useStoredQR ? qrPath : dynamicQR;
       
-      const data = window.statusData || {};
       const accessWindow = `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
       const statusLower = (status || '').toLowerCase();
       const banner = statusLower === 'approved' ? '✅ Valid Entry Pass'

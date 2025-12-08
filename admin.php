@@ -204,6 +204,29 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
     exit;
 }
 
+// Handle AJAX request for resident reservation details
+if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_details' && isset($_GET['id'])) {
+    header('Content-Type: application/json');
+    $id = intval($_GET['id']);
+    $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.persons, r.purpose,
+                                    r.created_at, r.approval_status, r.approved_by, r.approval_date,
+                                    r.price, r.downpayment, r.payment_status,
+                                    u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
+                             FROM reservations r
+                             LEFT JOIN users u ON r.user_id = u.id
+                             WHERE r.id = ? LIMIT 1");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res && ($row = $res->fetch_assoc())) {
+        echo json_encode(['success' => true, 'details' => $row]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Reservation not found']);
+    }
+    $stmt->close();
+    exit;
+}
+
 // Handle AJAX request for standard amenity reservation details
 if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && isset($_GET['id'])) {
     $reservation_id = intval($_GET['id']);
@@ -1661,16 +1684,17 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
                   if ($approval_status == 'pending') {
+                      $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
-                      echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                      echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                 } elseif ($approval_status == 'denied') {
                     $canRefund = false; $downAmt = 0; $payStatus = '';
@@ -1929,17 +1953,19 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
                 if ($approval_status == 'pending') {
+                    $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
-                    echo "<button type='submit' class='btn btn-approve'>Approve</button>";
+                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                     echo "</form>";
 
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                    echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
+                } elseif ($approval_status == 'denied') {
                 } elseif ($approval_status == 'denied') {
                     $canRefund = false; $downAmt = 0; $payStatus = '';
                     try {
@@ -2371,12 +2397,15 @@ window.addEventListener('click', function(event){
 </div>
 
 <script>
+function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return (String(h).padStart(2,'0')+":"+String(m).padStart(2,'0')); }
 function showResidentReservationDetails(rrId){
   fetch('admin.php?action=get_resident_reservation_details&id=' + rrId)
     .then(r => r.json())
     .then(data => {
       if(!data.success){ alert('Error loading resident reservation details: ' + (data.message||'Unknown error')); return; }
       const d = data.details || {};
+      const ps = ((d.payment_status||'pending')+'').toLowerCase();
+      const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const content = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -2395,6 +2424,8 @@ function showResidentReservationDetails(rrId){
             ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
             ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
             ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
+            ${d.price?`<p><strong>Price:</strong> ₱${parseFloat(d.price).toLocaleString()}</p>`:''}
+            <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
             ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
             ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
             ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
