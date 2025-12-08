@@ -363,7 +363,9 @@
       const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
       document.getElementById("qrImage").src = useStoredQR ? qrPath : dynamicQR;
       
-      const accessWindow = `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
+      const accessWindow = isGuestEntry
+        ? (data.start_date || '-')
+        : `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
       const statusLower = (status || '').toLowerCase();
       const banner = statusLower === 'approved' ? '✅ Valid Entry Pass'
                     : statusLower === 'expired' ? '❌ Expired Entry Pass'
@@ -378,7 +380,7 @@
         ${data.birthdate ? `<p><strong>Birthdate:</strong> ${data.birthdate}</p>` : ''}
         ${data.sex ? `<p><strong>Sex:</strong> ${data.sex}</p>` : ''}
         ${data.contact ? `<p><strong>Contact:</strong> ${data.contact}</p>` : ''}
-        ${data.address ? `<p><strong>Address:</strong> ${data.address}</p>` : ''}
+        ${data.address ? `<p><strong>${isGuestEntry ? 'Resident House Number' : 'Address'}:</strong> ${data.address}</p>` : ''}
         ${data.purpose ? `<p><strong>Purpose:</strong> ${data.purpose}</p>` : ''}
         <p><strong>Type:</strong> ${isGuestEntry ? "Resident's Guest" : type}</p>
         <p><strong>Valid Dates:</strong> ${accessWindow}</p>
@@ -401,13 +403,21 @@
       const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(data.persons);
       const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
 
-      const yourInfo = [
-        ['Full Name', data.name || '-'],
-        ['Email', data.email || '-'],
-        ['Address', data.address || '-'],
-        ['Birthdate', data.birthdate || '-'],
-        ['Sex', data.sex || '-']
-      ].map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+      const yourInfoPairs = isGuestEntry
+        ? [
+            ['Full Name', data.name || '-'],
+            ['Email', data.email || '-'],
+            ['Birthdate', data.birthdate || '-'],
+            ['Sex', data.sex || '-']
+          ]
+        : [
+            ['Full Name', data.name || '-'],
+            ['Email', data.email || '-'],
+            ['Address', data.address || '-'],
+            ['Birthdate', data.birthdate || '-'],
+            ['Sex', data.sex || '-']
+          ];
+      const yourInfo = yourInfoPairs.map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
 
       const resRows = [];
       if (!isGuestEntry && (data.type || '')) resRows.push(['Amenity', data.type]);

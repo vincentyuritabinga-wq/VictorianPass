@@ -124,6 +124,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
                                     u.email AS res_email, u.phone AS res_phone, u.house_number AS res_house_number,
                                     r.payment_status AS r_payment_status, r.price AS r_price, r.downpayment AS r_downpayment,
                                     r.amenity AS r_amenity, r.start_date AS r_start_date, r.end_date AS r_end_date,
+                                    r.start_time AS r_start_time, r.end_time AS r_end_time,
                                     r.persons AS r_persons, r.ref_code AS r_ref_code
                              FROM guest_forms gf
                              LEFT JOIN users u ON gf.resident_user_id = u.id
@@ -1011,8 +1012,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             }
 
-            // Redirect to prevent form resubmission
-            header("Location: admin.php?page=visitor_requests" . ($conflict ? "&msg=time_conflict" : ""));
+            $redir = isset($_POST['redirect_page']) ? preg_replace('/[^a-z_]/', '', $_POST['redirect_page']) : 'visitor_requests';
+            header("Location: admin.php?page=" . $redir . ($conflict ? "&msg=time_conflict" : ""));
             exit;
         }
         
@@ -1704,19 +1705,21 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                     if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
                     $stmtPay2->close();
                   }
-                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", '" . $srcAttr . ")\">View More Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\">View More Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = ($isAmenity && $payStatus !== 'verified');
-                      echo "<form method='post' class='action-form action-approve'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
-                      echo "<input type='hidden' name='action' value='approve_request'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
-                      echo "</form>";
-                      echo "<form method='post' class='action-form action-deny'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
-                      echo "<input type='hidden' name='action' value='deny_request'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                      echo "</form>";
+                  echo "<form method='post' class='action-form action-approve'>";
+                  echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
+                  echo "<input type='hidden' name='action' value='approve_request'>";
+                  echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                  echo "</form>";
+                  echo "<form method='post' class='action-form action-deny'>";
+                  echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
+                  echo "<input type='hidden' name='action' value='deny_request'>";
+                  echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
+                  echo "</form>";
                   } elseif ($approval_status == 'denied') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
@@ -1726,6 +1729,9 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   } else {
                       $approvedBy = !empty($req['approved_by']) ? "by Staff ID " . $req['approved_by'] : "";
                       $approvalDate = !empty($req['approval_date']) ? date('M d, Y', strtotime($req['approval_date'])) : "";
+                      if ($approval_status === 'approved' && !empty($req['ref_code'])) {
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                      }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
                   }
                   echo "</td>";

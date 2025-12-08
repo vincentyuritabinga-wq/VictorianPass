@@ -155,8 +155,11 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       <input type="date" name="visit_date" placeholder="Date of Visit*" required min="<?php echo date('Y-m-d'); ?>">
       <input type="time" name="visit_time" placeholder="Expected Time*" required>
     </div>
-    <div class="input-wrap">
-      <input type="number" name="visit_persons" placeholder="How many persons?" min="1" value="1">
+    <div class="form-row">
+      <div class="form-group">
+        <input type="number" id="visit_persons" name="visit_persons" placeholder=" " min="1" value="1">
+        <label for="visit_persons">How many persons?</label>
+      </div>
     </div>
     <textarea rows="3" name="visit_purpose" placeholder="Purpose of Visit*" required></textarea>
 

@@ -33,22 +33,48 @@ if (empty($error)) {
     $email = $row['visitor_email'] ?? '';
     $phone = $row['visitor_contact'] ?? '';
     if (preg_match('/^\+63(9\d{9})$/', $phone)) { $phone = '0' . substr($phone, 3); }
-    $address = $row['resident_house'] ?? (($row['res_house_number'] ?? '') ? ('Block ' . $row['res_house_number']) : '');
+    $address = ($row['res_house_number'] ?? ($row['resident_house'] ?? ''));
     $sex = $row['visitor_sex'] ?? '';
     $birthRaw = $row['visitor_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
-    $hasAmenityDates = (!empty($row['start_date']) && !empty($row['end_date']));
-    if ($hasAmenityDates) {
-      $publishDate = date('m/d/y', strtotime($row['start_date']));
-      $expireDate = date('m/d/y', strtotime($row['end_date']));
-    } else {
-      $publishDate = !empty($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : '';
-      $expireDate = '';
-    }
-    $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
+    $publishDate = !empty($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : '';
+    $expireDate = '';
+    $validWindow = ($publishDate ?: '-');
     $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
     $qrImg = $qrPath ? $qrPath : ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink));
-    $hasReservation = !empty($row['amenity']);
+    $hasReservation = false;
+
+    // Try to load linked reservation details via ref_code
+    $rAmenity = '';
+    $rStartDate = '';
+    $rEndDate = '';
+    $rStartTime = null;
+    $rEndTime = null;
+    $rPersons = null;
+    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, qr_path FROM reservations WHERE ref_code = ? LIMIT 1");
+    if ($stmtR) {
+      $stmtR->bind_param('s', $row['ref_code']);
+      if ($stmtR->execute()) {
+        $resR = $stmtR->get_result();
+        if ($resR && $resR->num_rows > 0) {
+          $r = $resR->fetch_assoc();
+          $rAmenity = $r['amenity'] ?? '';
+          $rStartDate = $r['start_date'] ?? '';
+          $rEndDate = $r['end_date'] ?? '';
+          $rStartTime = $r['start_time'] ?? null;
+          $rEndTime = $r['end_time'] ?? null;
+          $rPersons = isset($r['persons']) ? intval($r['persons']) : null;
+          $hasReservation = !empty($rAmenity);
+          if (!$qrPath && !empty($r['qr_path'])) { $qrPath = $r['qr_path']; $qrImg = $qrPath; }
+          if ($hasReservation) {
+            $publishDate = !empty($rStartDate) ? date('m/d/y', strtotime($rStartDate)) : $publishDate;
+            $expireDate = !empty($rEndDate) ? date('m/d/y', strtotime($rEndDate)) : '';
+            $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
+          }
+        }
+      }
+      $stmtR->close();
+    }
 
     $data = [
       'code' => $row['ref_code'],
@@ -59,8 +85,11 @@ if (empty($error)) {
       'contact' => $phone,
       'email' => $email,
       'address' => $address,
-      'amenity' => $hasReservation ? ($row['amenity'] ?? '') : '',
+      'amenity' => $hasReservation ? $rAmenity : '',
       'purpose' => $row['purpose'] ?? '',
+      'start_time' => $rStartTime,
+      'end_time' => $rEndTime,
+      'persons' => $rPersons,
       'publish' => $publishDate,
       'expire' => $expireDate,
       'valid_window' => $validWindow,
@@ -290,9 +319,13 @@ if (empty($error)) {
           <?php if ($data['birthdate']): ?><p><strong>Birthdate:</strong> <?php echo htmlspecialchars($data['birthdate']); ?></p><?php endif; ?>
           <?php if (!empty($data['sex'])): ?><p><strong>Sex:</strong> <?php echo htmlspecialchars($data['sex']); ?></p><?php endif; ?>
 
-          <?php if (!empty($data['address'])): ?><p><strong>Address:</strong> <?php echo htmlspecialchars($data['address']); ?></p><?php endif; ?>
+          <?php if (!empty($data['address'])): ?><p><strong><?php echo !empty($data['is_guest']) ? "Resident House Number" : "Address"; ?>:</strong> <?php echo htmlspecialchars($data['address']); ?></p><?php endif; ?>
           <?php if (!empty($data['purpose'])): ?><p><strong>Purpose:</strong> <?php echo htmlspecialchars($data['purpose']); ?></p><?php endif; ?>
           <?php if (!empty($data['amenity'])): ?><p><strong>Amenity/Visit:</strong> <?php echo htmlspecialchars($data['amenity']); ?></p><?php endif; ?>
+          <?php $t1 = !empty($data['start_time']) ? date('H:i', strtotime($data['start_time'])) : ''; $t2 = !empty($data['end_time']) ? date('H:i', strtotime($data['end_time'])) : ''; if($t1 || $t2){ ?>
+            <p><strong>Time:</strong> <?php echo htmlspecialchars($t1 . ($t2 ? ' → ' . $t2 : '')); ?></p>
+          <?php } ?>
+          <?php if (!empty($data['persons'])): ?><p><strong>Persons:</strong> <?php echo htmlspecialchars($data['persons']); ?></p><?php endif; ?>
         </div>
         <div class="divider"></div>
         <div class="meta">

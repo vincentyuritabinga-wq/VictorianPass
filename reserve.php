@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Persons must be at least 1.';
     } else if ($sdObj && $edObj) {
       $diffDays = $sdObj->diff($edObj)->days;
-      if ($diffDays > 6) { $errorMsg = 'Date range cannot exceed 7 days.'; }
+      if ($diffDays > 6) { $errorMsg = 'Cannot book more than 1 week.'; }
     } else if ($stObj && $etObj) {
       $minH = ($amenity === 'Clubhouse') ? 9 : 9;
       $maxH = ($amenity === 'Clubhouse') ? 21 : 18;
@@ -762,7 +762,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     function setEnd(ds){
       const sVal=document.getElementById('startDateInput').value||'';
       if(sVal && ds < sVal){ showDateError('End date cannot be earlier than start date.'); return false; }
-      if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); return false; } }
+      if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return false; } }
       selectedEnd=ds;
       document.getElementById('endDate').textContent=selectedEnd;
       document.getElementById('endDateInput').value=selectedEnd;
@@ -1247,7 +1247,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!s||!e){ showStartDateError(''); showDateError(''); return false; }
     if(e < s){ showDateError('End date cannot be earlier than start date.'); showStartDateError(''); return false; }
     if(s > e){ showStartDateError('Start date cannot be later than end date.'); showDateError(''); return false; }
-    const sD=new Date(s), eD=new Date(e); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); return false; }
+    const sD=new Date(s), eD=new Date(e); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return false; }
     const st=document.getElementById('startTimeInput').value;
     const et=document.getElementById('endTimeInput').value;
     if(s===e){
@@ -1289,7 +1289,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(!s){ if(force||isDirty('startDateInput')) showStartDateError('Start date is required.'); } else { showStartDateError(''); }
     if(!eD){ if(force||isDirty('endDateInput')) showDateError('End date is required.'); }
     else {
-      const sDVal=s; const eDVal=eD; if(sDVal){ const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Date range cannot exceed 7 days.'); } else { showDateError(''); } } else { showDateError(''); }
+      const sDVal=s; const eDVal=eD; if(sDVal){ const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); } else { showDateError(''); } } else { showDateError(''); }
     }
     if(!st){ if(force||isDirty('startTimeInput')) setFieldWarning('startTimeInput','Start time is required.'); } else { setFieldWarning('startTimeInput',''); }
     // End time is auto-computed from start time + hours; no manual warning
@@ -1402,7 +1402,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const persons=parseInt(document.getElementById('personsInput').value||'0');
       const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
       showIncompleteWarnings(true);
-      if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ e.preventDefault(); showDateError('Date range cannot exceed 7 days.'); return false; } }
+      if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ e.preventDefault(); showDateError('Cannot book more than 1 week.'); return false; } }
       if(s && eD && s===eD && st && et){
         const [sh,sm]=(st||'').split(':');
         const [eh,em]=(et||'').split(':');

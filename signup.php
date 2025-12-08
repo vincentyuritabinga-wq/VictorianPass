@@ -306,7 +306,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           The following terminology applies to these Terms and Conditions, Privacy Statement and Disclaimer Notice and any or all Agreements:
           "Customer", "You" and "Your" refers to you, the person accessing this website and accepting the Company's terms and conditions.
         </p>
-        <h3>Effective Date: [September 00, 2025]</h3>
+        <h3>Effective Date: [September 01, 2026]</h3>
         <h4>1. User Roles</h4>
         <ul>
           <li>Residents: Must provide accurate info, manage guest entries responsibly, and use the system for valid purposes only.</li>

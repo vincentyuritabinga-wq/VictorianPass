@@ -140,7 +140,7 @@ if ($resGF && $resGF->num_rows > 0) {
     $phone = $row['visitor_contact'] ?? '';
     // Normalize phone to 09 format if stored as +63
     if (preg_match('/^\+63(9\d{9})$/', $phone)) { $phone = '0' . substr($phone, 3); }
-    $address = $row['resident_house'] ?? (($row['res_house_number'] ?? '') ? ('Block ' . $row['res_house_number']) : '');
+    $address = '';
     $sex = $row['visitor_sex'] ?? '';
     $birthRaw = $row['visitor_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
@@ -148,22 +148,34 @@ if ($resGF && $resGF->num_rows > 0) {
     $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
     $pay = null; $epid = null; $rAmenity = null; $rStart = null; $rEnd = null; $rStartTime = null; $rEndTime = null; $rPersons = null; $rPrice = null; $rDown = null;
     if ($con instanceof mysqli) {
-        $stmtP = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
-        $stmtP->bind_param('s', $row['ref_code']);
-        $stmtP->execute(); $resP = $stmtP->get_result();
-        if ($resP && ($pr=$resP->fetch_assoc())) {
-            $rAmenity = $pr['amenity'] ?? null;
-            $rStart = $pr['start_date'] ?? null;
-            $rEnd = $pr['end_date'] ?? null;
-            $rStartTime = $pr['start_time'] ?? null;
-            $rEndTime = $pr['end_time'] ?? null;
-            $rPersons = isset($pr['persons']) ? intval($pr['persons']) : null;
-            $rPrice = isset($pr['price']) ? floatval($pr['price']) : null;
-            $rDown = isset($pr['downpayment']) ? floatval($pr['downpayment']) : null;
-            $pay = strtolower($pr['payment_status'] ?? '');
-            $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null;
+      $stmtP = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+      $stmtP->bind_param('s', $row['ref_code']);
+      $stmtP->execute(); $resP = $stmtP->get_result();
+      if ($resP && ($pr=$resP->fetch_assoc())) {
+        $rAmenity = $pr['amenity'] ?? null;
+        $rStart = $pr['start_date'] ?? null;
+        $rEnd = $pr['end_date'] ?? null;
+        $rStartTime = $pr['start_time'] ?? null;
+        $rEndTime = $pr['end_time'] ?? null;
+        $rPersons = isset($pr['persons']) ? intval($pr['persons']) : null;
+        $rPrice = isset($pr['price']) ? floatval($pr['price']) : null;
+        $rDown = isset($pr['downpayment']) ? floatval($pr['downpayment']) : null;
+        $pay = strtolower($pr['payment_status'] ?? '');
+        $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null;
+      }
+      $stmtP->close();
+
+      if (!empty($epid)) {
+        $stmtE = $con->prepare("SELECT address FROM entry_passes WHERE id = ? LIMIT 1");
+        $stmtE->bind_param('i', $epid);
+        $stmtE->execute();
+        $resE = $stmtE->get_result();
+        if ($resE && ($ep = $resE->fetch_assoc())) {
+          $addrCandidate = trim($ep['address'] ?? '');
+          if ($addrCandidate !== '') { $address = $addrCandidate; }
         }
-        $stmtP->close();
+        $stmtE->close();
+      }
     }
     $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
     $resp = [
