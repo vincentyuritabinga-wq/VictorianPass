@@ -131,26 +131,43 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           $ins->execute();
           $ins->close();
         }
-        try {
-          $chkRR = $con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
-          $chkRR->bind_param('s', $ref_code);
-          $chkRR->execute(); $resRR = $chkRR->get_result(); $existsRR = ($resRR && $resRR->num_rows>0); $chkRR->close();
-          if ($existsRR) {
-            $uRR = $con->prepare("UPDATE resident_reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), approval_status = 'pending', updated_at = NOW(), user_id = COALESCE(?, user_id) WHERE ref_code = ?");
-            $uRR->bind_param('sssis', $amenity, $start, $end, $uid, $ref_code);
-            $uRR->execute(); $uRR->close();
-          } else {
-            $iRR = $con->prepare("INSERT INTO resident_reservations (user_id, amenity, start_date, end_date, approval_status, ref_code, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, NOW(), NOW())");
-            $iRR->bind_param('issss', $uid, $amenity, $start, $end, $ref_code);
-            $iRR->execute(); $iRR->close();
-          }
-        } catch (Throwable $_) { }
+        if ($acct === 'resident') {
+          try {
+            $chkRR = $con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $chkRR->bind_param('s', $ref_code);
+            $chkRR->execute(); $resRR = $chkRR->get_result(); $existsRR = ($resRR && $resRR->num_rows>0); $chkRR->close();
+            if ($existsRR) {
+              $uRR = $con->prepare("UPDATE resident_reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), approval_status = 'pending', updated_at = NOW(), user_id = COALESCE(?, user_id) WHERE ref_code = ?");
+              $uRR->bind_param('sssis', $amenity, $start, $end, $uid, $ref_code);
+              $uRR->execute(); $uRR->close();
+            } else {
+              $iRR = $con->prepare("INSERT INTO resident_reservations (user_id, amenity, start_date, end_date, approval_status, ref_code, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, NOW(), NOW())");
+              $iRR->bind_param('issss', $uid, $amenity, $start, $end, $ref_code);
+              $iRR->execute(); $iRR->close();
+            }
+          } catch (Throwable $_) { }
+        }
       }
       $_SESSION['pending_reservation'] = null;
       if(empty($msg)){
         $msg = 'Receipt uploaded. Payment submitted for review.';
         if (($continue_post ?? $continue) === 'reserve_resident') {
-          $_SESSION['flash_notice'] = 'Your reservation has been submitted. Please wait for confirmation.';
+          $isGuestFlow = false;
+          try {
+            if ($con instanceof mysqli) {
+              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtGF->bind_param('s', $ref_code);
+              $stmtGF->execute();
+              $resGF = $stmtGF->get_result();
+              $isGuestFlow = ($resGF && $resGF->num_rows > 0);
+              $stmtGF->close();
+            }
+          } catch (Throwable $_) { $isGuestFlow = false; }
+          if ($isGuestFlow) {
+            $_SESSION['flash_notice'] = 'Reservation for your guest submitted — Status Code: ' . $ref_code . '. Share this code with your guest so they can check their status via the Check Status page.';
+          } else {
+            $_SESSION['flash_notice'] = 'Your reservation has been submitted. Please wait for confirmation.';
+          }
         } else {
           $_SESSION['flash_notice'] = 'Please wait for confirmation. The status code will be sent to your email within 12 hours.';
           $_SESSION['flash_ref_code'] = $ref_code;

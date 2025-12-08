@@ -145,14 +145,24 @@ if ($resGF && $resGF->num_rows > 0) {
     $birthRaw = $row['visitor_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
 
-    $isAmenity = !empty($row['amenity']);
-    // Pull payment_status and entry_pass_id from reservations for this ref_code
-    $pay = null; $epid = null;
+    $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+    $pay = null; $epid = null; $rAmenity = null; $rStart = null; $rEnd = null; $rStartTime = null; $rEndTime = null; $rPersons = null; $rPrice = null; $rDown = null;
     if ($con instanceof mysqli) {
-        $stmtP = $con->prepare("SELECT payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+        $stmtP = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
         $stmtP->bind_param('s', $row['ref_code']);
         $stmtP->execute(); $resP = $stmtP->get_result();
-        if ($resP && ($pr=$resP->fetch_assoc())) { $pay = strtolower($pr['payment_status'] ?? ''); $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null; }
+        if ($resP && ($pr=$resP->fetch_assoc())) {
+            $rAmenity = $pr['amenity'] ?? null;
+            $rStart = $pr['start_date'] ?? null;
+            $rEnd = $pr['end_date'] ?? null;
+            $rStartTime = $pr['start_time'] ?? null;
+            $rEndTime = $pr['end_time'] ?? null;
+            $rPersons = isset($pr['persons']) ? intval($pr['persons']) : null;
+            $rPrice = isset($pr['price']) ? floatval($pr['price']) : null;
+            $rDown = isset($pr['downpayment']) ? floatval($pr['downpayment']) : null;
+            $pay = strtolower($pr['payment_status'] ?? '');
+            $epid = isset($pr['entry_pass_id']) ? intval($pr['entry_pass_id']) : null;
+        }
         $stmtP->close();
     }
     $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
@@ -160,7 +170,7 @@ if ($resGF && $resGF->num_rows > 0) {
         'success' => true,
         'code' => $row['ref_code'],
         'name' => $fullName,
-        'type' => $isAmenity ? $row['amenity'] : 'Guest Entry',
+        'type' => $isAmenity ? ($rAmenity ?: ($row['amenity'] ?: 'Amenity Reservation')) : 'Guest Entry',
         'status' => $statusVal,
         'qr_path' => (!empty($row['qr_path']) ? $row['qr_path'] : 'images/mainpage/qr.png'),
         'message' => $statusMessage,
@@ -176,14 +186,14 @@ if ($resGF && $resGF->num_rows > 0) {
         'resident_house_number' => ($row['res_house_number'] ?? null),
         'resident_email' => ($row['res_email'] ?? null),
         'resident_phone' => ($row['res_phone'] ?? null),
-        'purpose' => $row['purpose'] ?? '',
-        'persons' => isset($row['persons']) ? intval($row['persons']) : null,
-        'price' => $isAmenity && isset($row['price']) ? floatval($row['price']) : null,
-        'downpayment' => isset($row['downpayment']) ? floatval($row['downpayment']) : null,
-        'start_date' => $isAmenity && !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
-        'end_date' => $isAmenity && !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
-        'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
-        'end_time' => !empty($row['end_time']) ? $row['end_time'] : null,
+        'purpose' => $isAmenity ? 'Amenity Booking' : ($row['purpose'] ?? ''),
+        'persons' => ($rPersons !== null ? $rPersons : (isset($row['persons']) ? intval($row['persons']) : null)),
+        'price' => $isAmenity ? ($rPrice !== null ? $rPrice : null) : null,
+        'downpayment' => $isAmenity ? ($rDown !== null ? $rDown : null) : null,
+        'start_date' => $isAmenity && !empty($rStart) ? date('m/d/y', strtotime($rStart)) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
+        'end_date' => $isAmenity && !empty($rEnd) ? date('m/d/y', strtotime($rEnd)) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
+        'start_time' => ($rStartTime ?: null),
+        'end_time' => ($rEndTime ?: null),
         'expires_at' => $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : ''
     ];
     echo json_encode($resp);

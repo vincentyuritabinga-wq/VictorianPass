@@ -314,9 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $errorMsg = 'This reservation has already been submitted.';
             } else {
               $_SESSION['reservation_submitted'] = $newRef;
-              if (!empty($guestResidentId)) {
-                $_SESSION['flash_notice'] = 'Reservation created for your guest — Status Code: ' . $newRef . '. Share this code with your guest so they can check their status via the Check Status page.';
-              }
+              // Defer guest code notification until after downpayment submission
               // Redirect to downpayment page with role-aware flow and ref_code
               $redir = 'downpayment.php?continue=' . (($acct === 'resident') ? 'reserve_resident' : 'reserve');
               if (!empty($entry_pass_id)) { $redir .= '&entry_pass_id=' . urlencode((string)$entry_pass_id); }

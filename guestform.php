@@ -155,6 +155,9 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       <input type="date" name="visit_date" placeholder="Date of Visit*" required min="<?php echo date('Y-m-d'); ?>">
       <input type="time" name="visit_time" placeholder="Expected Time*" required>
     </div>
+    <div class="input-wrap">
+      <input type="number" name="visit_persons" placeholder="How many persons?" min="1" value="1">
+    </div>
     <textarea rows="3" name="visit_purpose" placeholder="Purpose of Visit*" required></textarea>
 
     <div class="reserve-note">
@@ -186,6 +189,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
     <p><small><em>You can still view and manage the request in your resident dashboard.</em></small></p>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
       <button type="button" class="close-btn" onclick="window.location.href='profileresident.php'">Go to Resident Profile</button>
+      <button type="button" class="close-btn" id="btnReserveProceed" style="display:none;">Proceed to Amenity Reservation</button>
     </div>
   </div>
 </div>
@@ -204,7 +208,16 @@ const visitPurpose = entryForm.querySelector('textarea[name="visit_purpose"]');
 
 function openModal(refCode){
   document.getElementById('refCode').textContent = refCode;
-  document.getElementById('refModal').style.display = 'flex';
+  var m = document.getElementById('refModal');
+  var btn = document.getElementById('btnReserveProceed');
+  if (reserveCheck && reserveCheck.checked && btn) {
+    btn.style.display = 'inline-block';
+    btn.onclick = function(){ window.location.href = 'reserve.php?ref_code=' + encodeURIComponent(refCode); };
+  } else if (btn) {
+    btn.style.display = 'none';
+    btn.onclick = null;
+  }
+  m.style.display = 'flex';
 }
 function closeModal(){
   document.getElementById('refModal').style.display = 'none';

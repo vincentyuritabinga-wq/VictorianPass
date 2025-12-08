@@ -199,8 +199,12 @@ if (!$stmtGF->execute()) {
 }
 $stmtGF->close();
 
-$_SESSION['flash_notice'] = 'Resident\'s Guest request submitted — Status Code: ' . $ref_code . '. Give this Status Code to your guest so they can also check the status of their entry.';
+if (!$wants_amenity) {
+  $_SESSION['flash_notice'] = 'Resident\'s Guest request submitted — Status Code: ' . $ref_code . '. Give this Status Code to your guest so they can also check the status of their entry.';
+}
 
 echo json_encode(['success' => true, 'ref_code' => $ref_code]);
 exit;
 ?>
+// Normalize purpose when reserving an amenity via guest form
+if ($wants_amenity) { $visit_purpose = 'Amenity Booking'; }

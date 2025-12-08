@@ -1482,10 +1482,10 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           <div class="modal-content">
             <span class="close" id="notifModalClose">&times;</span>
             <h3>Notifications</h3>
-            <div class="tabs">
+           <!--<div class="tabs">
               <button class="tab-btn active" data-tab="req">Requests</button>
               <button class="tab-btn" data-tab="rec">Payment Receipts</button>
-            </div>
+            </div> -->
             <div id="tabReq" class="tab-body">
               <div id="notifRequestsList"></div>
             </div>
@@ -1684,7 +1684,9 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
           if ($residentRequests && $residentRequests->num_rows > 0) {
               while ($req = $residentRequests->fetch_assoc()) {
                   $hasResidentRequests = true;
-                  echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='guest_form'>";
+                  $isLegacy = array_key_exists('entry_pass_id', $req);
+                  $srcAttr = $isLegacy ? 'reservation' : 'guest_form';
+                  echo "<tr data-ref='" . htmlspecialchars($req['ref_code'] ?? '') . "' data-id='" . intval($req['id']) . "' data-source='" . $srcAttr . "'>";
                   $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
                   echo "<td>" . (!empty($req['amenity']) ? htmlspecialchars($req['amenity']) : "") . "</td>";
@@ -1702,7 +1704,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                     if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
                     $stmtPay2->close();
                   }
-                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", 'guest_form')\">View More Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $req['id'] . ", '" . $srcAttr . ")\">View More Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = ($isAmenity && $payStatus !== 'verified');
                       echo "<form method='post' class='action-form action-approve'>";
@@ -2357,6 +2359,12 @@ function showVisitorDetails(id, source) {
         function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
         const ps = ((details.payment_status || 'pending') + '').toLowerCase();
         const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
+        const isGuestEntry = !details.amenity || String(details.amenity).trim() === 'Guest Entry';
+        const visitDateVal = (isGuestEntry ? details.visit_date : details.start_date);
+        const visitEndDateVal = (isGuestEntry ? null : details.end_date);
+        const visitStartTimeVal = (isGuestEntry ? details.visit_time : details.start_time);
+        const visitEndTimeVal = (isGuestEntry ? null : details.end_time);
+        const sectionTitle = isGuestEntry ? 'Visit Details' : 'Reservation Details';
         const content = isResident
           ? `
           <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
@@ -2377,9 +2385,9 @@ function showVisitorDetails(id, source) {
               ${details.valid_id_path ? `<p><strong>Valid ID:</strong> <a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>` : '<p><strong>Valid ID:</strong> Not uploaded</p>'}
             </div>
             <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Visit Details</h4>
-              ${details.start_date ? `<p><strong>Date:</strong> ${new Date(details.start_date).toLocaleDateString()}${details.end_date ? ' - ' + new Date(details.end_date).toLocaleDateString() : ''}</p>` : ''}
-              ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
+              <h4 style="color:#23412e;margin-bottom:10px;">${sectionTitle}</h4>
+              ${visitDateVal ? `<p><strong>Date:</strong> ${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</p>` : ''}
+              ${(visitStartTimeVal || visitEndTimeVal) ? `<p><strong>Time:</strong> ${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
               ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
@@ -2404,11 +2412,11 @@ function showVisitorDetails(id, source) {
               ${details.valid_id_path ? `<p><strong>Valid ID:</strong> <a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>` : '<p><strong>Valid ID:</strong> Not uploaded</p>'}
             </div>
             <div>
-              <h4 style="color: #23412e; margin-bottom: 10px;">Reservation Details</h4>
+              <h4 style="color: #23412e; margin-bottom: 10px;">${sectionTitle}</h4>
               ${details.ref_code ? `<p><strong>Status Code:</strong> ${details.ref_code}</p>` : ''}
               ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
-              ${details.start_date ? `<p><strong>Date:</strong> ${new Date(details.start_date).toLocaleDateString()}${details.end_date ? ' - ' + new Date(details.end_date).toLocaleDateString() : ''}</p>` : ''}
-              ${(details.start_time || details.end_time) ? `<p><strong>Time:</strong> ${fmtTime(details.start_time)}${details.end_time ? ' - ' + fmtTime(details.end_time) : ''}</p>` : ''}
+              ${visitDateVal ? `<p><strong>Date:</strong> ${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</p>` : ''}
+              ${(visitStartTimeVal || visitEndTimeVal) ? `<p><strong>Time:</strong> ${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</p>` : ''}
               ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
               ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
               ${details.price ? (()=>{ const total=parseFloat(details.price)||0; const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); const rem=Math.max(0, total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
