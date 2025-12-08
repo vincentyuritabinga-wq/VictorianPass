@@ -212,10 +212,24 @@ if (empty($error)) {
     .banner{ text-align:center; font-weight:700; padding:8px; border-top:1px solid #333; color:#9bd08f; }
     .banner.expired, .banner.denied{ color:#ffb3b3; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script>
     function goBack(){
       if (document.referrer && document.referrer.indexOf(location.origin) === 0) { location.href = document.referrer; return; }
       history.back();
+    }
+    function downloadQRImage(){
+      var target = document.querySelector('.card');
+      if(!target) return;
+      var fname = (<?php echo json_encode($data['code'] ?? 'VP'); ?>||'VP') + '_QR.png';
+      html2canvas(target, {scale:2, useCORS:true, backgroundColor:null}).then(function(canvas){
+        var link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = fname;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
     }
   </script>
   </head>
@@ -240,7 +254,7 @@ if (empty($error)) {
         ?>
       </div>
       <div class="qr-area">
-        <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" />
+        <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" crossorigin="anonymous" />
       </div>
       <div class="content">
         <div class="row">
@@ -275,7 +289,7 @@ if (empty($error)) {
         </div>
       </div>
       
-      <div class="verify"><a href="<?php echo htmlspecialchars($data['verification']); ?>" target="_blank">Open verification page</a></div>
+      <div class="verify"><a href="#" onclick="downloadQRImage();return false;">Download QR</a></div>
     </div>
     <?php endif; ?>
   </div>

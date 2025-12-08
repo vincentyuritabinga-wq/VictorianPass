@@ -43,11 +43,10 @@ $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
 $qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
 $qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
 $qrAbsPath = __DIR__ . '/' . $qrRelPath;
-if (!file_exists($qrAbsPath)) {
-  $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
-  $img = @file_get_contents($qrUrl);
-  if ($img !== false) { @file_put_contents($qrAbsPath, $img); }
-}
+// Always ensure the cached QR encodes the current resident ID link
+$qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
+$img = @file_get_contents($qrUrl);
+if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath = $qrUrl; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -240,7 +239,7 @@ if (!file_exists($qrAbsPath)) {
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 
-  .qr-container { text-align: center; padding-top: 20px; }
+  .qr-container { text-align: left; padding-top: 20px; }
   .qr-container img { width: 200px; height: 200px; object-fit: contain; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
   .qr-container p { font-size: 14px; margin: 5px 0; color: #23412e; }
 
@@ -296,10 +295,7 @@ if (!file_exists($qrAbsPath)) {
             <p><?php echo htmlspecialchars($user['email']); ?></p>
           </div>
         </div>
-        <!-- <div style="margin-bottom:10px;padding:10px 12px;border-left:4px solid #c0392b;background:#fff;color:#c0392b;border-radius:6px;">
-          Editing is disabled for residents. Please contact Admin to update your details.
-        </div> -->
-
+        <a class="view-btn" href="<?php echo htmlspecialchars($qrLink); ?>">OPEN DIGITAL QR CODE</a>
         <div class="info-row"><span class="info-label">Name:</span><span class="info-value"><?php echo htmlspecialchars($fullName); ?></span></div>
         <div class="info-row"><span class="info-label">Email:</span><span class="info-value" id="emailVal"><?php echo htmlspecialchars($user['email']); ?></span></div>
 
@@ -414,12 +410,7 @@ if (!file_exists($qrAbsPath)) {
           <?php } ?>
         </table>
 
-        <div class="qr-container">
-          <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="Resident QR Code">
-          <p><?php echo htmlspecialchars($fullName ?: 'Your name'); ?> <br><small>Verified User</small></p>
-          <a class="view-btn" href="<?php echo htmlspecialchars($qrLink); ?>">View Resident ID</a>
-          <a class="save-btn" href="<?php echo htmlspecialchars($qrRelPath); ?>" download="VictorianPass_QR_<?php echo intval($user['id'] ?? $userId); ?>.png">Download QR Code</a>
-        </div>
+        
       </div>
     </div>
   </div>
