@@ -1,4 +1,5 @@
 <?php
+session_start();
 header('Content-Type: application/json');
 include 'connect.php';
 
@@ -8,6 +9,25 @@ function ensureReservationsUpdatedAtColumn($con){
     if ($c && $c->num_rows === 0) { @$con->query("ALTER TABLE reservations ADD COLUMN updated_at TIMESTAMP NULL"); }
 }
 ensureReservationsUpdatedAtColumn($con);
+
+// Ensure scan logging table exists (idempotent)
+if ($con instanceof mysqli) {
+  $con->query("CREATE TABLE IF NOT EXISTS entry_scans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ref_code VARCHAR(50) NOT NULL,
+    scanned_by_guard_id INT NULL,
+    scanned_by_name VARCHAR(150) NULL,
+    subject_name VARCHAR(150) NULL,
+    entry_type VARCHAR(50) NULL,
+    status VARCHAR(50) NULL,
+    start_date DATE NULL,
+    end_date DATE NULL,
+    scanned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ref_code (ref_code),
+    INDEX idx_guard (scanned_by_guard_id),
+    INDEX idx_scanned_at (scanned_at)
+  ) ENGINE=InnoDB");
+}
 
 // Handle cancellation
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -180,6 +200,7 @@ if ($resGF && $resGF->num_rows > 0) {
       }
     }
     $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
+    // Build base response
     $resp = [
         'success' => true,
         'code' => $row['ref_code'],
@@ -210,6 +231,40 @@ if ($resGF && $resGF->num_rows > 0) {
         'end_time' => ($rEndTime ?: null),
         'expires_at' => $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : ''
     ];
+    // If a guard is scanning, record and annotate 'scanned_by'
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
+      $gid = isset($_SESSION['staff_id']) ? intval($_SESSION['staff_id']) : null;
+      // Prefer explicit guard surname stored on login, else derive from email
+      $gname = isset($_SESSION['guard_surname']) ? trim($_SESSION['guard_surname']) : '';
+      if ($gname === '' && isset($_SESSION['email'])) {
+        $local = explode('@', $_SESSION['email'])[0] ?? '';
+        $s = $local;
+        if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+        if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+        $s = preg_replace('/[^a-zA-Z]/', '', $s);
+        $gname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+      }
+      $resp['scanned_by'] = $gname !== '' ? $gname : 'Guard';
+      // Persist scan entry
+      if ($con instanceof mysqli) {
+        $exists = false;
+        $chk = $con->prepare("SELECT 1 FROM entry_scans WHERE ref_code = ? AND DATE(scanned_at) = CURDATE() LIMIT 1");
+        $chk->bind_param('s', $row['ref_code']);
+        $chk->execute();
+        $cres = $chk->get_result();
+        if ($cres && $cres->num_rows > 0) { $exists = true; }
+        $chk->close();
+        if (!$exists) {
+          $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+          $sd = $resp['start_date'] ? date('Y-m-d', strtotime($resp['start_date'])) : null;
+          $ed = $resp['end_date'] ? date('Y-m-d', strtotime($resp['end_date'])) : null;
+          $subject = $resp['name']; $etype = $resp['type']; $stat = $resp['status'];
+          $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
+          @$stmtLog->execute();
+          @$stmtLog->close();
+        }
+      }
+    }
     echo json_encode($resp);
     exit;
 }
@@ -296,7 +351,7 @@ if ($result && $result->num_rows > 0) {
     $birthRaw = !empty($row['ep_birthdate']) ? $row['ep_birthdate'] : ($row['user_birthdate'] ?? null);
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
     
-    echo json_encode([
+    $resp = [
         'success' => true,
         'code' => $row['ref_code'],
         'name' => $fullName,
@@ -321,7 +376,40 @@ if ($result && $result->num_rows > 0) {
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
         'end_time' => !empty($row['end_time']) ? $row['end_time'] : null,
         'expires_at' => $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : ''
-    ]);
+    ];
+    // Guard scan logging
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
+      $gid = isset($_SESSION['staff_id']) ? intval($_SESSION['staff_id']) : null;
+      $gname = isset($_SESSION['guard_surname']) ? trim($_SESSION['guard_surname']) : '';
+      if ($gname === '' && isset($_SESSION['email'])) {
+        $local = explode('@', $_SESSION['email'])[0] ?? '';
+        $s = $local;
+        if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+        if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+        $s = preg_replace('/[^a-zA-Z]/', '', $s);
+        $gname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+      }
+      $resp['scanned_by'] = $gname !== '' ? $gname : 'Guard';
+      if ($con instanceof mysqli) {
+        $exists = false;
+        $chk = $con->prepare("SELECT 1 FROM entry_scans WHERE ref_code = ? AND DATE(scanned_at) = CURDATE() LIMIT 1");
+        $chk->bind_param('s', $row['ref_code']);
+        $chk->execute();
+        $cres = $chk->get_result();
+        if ($cres && $cres->num_rows > 0) { $exists = true; }
+        $chk->close();
+        if (!$exists) {
+          $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+          $sd = $resp['start_date'] ? date('Y-m-d', strtotime($resp['start_date'])) : null;
+          $ed = $resp['end_date'] ? date('Y-m-d', strtotime($resp['end_date'])) : null;
+          $subject = $resp['name']; $etype = $resp['type']; $stat = $resp['status'];
+          $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
+          @$stmtLog->execute();
+          @$stmtLog->close();
+        }
+      }
+    }
+    echo json_encode($resp);
     exit;
 }
 
@@ -375,7 +463,7 @@ if ($res2 && $res2->num_rows > 0) {
         $stmtPay->close();
     }
 
-    echo json_encode([
+    $resp = [
         'success' => true,
         'code' => $row['ref_code'],
         'name' => $fullName !== '' ? $fullName : 'Resident',
@@ -399,7 +487,39 @@ if ($res2 && $res2->num_rows > 0) {
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
         'end_time' => !empty($row['end_time']) ? $row['end_time'] : null,
         'expires_at' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ''
-    ]);
+    ];
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
+      $gid = isset($_SESSION['staff_id']) ? intval($_SESSION['staff_id']) : null;
+      $gname = isset($_SESSION['guard_surname']) ? trim($_SESSION['guard_surname']) : '';
+      if ($gname === '' && isset($_SESSION['email'])) {
+        $local = explode('@', $_SESSION['email'])[0] ?? '';
+        $s = $local;
+        if (strpos($local, '_') !== false) { $parts = explode('_'); $s = end($parts); }
+        if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+        $s = preg_replace('/[^a-zA-Z]/', '', $s);
+        $gname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+      }
+      $resp['scanned_by'] = $gname !== '' ? $gname : 'Guard';
+      if ($con instanceof mysqli) {
+        $exists = false;
+        $chk = $con->prepare("SELECT 1 FROM entry_scans WHERE ref_code = ? AND DATE(scanned_at) = CURDATE() LIMIT 1");
+        $chk->bind_param('s', $row['ref_code']);
+        $chk->execute();
+        $cres = $chk->get_result();
+        if ($cres && $cres->num_rows > 0) { $exists = true; }
+        $chk->close();
+        if (!$exists) {
+          $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+          $sd = $resp['start_date'] ? date('Y-m-d', strtotime($resp['start_date'])) : null;
+          $ed = $resp['end_date'] ? date('Y-m-d', strtotime($resp['end_date'])) : null;
+          $subject = $resp['name']; $etype = $resp['type']; $stat = $resp['status'];
+          $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
+          @$stmtLog->execute();
+          @$stmtLog->close();
+        }
+      }
+    }
+    echo json_encode($resp);
     exit;
 }
 
