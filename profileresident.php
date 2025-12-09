@@ -327,7 +327,7 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
           $reservations = [];
           if ($con) {
             // Existing reservations
-            $stmtR = mysqli_prepare($con, "SELECT ref_code, amenity, start_date, end_date, approval_status, created_at FROM reservations WHERE user_id = ? ORDER BY created_at DESC LIMIT 20");
+            $stmtR = mysqli_prepare($con, "SELECT ref_code, amenity, start_date, end_date, approval_status, approval_date, payment_status, created_at FROM reservations WHERE user_id = ? ORDER BY created_at DESC LIMIT 20");
             if ($stmtR) {
               mysqli_stmt_bind_param($stmtR, 'i', $userId);
               mysqli_stmt_execute($stmtR);
@@ -370,7 +370,7 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
               mysqli_stmt_close($stmtGF);
             }
             // Deduplicate across sources by ref_code when present, otherwise by amenity+dates
-            $pref = ['resident_reservations' => 3, 'reservations' => 2, 'guest_forms' => 1];
+            $pref = ['reservations' => 3, 'resident_reservations' => 2, 'guest_forms' => 1];
             $map = [];
             foreach ($reservations as $row) {
               $key = '';
@@ -402,13 +402,14 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
           // Helper to compute status and css class
           function vp_compute_status($row) {
             $today = date('Y-m-d');
+            $src = strtolower($row['source'] ?? '');
+            $pay = strtolower($row['payment_status'] ?? '');
+            if ($src === 'reservations' && $pay === 'rejected') { return ['rejected','denied']; }
             $raw = isset($row['approval_status']) && $row['approval_status'] !== '' ? strtolower($row['approval_status']) : 'pending';
             if ($raw === 'approved') {
               if (!empty($row['end_date']) && $row['end_date'] < $today) { return ['expired','expired']; }
-              return ['approved','active'];
-            }
+              return ['approved','active']; }
             if ($raw === 'denied' || $raw === 'rejected') { return ['denied','denied']; }
-            // fallback check for expiry
             if (!empty($row['end_date']) && $row['end_date'] < $today) { return ['expired','expired']; }
             return ['pending','pending'];
           }

@@ -270,6 +270,7 @@
                 case 'expired': bannerText = '❌ Expired Entry Pass'; break;
                 case 'pending': bannerText = '⏳ Pending Review'; break;
                 case 'denied': bannerText = '❌ Denied Entry Pass'; break;
+                case 'rejected': bannerText = 'Rejected'; break;
                 case 'cancelled': bannerText = '❌ Cancelled Reservation'; break;
                 default: bannerText = `⚠️ ${data.message || 'Unknown status'}`;
               }

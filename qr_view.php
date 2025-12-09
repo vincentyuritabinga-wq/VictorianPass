@@ -297,6 +297,7 @@ if (empty($error)) {
             case 'approved': echo '✅ Valid Entry Pass'; break;
             case 'expired': echo '❌ Expired Entry Pass'; break;
             case 'denied': echo '❌ Denied Entry Pass'; break;
+            case 'rejected': echo 'Rejected'; break;
             default: echo '⏳ Pending Review';
           }
         ?>

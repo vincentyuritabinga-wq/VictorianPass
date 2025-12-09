@@ -116,6 +116,8 @@ if ($resGF && $resGF->num_rows > 0) {
         $statusVal = 'expired';
     }
 
+    // If linked reservation's payment is rejected, show overall status as rejected
+    // (handled after payment lookup below)
     $statusMessage = '';
     switch ($statusVal) {
         case 'approved': $statusMessage = 'Approved: Your guest entry is confirmed.'; break;
@@ -247,6 +249,10 @@ if ($result && $result->num_rows > 0) {
         $statusVal = 'pending';
     }
 
+    // Reflect rejected payment as rejected overall status
+    $pay = strtolower($row['payment_status'] ?? '');
+    if ($pay === 'rejected') { $statusVal = 'rejected'; }
+
     // Map status to message
     $statusMessage = '';
     switch ($statusVal) {
@@ -261,6 +267,9 @@ if ($result && $result->num_rows > 0) {
             break;
         case 'denied':
             $statusMessage = 'Denied: Your reservation was not approved.';
+            break;
+        case 'rejected':
+            $statusMessage = 'Rejected: Your payment was rejected.';
             break;
         default:
             $statusMessage = ucfirst($statusVal);
@@ -396,3 +405,5 @@ if ($res2 && $res2->num_rows > 0) {
 
 echo json_encode(['success' => false, 'message' => 'Invalid status code.']);
 exit;
+      // Override status to rejected if payment is rejected
+      if ($pay === 'rejected') { $statusVal = 'rejected'; $statusMessage = 'Rejected: Payment was rejected.'; }
