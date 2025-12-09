@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           }
         }
         $success = true;
-        $success_message = 'Your report has been successfully submitted. The admin will review it shortly.';
+        $success_message = 'Your report has been successfully submitted. The Guard will review it shortly.';
       } else {
         $errors[] = 'Failed to save report.';
       }

@@ -28,7 +28,74 @@ if ($staffId > 0) {
   $stmt->execute();
   $res = $stmt->get_result();
   while ($res && ($row = $res->fetch_assoc())) { $history[] = $row; }
-  $stmt->close();
+$stmt->close();
+}
+
+// Ensure incident tables and escalation columns exist
+$con->query("CREATE TABLE IF NOT EXISTS incident_reports (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  complainant VARCHAR(150) NOT NULL,
+  address VARCHAR(255) NOT NULL,
+  nature VARCHAR(255) NULL,
+  other_concern VARCHAR(255) NULL,
+  user_id INT NULL,
+  status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL,
+  INDEX idx_status (status),
+  INDEX idx_user_id (user_id)
+) ENGINE=InnoDB");
+$c1 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_to_admin'");
+if ($c1 && $c1->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_to_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER status"); }
+$c2 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_by_guard_id'");
+if ($c2 && $c2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_by_guard_id INT NULL AFTER escalated_to_admin"); }
+$c3 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_at'");
+if ($c3 && $c3->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_at DATETIME NULL AFTER escalated_by_guard_id"); }
+
+// API: list incidents for guards (not yet escalated)
+if (isset($_GET['action']) && $_GET['action'] === 'list_incidents') {
+  header('Content-Type: application/json');
+  $rows = [];
+  $q = "SELECT ir.id, ir.complainant, ir.subject, ir.address, ir.nature, ir.other_concern, ir.created_at, ir.status,
+               u.first_name, u.middle_name, u.last_name
+        FROM incident_reports ir
+        LEFT JOIN users u ON ir.user_id = u.id
+        WHERE COALESCE(ir.escalated_to_admin,0) = 0
+        ORDER BY ir.created_at DESC";
+  $res = $con->query($q);
+  if ($res) {
+    while ($r = $res->fetch_assoc()) {
+      $full = trim(($r['first_name'] ?? '') . ' ' . ($r['middle_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+      $rows[] = [
+        'id' => intval($r['id']),
+        'resident_name' => ($full !== '' ? $full : $r['complainant']),
+        'subject' => $r['subject'] ?? '',
+        'address' => $r['address'] ?? '',
+        'nature' => $r['nature'] ?? ($r['other_concern'] ?? ''),
+        'created_at' => $r['created_at'],
+        'status' => $r['status']
+      ];
+    }
+  }
+  echo json_encode(['success' => true, 'incidents' => $rows]);
+  exit;
+}
+
+// API: escalate incident to admin
+if (isset($_POST['action']) && $_POST['action'] === 'escalate' && isset($_POST['report_id'])) {
+  header('Content-Type: application/json');
+  $rid = intval($_POST['report_id']);
+  $gid = intval($staffId);
+  if ($rid > 0 && $gid > 0) {
+    $stmt = $con->prepare("UPDATE incident_reports SET escalated_to_admin = 1, escalated_by_guard_id = ?, escalated_at = NOW(), updated_at = NOW() WHERE id = ?");
+    $stmt->bind_param('ii', $gid, $rid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    echo json_encode(['success' => $ok]);
+  } else {
+    echo json_encode(['success' => false]);
+  }
+  exit;
 }
 ?>
 <!DOCTYPE html>
@@ -146,8 +213,12 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
       <div class="card-header">Manage Reported Incidents</div>
       <div class="card-body">
         <table id="incidentTable">
-          <tr><th>Report ID</th><th>Resident Name</th><th>Proof</th><th>Description</th><th>Action</th></tr>
-          <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
+          <thead>
+            <tr><th>Report ID</th><th>Resident Name</th><th>Description</th><th>Report Date</th><th>Action</th></tr>
+          </thead>
+          <tbody id="incidentTableBody">
+            <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
@@ -196,7 +267,45 @@ const pageTitle = document.getElementById('page-title');
 navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); pageTitle.textContent=item.querySelector('span').textContent; }); });
 function showToast(message, type){ const toast=document.getElementById('toast'); toast.textContent=message; toast.style.background=type==='error'?"var(--status-rejected)":"var(--status-approved)"; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2500); }
 function scanCode(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code to scan','error'); return; } fetch(`status.php?code=${encodeURIComponent(code)}`).then(r=>r.json()).then(data=>{ if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; } const tbl=document.getElementById('entryTable'); const empty=document.getElementById('emptyRow'); if(empty) empty.remove(); const dateDisplay=(data.start_date&&data.end_date)?`${data.start_date} → ${data.end_date}`:(data.start_date||'-'); const tr=document.createElement('tr'); tr.innerHTML=`<td>${data.code}</td><td>${data.name||'-'}</td><td>${data.type||'-'}</td><td>${dateDisplay}</td><td>${data.status||'-'}</td><td>${data.scanned_by||'-'}</td>`; tbl.appendChild(tr); showToast('Scan recorded'); }).catch(_=>{ showToast('Network error','error'); }); }
-function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
+  function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
+// Incident listing & escalation
+let lastIncidentIds = new Set();
+function renderIncidents(rows){
+  const tbody = document.getElementById('incidentTableBody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  if(!rows || rows.length===0){
+    const tr = document.createElement('tr'); tr.id='noIncidents'; tr.innerHTML = `<td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach(r=>{
+    const isNew = !lastIncidentIds.has(r.id);
+    lastIncidentIds.add(r.id);
+    const tr = document.createElement('tr');
+    const desc = (r.nature||'').trim();
+    const dt = r.created_at ? new Date(r.created_at) : null;
+    const dstr = dt ? dt.toLocaleDateString() : '';
+    tr.innerHTML = `<td>${r.id}</td><td>${(r.resident_name||'-')}</td><td>${desc||'-'}</td><td>${dstr}</td>
+      <td><button class="action-btn approve" data-id="${r.id}">Escalate to Admin</button></td>`;
+    tbody.appendChild(tr);
+    if(isNew){ showToast('New resident incident reported'); }
+  });
+  // Attach escalate handlers
+  Array.from(tbody.querySelectorAll('button.action-btn.approve')).forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = parseInt(this.getAttribute('data-id')||'0');
+      if(!id) return;
+      fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=escalate&report_id=${encodeURIComponent(id)}` })
+        .then(r=>r.json()).then(data=>{
+          if(data&&data.success){ showToast('Incident escalated to admin'); loadIncidents(); }
+          else { showToast('Failed to escalate','error'); }
+        }).catch(_=>{ showToast('Network error','error'); });
+    });
+  });
+}
+function loadIncidents(){ fetch('guard.php?action=list_incidents').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderIncidents(data.incidents||[]); } }).catch(_=>{}); }
+document.addEventListener('DOMContentLoaded', function(){ loadIncidents(); setInterval(loadIncidents, 15000); });
 </script>
 <script src="js/logout-modal.js"></script>
 </body>
