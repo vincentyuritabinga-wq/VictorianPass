@@ -315,12 +315,41 @@ if (isset($_POST['incident_action']) && isset($_POST['report_id'])) {
     if ($action === 'start') $newStatus = 'in_progress';
     elseif ($action === 'resolve') $newStatus = 'resolved';
     elseif ($action === 'reject') $newStatus = 'rejected';
+    elseif ($action === 'cancel') $newStatus = 'cancelled';
     if ($newStatus) {
         $stmt = $con->prepare("UPDATE incident_reports SET status = ?, updated_at = NOW() WHERE id = ?");
         $stmt->bind_param('si', $newStatus, $rid);
         $stmt->execute();
         $stmt->close();
     }
+    header("Location: admin.php?page=report");
+    exit;
+}
+
+// Handle incident report deletion by admin
+if (isset($_POST['incident_delete']) && isset($_POST['report_id'])) {
+    $rid = intval($_POST['report_id']);
+    // Delete files from disk
+    $stmtF = $con->prepare("SELECT file_path FROM incident_proofs WHERE report_id = ?");
+    $stmtF->bind_param('i', $rid);
+    $stmtF->execute();
+    $resF = $stmtF->get_result();
+    if ($resF) {
+        while ($rowF = $resF->fetch_assoc()) {
+            $fp = $rowF['file_path'];
+            if ($fp && file_exists($fp)) { @unlink($fp); }
+        }
+    }
+    $stmtF->close();
+    // Delete proofs and report
+    $stmtD = $con->prepare("DELETE FROM incident_proofs WHERE report_id = ?");
+    $stmtD->bind_param('i', $rid);
+    $stmtD->execute();
+    $stmtD->close();
+    $stmtR = $con->prepare("DELETE FROM incident_reports WHERE id = ?");
+    $stmtR->bind_param('i', $rid);
+    $stmtR->execute();
+    $stmtR->close();
     header("Location: admin.php?page=report");
     exit;
 }
@@ -656,7 +685,7 @@ function ensureIncidentTables($con) {
       nature VARCHAR(255) NULL,
       other_concern VARCHAR(255) NULL,
       user_id INT NULL,
-      status ENUM('new','in_progress','resolved','rejected') DEFAULT 'new',
+      status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL,
       INDEX idx_status (status),
@@ -670,6 +699,16 @@ function ensureIncidentTables($con) {
       uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_report_id (report_id)
     ) ENGINE=InnoDB");
+
+    $chkStatus = $con->query("SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incident_reports' AND COLUMN_NAME = 'status' LIMIT 1");
+    if ($chkStatus) {
+        $row = $chkStatus->fetch_assoc();
+        $colType = $row['COLUMN_TYPE'] ?? '';
+        if (strpos($colType, "'cancelled'") === false) {
+            $con->query("ALTER TABLE incident_reports MODIFY COLUMN status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new'");
+        }
+        $chkStatus->free();
+    }
 }
 
 ensureReservationStatusColumn($con);
@@ -2168,7 +2207,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               $rdate = !empty($r['report_date']) ? date('M d, Y', strtotime($r['report_date'])) : date('M d, Y', strtotime($r['created_at']));
               echo '<td>' . $rdate . '</td>';
               $status = $r['status'];
-              $badgeClass = $status === 'resolved' ? 'badge badge-approved' : ($status === 'rejected' ? 'badge badge-rejected' : 'badge badge-warning');
+              $badgeClass = $status === 'resolved' ? 'badge badge-approved' : ($status === 'rejected' ? 'badge badge-rejected' : ($status === 'cancelled' ? 'badge badge-expired' : 'badge badge-warning'));
               echo '<td><span class="' . $badgeClass . '">' . ucfirst($status) . '</span></td>';
               // Proofs
               $files = getIncidentProofs($con, intval($r['id']));
@@ -2202,6 +2241,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
               echo '<input type="hidden" name="incident_action" value="reject">';
               echo '<button type="submit" class="btn btn-reject">Reject</button>';
+              echo '</form>';
+              echo '<form method="POST" style="display:inline-block;margin-left:6px;" onsubmit="return confirm(\'Delete this incident report? This cannot be undone.\')">';
+              echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
+              echo '<input type="hidden" name="incident_delete" value="1">';
+              echo '<button type="submit" class="btn btn-remove">Delete</button>';
               echo '</form>';
               echo '</td>';
               echo '</tr>';

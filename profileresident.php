@@ -333,7 +333,7 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
               mysqli_stmt_execute($stmtR);
               $resR = mysqli_stmt_get_result($stmtR);
               if ($resR) {
-                while ($rowR = mysqli_fetch_assoc($resR)) { $reservations[] = $rowR; }
+                while ($rowR = mysqli_fetch_assoc($resR)) { $rowR['source'] = 'reservations'; $reservations[] = $rowR; }
               }
               mysqli_stmt_close($stmtR);
             }
@@ -344,7 +344,7 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
               mysqli_stmt_execute($stmtRR);
               $resRR = mysqli_stmt_get_result($stmtRR);
               if ($resRR) {
-                while ($rowRR = mysqli_fetch_assoc($resRR)) { $reservations[] = $rowRR; }
+                while ($rowRR = mysqli_fetch_assoc($resRR)) { $rowRR['source'] = 'resident_reservations'; $reservations[] = $rowRR; }
               }
               mysqli_stmt_close($stmtRR);
             }
@@ -363,11 +363,38 @@ if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath 
                     'end_date' => !empty($rowGF['end_date']) ? $rowGF['end_date'] : ($rowGF['visit_date'] ?? null),
                     'approval_status' => $rowGF['approval_status'] ?? 'pending',
                     'created_at' => $rowGF['created_at'] ?? null,
+                    'source' => 'guest_forms',
                   ];
                 }
               }
               mysqli_stmt_close($stmtGF);
             }
+            // Deduplicate across sources by ref_code when present, otherwise by amenity+dates
+            $pref = ['resident_reservations' => 3, 'reservations' => 2, 'guest_forms' => 1];
+            $map = [];
+            foreach ($reservations as $row) {
+              $key = '';
+              if (!empty($row['ref_code'])) {
+                $key = 'RC:' . strtolower(trim($row['ref_code']));
+              } else {
+                $amen = strtolower(trim($row['amenity'] ?? ''));
+                $sd = $row['start_date'] ?? '';
+                $ed = $row['end_date'] ?? '';
+                $key = 'K:' . $amen . '|' . $sd . '|' . $ed;
+              }
+              if (!isset($map[$key])) {
+                $map[$key] = $row;
+              } else {
+                $cur = $map[$key];
+                $a = $pref[$row['source']] ?? 0;
+                $b = $pref[$cur['source']] ?? 0;
+                if ($a > $b) { $map[$key] = $row; }
+                elseif ($a === $b) {
+                  if (($row['created_at'] ?? '') > ($cur['created_at'] ?? '')) { $map[$key] = $row; }
+                }
+              }
+            }
+            $reservations = array_values($map);
             // Sort combined list by created_at desc
             usort($reservations, function($a, $b){ return strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''); });
           }

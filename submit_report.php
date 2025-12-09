@@ -18,7 +18,7 @@ $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
   other_concern VARCHAR(255) NULL,
   user_id INT NULL,
   report_date DATE NULL,
-  status ENUM('new','in_progress','resolved','rejected') DEFAULT 'new',
+  status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL,
   INDEX idx_status (status),
@@ -26,8 +26,12 @@ $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
 ) ENGINE=InnoDB");
 
 // Add columns if missing (idempotent migrations)
-@$con->query("ALTER TABLE incident_reports ADD COLUMN subject VARCHAR(150) NULL");
-@$con->query("ALTER TABLE incident_reports ADD COLUMN report_date DATE NULL");
+$chk1 = $con->query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incident_reports' AND COLUMN_NAME = 'subject' LIMIT 1");
+if ($chk1 && $chk1->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN subject VARCHAR(150) NULL"); }
+if ($chk1) { $chk1->free(); }
+$chk2 = $con->query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incident_reports' AND COLUMN_NAME = 'report_date' LIMIT 1");
+if ($chk2 && $chk2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN report_date DATE NULL"); }
+if ($chk2) { $chk2->free(); }
 
 $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -36,6 +40,35 @@ $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_report_id (report_id)
 ) ENGINE=InnoDB");
+
+$chkStatus = $con->query("SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'incident_reports' AND COLUMN_NAME = 'status' LIMIT 1");
+if ($chkStatus) {
+  $row = $chkStatus->fetch_assoc();
+  $colType = $row['COLUMN_TYPE'] ?? '';
+  if (strpos($colType, "'cancelled'") === false) {
+    $con->query("ALTER TABLE incident_reports MODIFY COLUMN status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new'");
+  }
+  $chkStatus->free();
+}
+
+// Support cancellation by resident
+if (isset($_POST['action']) && $_POST['action'] === 'cancel' && isset($_POST['report_id'])) {
+  $rid = intval($_POST['report_id']);
+  $uid = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
+  if ($rid > 0 && $uid > 0) {
+    $stmtC = $con->prepare("UPDATE incident_reports SET status='cancelled', updated_at=NOW() WHERE id = ? AND (user_id = ? OR user_id IS NULL)");
+    $stmtC->bind_param('ii', $rid, $uid);
+    if ($stmtC->execute()) {
+      echo json_encode(['success' => true]);
+    } else {
+      echo json_encode(['success' => false, 'message' => 'Failed to cancel']);
+    }
+    $stmtC->close();
+    exit;
+  }
+  echo json_encode(['success' => false, 'message' => 'Invalid cancel request']);
+  exit;
+}
 
 // Inputs
 $complainant = trim($_POST['complainant'] ?? '');
