@@ -52,6 +52,25 @@ if ($c2 && $c2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD 
 $c3 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_at'");
 if ($c3 && $c3->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_at DATETIME NULL AFTER escalated_by_guard_id"); }
 
+// Ensure entry_scans table exists
+if ($con instanceof mysqli) {
+  $con->query("CREATE TABLE IF NOT EXISTS entry_scans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ref_code VARCHAR(50) NOT NULL,
+    scanned_by_guard_id INT NULL,
+    scanned_by_name VARCHAR(150) NULL,
+    subject_name VARCHAR(150) NULL,
+    entry_type VARCHAR(50) NULL,
+    status VARCHAR(50) NULL,
+    start_date DATE NULL,
+    end_date DATE NULL,
+    scanned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ref_code (ref_code),
+    INDEX idx_guard (scanned_by_guard_id),
+    INDEX idx_scanned_at (scanned_at)
+  ) ENGINE=InnoDB");
+}
+
 // API: list incidents for guards (not yet escalated)
 if (isset($_GET['action']) && $_GET['action'] === 'list_incidents') {
   header('Content-Type: application/json');
@@ -95,6 +114,38 @@ if (isset($_POST['action']) && $_POST['action'] === 'escalate' && isset($_POST['
   } else {
     echo json_encode(['success' => false]);
   }
+  exit;
+}
+
+// API: list today's entry scans
+if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
+  header('Content-Type: application/json');
+  $rows = [];
+  $q = "SELECT e.ref_code, e.scanned_by_name, e.subject_name, e.entry_type, e.status, e.start_date, e.end_date, e.scanned_at
+        FROM entry_scans e
+        INNER JOIN (
+          SELECT ref_code, MAX(scanned_at) AS ms
+          FROM entry_scans
+          WHERE DATE(scanned_at) = CURDATE()
+          GROUP BY ref_code
+        ) t ON e.ref_code = t.ref_code AND e.scanned_at = t.ms
+        ORDER BY e.scanned_at DESC";
+  $res = $con->query($q);
+  if ($res) {
+    while ($r = $res->fetch_assoc()) {
+      $rows[] = [
+        'code' => $r['ref_code'],
+        'name' => $r['subject_name'],
+        'type' => $r['entry_type'],
+        'start_date' => $r['start_date'],
+        'end_date' => $r['end_date'],
+        'status' => $r['status'],
+        'scanned_by' => $r['scanned_by_name'],
+        'scanned_at' => $r['scanned_at']
+      ];
+    }
+  }
+  echo json_encode(['success' => true, 'entries' => $rows]);
   exit;
 }
 ?>
@@ -205,7 +256,14 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
   <div id="entriesSection" class="section hidden">
     <div class="card">
       <div class="card-header">Today's Entry (Detailed)</div>
-      <div class="card-body">More entry logs will show here...</div>
+      <div class="card-body">
+        <table id="todayEntries" class="history-table">
+          <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th><th>Scanned At</th></tr>
+          <tbody id="todayEntriesBody">
+            <tr id="todayEmpty"><td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div id="restrictedSection" class="section hidden">
@@ -264,7 +322,7 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
 const navItems = document.querySelectorAll('.nav-item');
 const sections = document.querySelectorAll('.section');
 const pageTitle = document.getElementById('page-title');
-navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); pageTitle.textContent=item.querySelector('span').textContent; }); });
+navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); pageTitle.textContent=item.querySelector('span').textContent; if(item.dataset.section==='entries'){ loadTodayEntries(); } }); });
 function showToast(message, type){ const toast=document.getElementById('toast'); toast.textContent=message; toast.style.background=type==='error'?"var(--status-rejected)":"var(--status-approved)"; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2500); }
 function scanCode(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code to scan','error'); return; } fetch(`status.php?code=${encodeURIComponent(code)}`).then(r=>r.json()).then(data=>{ if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; } const tbl=document.getElementById('entryTable'); const empty=document.getElementById('emptyRow'); if(empty) empty.remove(); const dateDisplay=(data.start_date&&data.end_date)?`${data.start_date} → ${data.end_date}`:(data.start_date||'-'); const tr=document.createElement('tr'); tr.innerHTML=`<td>${data.code}</td><td>${data.name||'-'}</td><td>${data.type||'-'}</td><td>${dateDisplay}</td><td>${data.status||'-'}</td><td>${data.scanned_by||'-'}</td>`; tbl.appendChild(tr); showToast('Scan recorded'); }).catch(_=>{ showToast('Network error','error'); }); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
@@ -306,6 +364,11 @@ function renderIncidents(rows){
 }
 function loadIncidents(){ fetch('guard.php?action=list_incidents').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderIncidents(data.incidents||[]); } }).catch(_=>{}); }
 document.addEventListener('DOMContentLoaded', function(){ loadIncidents(); setInterval(loadIncidents, 15000); });
+function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); const sat=r.scanned_at?formatDateTime(r.scanned_at):''; tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${dateDisplay}</td><td>${r.status||'-'}</td><td>${r.scanned_by||'-'}</td><td>${sat}</td>`; tbody.appendChild(tr); }); }
+function formatMDY(ymd){ try{ const d=new Date(ymd); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; }catch(e){ return ymd; } }
+function formatDateTime(dt){ try{ const d=new Date(dt); const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); const hh=d.getHours().toString().padStart(2,'0'); const mi=d.getMinutes().toString().padStart(2,'0'); return `${mm}/${dd}/${yy} ${hh}:${mi}`; }catch(e){ return dt; } }
+function loadTodayEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderTodayEntries(data.entries||[]); } }).catch(_=>{}); }
+document.addEventListener('DOMContentLoaded', function(){ loadTodayEntries(); setInterval(loadTodayEntries, 60000); });
 </script>
 <script src="js/logout-modal.js"></script>
 </body>
