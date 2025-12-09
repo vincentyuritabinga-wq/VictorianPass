@@ -51,6 +51,11 @@ $c2 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_by_guard_i
 if ($c2 && $c2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_by_guard_id INT NULL AFTER escalated_to_admin"); }
 $c3 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_at'");
 if ($c3 && $c3->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_at DATETIME NULL AFTER escalated_by_guard_id"); }
+// Track guard-handled incidents
+$c4 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'handled_by_guard_id'");
+if ($c4 && $c4->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN handled_by_guard_id INT NULL AFTER escalated_at"); }
+$c5 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'handled_at'");
+if ($c5 && $c5->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN handled_at DATETIME NULL AFTER handled_by_guard_id"); }
 
 // Ensure entry_scans table exists
 if ($con instanceof mysqli) {
@@ -107,6 +112,23 @@ if (isset($_POST['action']) && $_POST['action'] === 'escalate' && isset($_POST['
   $gid = intval($staffId);
   if ($rid > 0 && $gid > 0) {
     $stmt = $con->prepare("UPDATE incident_reports SET escalated_to_admin = 1, escalated_by_guard_id = ?, escalated_at = NOW(), updated_at = NOW() WHERE id = ?");
+    $stmt->bind_param('ii', $gid, $rid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    echo json_encode(['success' => $ok]);
+  } else {
+    echo json_encode(['success' => false]);
+  }
+  exit;
+}
+
+// API: mark incident as handled by guard (in progress)
+if (isset($_POST['action']) && $_POST['action'] === 'handle' && isset($_POST['report_id'])) {
+  header('Content-Type: application/json');
+  $rid = intval($_POST['report_id']);
+  $gid = intval($staffId);
+  if ($rid > 0 && $gid > 0) {
+    $stmt = $con->prepare("UPDATE incident_reports SET status = 'in_progress', handled_by_guard_id = ?, handled_at = NOW(), updated_at = NOW() WHERE id = ?");
     $stmt->bind_param('ii', $gid, $rid);
     $ok = $stmt->execute();
     $stmt->close();
@@ -324,7 +346,9 @@ const sections = document.querySelectorAll('.section');
 const pageTitle = document.getElementById('page-title');
 navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); pageTitle.textContent=item.querySelector('span').textContent; if(item.dataset.section==='entries'){ loadTodayEntries(); } }); });
 function showToast(message, type){ const toast=document.getElementById('toast'); toast.textContent=message; toast.style.background=type==='error'?"var(--status-rejected)":"var(--status-approved)"; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2500); }
-function scanCode(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code to scan','error'); return; } fetch(`status.php?code=${encodeURIComponent(code)}`).then(r=>r.json()).then(data=>{ if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; } const tbl=document.getElementById('entryTable'); const empty=document.getElementById('emptyRow'); if(empty) empty.remove(); const dateDisplay=(data.start_date&&data.end_date)?`${data.start_date} → ${data.end_date}`:(data.start_date||'-'); const tr=document.createElement('tr'); tr.innerHTML=`<td>${data.code}</td><td>${data.name||'-'}</td><td>${data.type||'-'}</td><td>${dateDisplay}</td><td>${data.status||'-'}</td><td>${data.scanned_by||'-'}</td>`; tbl.appendChild(tr); showToast('Scan recorded'); }).catch(_=>{ showToast('Network error','error'); }); }
+function scanCode(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code to scan','error'); return; } fetch(`status.php?code=${encodeURIComponent(code)}`).then(r=>r.json()).then(data=>{ if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; } showToast('Scan recorded'); loadDashboardEntries(); }).catch(_=>{ showToast('Network error','error'); }); }
+function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${dateDisplay}</td><td>${r.status||'-'}</td><td>${r.scanned_by||'-'}</td>`; tbl.appendChild(tr); }); }
+function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
 // Incident listing & escalation
 let lastIncidentIds = new Set();
@@ -345,12 +369,27 @@ function renderIncidents(rows){
     const dt = r.created_at ? new Date(r.created_at) : null;
     const dstr = dt ? dt.toLocaleDateString() : '';
     tr.innerHTML = `<td>${r.id}</td><td>${(r.resident_name||'-')}</td><td>${desc||'-'}</td><td>${dstr}</td>
-      <td><button class="action-btn approve" data-id="${r.id}">Escalate to Admin</button></td>`;
+      <td>
+        <button class="action-btn handle-btn" data-id="${r.id}" style="background:#23412e">Handle Locally</button>
+        <button class="action-btn approve escalate-btn" data-id="${r.id}">Escalate to Admin</button>
+      </td>`;
     tbody.appendChild(tr);
     if(isNew){ showToast('New resident incident reported'); }
   });
+  // Attach handle locally
+  Array.from(tbody.querySelectorAll('button.handle-btn')).forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = parseInt(this.getAttribute('data-id')||'0');
+      if(!id) return;
+      fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=handle&report_id=${encodeURIComponent(id)}` })
+        .then(r=>r.json()).then(data=>{
+          if(data&&data.success){ showToast('Incident marked in progress'); loadIncidents(); }
+          else { showToast('Failed to update','error'); }
+        }).catch(_=>{ showToast('Network error','error'); });
+    });
+  });
   // Attach escalate handlers
-  Array.from(tbody.querySelectorAll('button.action-btn.approve')).forEach(btn=>{
+  Array.from(tbody.querySelectorAll('button.escalate-btn')).forEach(btn=>{
     btn.addEventListener('click', function(){
       const id = parseInt(this.getAttribute('data-id')||'0');
       if(!id) return;
@@ -368,7 +407,7 @@ function renderTodayEntries(rows){ const tbody=document.getElementById('todayEnt
 function formatMDY(ymd){ try{ const d=new Date(ymd); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; }catch(e){ return ymd; } }
 function formatDateTime(dt){ try{ const d=new Date(dt); const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); const hh=d.getHours().toString().padStart(2,'0'); const mi=d.getMinutes().toString().padStart(2,'0'); return `${mm}/${dd}/${yy} ${hh}:${mi}`; }catch(e){ return dt; } }
 function loadTodayEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderTodayEntries(data.entries||[]); } }).catch(_=>{}); }
-document.addEventListener('DOMContentLoaded', function(){ loadTodayEntries(); setInterval(loadTodayEntries, 60000); });
+document.addEventListener('DOMContentLoaded', function(){ loadTodayEntries(); loadDashboardEntries(); setInterval(loadTodayEntries, 60000); setInterval(loadDashboardEntries, 60000); });
 </script>
 <script src="js/logout-modal.js"></script>
 </body>
