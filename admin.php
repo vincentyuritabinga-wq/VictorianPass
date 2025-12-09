@@ -285,6 +285,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     if($rr){ while($row=$rr->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 8");
     if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    // Include escalated incident reports for admin notifications
+    $ir = $con->query("SELECT id, status, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 8");
+    if($ir){ while($row=$ir->fetch_assoc()){ $requests[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $items = array_merge($receipts, $requests);
     usort($items, function($a, $b){
         $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
@@ -490,7 +493,7 @@ function getAmenityReadyForApprovalCount($con){
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getOpenIncidentCount($con){
-  $q = "SELECT COUNT(*) AS c FROM incident_reports WHERE status IN ('new','in_progress')";
+  $q = "SELECT COUNT(*) AS c FROM incident_reports WHERE escalated_to_admin = 1 AND status IN ('new','in_progress')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingResidentAmenityCount($con){
@@ -520,8 +523,8 @@ function getRecentNotifications($con){
   if($rr){ while($row=$rr->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports ORDER BY created_at DESC LIMIT 5");
-  if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident: '.$row['status'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
+  $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
+  if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
   usort($items, function($a, $b){
     $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
     $eb = isset($b['epoch']) ? intval($b['epoch']) : 0;
@@ -587,7 +590,12 @@ function getSecurityGuards($con) {
 }
 
 function getIncidentReports($con) {
-    $query = "SELECT ir.*, u.first_name, u.middle_name, u.last_name FROM incident_reports ir LEFT JOIN users u ON ir.user_id = u.id ORDER BY ir.created_at DESC";
+    $query = "SELECT ir.*, u.first_name, u.middle_name, u.last_name, s.email AS escalated_by_email
+              FROM incident_reports ir
+              LEFT JOIN users u ON ir.user_id = u.id
+              LEFT JOIN staff s ON s.id = ir.escalated_by_guard_id
+              WHERE ir.escalated_to_admin = 1
+              ORDER BY ir.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
 }
@@ -708,6 +716,20 @@ function ensureIncidentTables($con) {
             $con->query("ALTER TABLE incident_reports MODIFY COLUMN status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new'");
         }
         $chkStatus->free();
+    }
+
+    // Add escalation tracking columns if missing
+    $c1 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_to_admin'");
+    if ($c1 && $c1->num_rows === 0) {
+        $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_to_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
+    }
+    $c2 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_by_guard_id'");
+    if ($c2 && $c2->num_rows === 0) {
+        $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_by_guard_id INT NULL AFTER escalated_to_admin");
+    }
+    $c3 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'escalated_at'");
+    if ($c3 && $c3->num_rows === 0) {
+        $con->query("ALTER TABLE incident_reports ADD COLUMN escalated_at DATETIME NULL AFTER escalated_by_guard_id");
     }
 }
 
@@ -1443,14 +1465,20 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
   .table-security thead th:nth-child(3),.table-security td:nth-child(3){width:20%;text-align:center}
   .table-security thead th:nth-child(4),.table-security td:nth-child(4){width:20%;text-align:center}
 
-  .table-report thead th:nth-child(1),.table-report td:nth-child(1){width:14%;text-align:left}
-  .table-report thead th:nth-child(2),.table-report td:nth-child(2){width:14%;text-align:left}
-  .table-report thead th:nth-child(3),.table-report td:nth-child(3){width:16%;text-align:left}
-  .table-report thead th:nth-child(4),.table-report td:nth-child(4){width:20%;text-align:left}
+  /* Reported Incidents table: fixed layout, equal-width columns, centered headers */
+  .table-report{table-layout:fixed}
+  .table-report thead th{white-space:nowrap;vertical-align:middle}
+  .table-report thead th,.table-report td{overflow:hidden;text-overflow:ellipsis}
+  .table-report thead th:nth-child(1),.table-report td:nth-child(1){width:10%;text-align:left}
+  .table-report thead th:nth-child(2),.table-report td:nth-child(2){width:10%;text-align:left}
+  .table-report thead th:nth-child(3),.table-report td:nth-child(3){width:10%;text-align:left}
+  .table-report thead th:nth-child(4),.table-report td:nth-child(4){width:10%;text-align:left}
   .table-report thead th:nth-child(5),.table-report td:nth-child(5){width:10%;text-align:center}
   .table-report thead th:nth-child(6),.table-report td:nth-child(6){width:10%;text-align:center}
-  .table-report thead th:nth-child(7),.table-report td:nth-child(7){width:8%;text-align:center}
-  .table-report thead th:nth-child(8),.table-report td:nth-child(8){width:8%;text-align:center}
+  .table-report thead th:nth-child(7),.table-report td:nth-child(7){width:10%;text-align:center}
+  .table-report thead th:nth-child(8),.table-report td:nth-child(8){width:10%;text-align:center}
+  .table-report thead th:nth-child(9),.table-report td:nth-child(9){width:10%;text-align:center}
+  .table-report thead th:nth-child(10),.table-report td:nth-child(10){width:10%;text-align:center}
 
   .table-visitor thead th:nth-child(1),.table-visitor td:nth-child(1){width:24%;text-align:left}
   .table-visitor thead th:nth-child(2),.table-visitor td:nth-child(2){width:18%;text-align:left}
@@ -2188,6 +2216,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
         <th>Address</th>
         <th>Report Date</th>
         <th>Status</th>
+        <th>Escalated By</th>
+        <th>Escalated At</th>
         <th>Proofs</th>
         <th>Actions</th>
       </tr>
@@ -2209,6 +2239,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               $status = $r['status'];
               $badgeClass = $status === 'resolved' ? 'badge badge-approved' : ($status === 'rejected' ? 'badge badge-rejected' : ($status === 'cancelled' ? 'badge badge-expired' : 'badge badge-warning'));
               echo '<td><span class="' . $badgeClass . '">' . ucfirst($status) . '</span></td>';
+              // Escalation details
+              $escBy = !empty($r['escalated_by_email']) ? $r['escalated_by_email'] : (isset($r['escalated_by_guard_id']) ? ('Guard ID ' . intval($r['escalated_by_guard_id'])) : '-');
+              $escAt = !empty($r['escalated_at']) ? date('M d, Y H:i', strtotime($r['escalated_at'])) : '-';
+              echo '<td>' . htmlspecialchars($escBy) . '</td>';
+              echo '<td>' . htmlspecialchars($escAt) . '</td>';
               // Proofs
               $files = getIncidentProofs($con, intval($r['id']));
               echo '<td>';
