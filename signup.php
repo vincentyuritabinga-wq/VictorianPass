@@ -1,18 +1,41 @@
 <?php 
 include("connect.php");
 session_start();
-// Track registration success to show banner and auto-redirect
 $registration_success = false;
 
-// 🧠 Pre-fill verified house number (if user came from verify_house.php)
 $verified_house = isset($_GET['house_number']) ? trim($_GET['house_number']) : '';
+
+function ensureVisitorSchema($con){
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'user_type'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strpos($row['Type'], "visitor") === false) {
+      $con->query("ALTER TABLE users MODIFY COLUMN user_type ENUM('resident','visitor') DEFAULT 'resident'");
+    }
+  }
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'house_number'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN house_number VARCHAR(50) NULL");
+    }
+  }
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'address'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN address VARCHAR(255) NULL");
+    }
+  }
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'valid_id_path'");
+  if ($res && $res->num_rows === 0) {
+    $con->query("ALTER TABLE users ADD COLUMN valid_id_path VARCHAR(255) NULL");
+  }
+}
+ensureVisitorSchema($con);
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $first_name = trim($_POST['first_name']);
   $middle_name = trim($_POST['middle_name']);
   $last_name = trim($_POST['last_name']);
   $phone = trim($_POST['phone']);
-  // Normalize and validate email
   $email = strtolower(trim($_POST['email']));
   $password = trim($_POST['password']);
   $confirm_password = trim($_POST['confirm_password']);
@@ -21,27 +44,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $house_number = isset($_POST['house_number']) ? trim($_POST['house_number']) : '';
   $address = isset($_POST['address']) ? trim($_POST['address']) : '';
   $terms_agreed = isset($_POST['terms_agreed']) ? $_POST['terms_agreed'] : '0';
+  $is_visitor = isset($_POST['is_visitor']) && $_POST['is_visitor'] === '1';
   $serverErrors = [];
 
-  // 🛑 Require verified house number (targets the homeowner section via houseHidden)
-  if (empty($house_number)) {
-    $serverErrors['houseHidden'] = 'Please verify your House Number before signing up.';
+  // File Upload Logic
+  $valid_id_path = null;
+  if ($is_visitor && isset($_FILES['valid_id']) && $_FILES['valid_id']['error'] === UPLOAD_ERR_OK) {
+      $uploadDir = 'uploads/ids/';
+      if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+      $fileName = time() . '_' . basename($_FILES['valid_id']['name']);
+      $targetPath = $uploadDir . $fileName;
+      if (move_uploaded_file($_FILES['valid_id']['tmp_name'], $targetPath)) {
+          $valid_id_path = $targetPath;
+      } else {
+          $serverErrors['valid_id'] = 'Failed to upload Valid ID.';
+      }
+  } elseif ($is_visitor && (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK)) {
+      $serverErrors['valid_id'] = 'Valid ID is required for visitors.';
   }
 
   if ($password !== $confirm_password) {
     $serverErrors['confirm_password'] = 'Passwords do not match.';
   }
 
-  // ✅ Require Terms & Conditions agreement (server-side safeguard)
   if ($terms_agreed !== '1') {
     $serverErrors['terms'] = 'Please read and agree to the Terms & Conditions.';
   }
 
-  // 🔎 Validate email format
   if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $serverErrors['email'] = 'Please enter a valid email address.';
   } else {
-    // 🔍 Check if email exists (case-insensitive, portable API)
     $checkEmail = $con->prepare("SELECT id FROM users WHERE LOWER(email) = ?");
     $checkEmail->bind_param("s", $email);
     $checkEmail->execute();
@@ -52,48 +84,56 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $checkEmail->close();
   }
 
-  // 🔍 Check house validity
-  $checkHouse = $con->prepare("SELECT id FROM houses WHERE house_number = ?");
-  $checkHouse->bind_param("s", $house_number);
-  $checkHouse->execute();
-  $checkHouse->store_result();
-  if ($checkHouse->num_rows === 0) {
-    $serverErrors['houseHidden'] = 'Invalid or unregistered House Number.';
-  }
-  $checkHouse->close();
+  if (!$is_visitor) {
+    if (empty($house_number)) {
+      $serverErrors['houseHidden'] = 'Please verify your House Number before signing up.';
+    } else {
+      $checkHouse = $con->prepare("SELECT id FROM houses WHERE house_number = ?");
+      $checkHouse->bind_param("s", $house_number);
+      $checkHouse->execute();
+      $checkHouse->store_result();
+      if ($checkHouse->num_rows === 0) {
+        $serverErrors['houseHidden'] = 'Invalid or unregistered House Number.';
+      }
+      $checkHouse->close();
 
-  // 🚫 Prevent duplicate account for same house
-  $checkDuplicate = $con->prepare("SELECT id FROM users WHERE house_number = ?");
-  $checkDuplicate->bind_param("s", $house_number);
-  $checkDuplicate->execute();
-  $checkDuplicate->store_result();
-  if ($checkDuplicate->num_rows > 0) {
-    $serverErrors['houseHidden'] = 'This house number is already registered.';
+      $checkDuplicate = $con->prepare("SELECT id FROM users WHERE house_number = ?");
+      $checkDuplicate->bind_param("s", $house_number);
+      $checkDuplicate->execute();
+      $checkDuplicate->store_result();
+      if ($checkDuplicate->num_rows > 0) {
+        $serverErrors['houseHidden'] = 'This house number is already registered.';
+      }
+      $checkDuplicate->close();
+    }
+  } else {
+    $house_number = null;
+    $address = null;
   }
-  $checkDuplicate->close();
 
-  // 📞 Validate Philippine mobile number: must start with 09 and be 11 digits
   if (empty($phone) || !preg_match('/^09\d{9}$/', $phone)) {
     $serverErrors['phone'] = 'Phone number must be 11 digits and start with 09.';
   }
 
-  // ✅ Register user if no errors
   if (empty($serverErrors)) {
     $hashed = password_hash($password, PASSWORD_DEFAULT);
+    $user_type = $is_visitor ? 'visitor' : 'resident';
     $stmt = $con->prepare("INSERT INTO users 
-      (first_name, middle_name, last_name, phone, email, password, sex, birthdate, house_number, address, user_type)
-      VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 'resident')");
-    $stmt->bind_param("ssssssssss", 
-      $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address);
+      (first_name, middle_name, last_name, phone, email, password, sex, birthdate, house_number, address, user_type, valid_id_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssssss", $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address, $user_type, $valid_id_path);
 
     if ($stmt->execute()) {
       $newUserId = $stmt->insert_id;
       $_SESSION['user_id'] = $newUserId;
-      $_SESSION['user_type'] = 'resident';
-      header('Location: profileresident.php');
+      $_SESSION['user_type'] = $user_type;
+      if ($user_type === 'resident') {
+        header('Location: profileresident.php');
+      } else {
+        header('Location: mainpage.php');
+      }
       exit;
     } else {
-      // Handle duplicate email race condition safely
       if ($con->errno === 1062) {
         $serverErrors['email'] = 'Email already exists.';
       } else {
@@ -217,7 +257,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <h1>Sign Up</h1>
       <p class="subtitle">Create your Account</p>
 
-      <form class="signup-form" id="signupForm" method="POST" action="signup.php" novalidate <?php if ($registration_success) echo 'style="display:none"'; ?>>
+      <form class="signup-form" id="signupForm" method="POST" action="signup.php" enctype="multipart/form-data" novalidate <?php if ($registration_success) echo 'style="display:none"'; ?>>
         <input type="hidden" id="terms_agreed" name="terms_agreed" value="0">
         <div class="form-row">
           <div class="input-wrap">
@@ -241,13 +281,43 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="email" name="email" id="email" placeholder="Email*" required>
         </div>
 
-        <!-- ✅ House verification section -->
-        <div class="form-row homeowner">
-          <a href="#" class="verify-link" onclick="openHouseModal(); return false;">
-            <img src="images/signuppage/location.svg" alt="Location"> Verify House Number
-          </a>
-          <span id="houseVerifiedBadge" style="display:none;margin-left:8px;color:#23412e;font-weight:600;">Verified</span>
+        <div class="input-wrap" id="visitorToggleWrap" style="margin-bottom: 15px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="isVisitor" name="is_visitor" value="1" style="width:auto; margin:0;">
+            <label for="isVisitor" style="margin:0; font-weight:600; color:#23412e;">I am a Visitor</label>
+          </div>
+          <p style="font-size: 0.75rem; color: #777; margin: 4px 0 0 24px; line-height: 1.3;">
+             Reminders: For Visitors, No House Verification Required.
+          </p>
+        </div>
 
+        <div class="input-wrap" id="visitorIdWrap" style="display:none; margin-bottom: 15px;">
+          <label for="valid_id" style="display:block; margin-bottom:5px; font-weight:600; color:#23412e;">Upload Valid ID (Required for Visitors)</label>
+          <input type="file" name="valid_id" id="valid_id" accept="image/*,.pdf" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%;">
+          <?php if (isset($serverErrors['valid_id'])): ?>
+            <div class="field-warning" role="alert" style="display: flex;">
+              <span class="warn-icon">!</span>
+              <span class="warn-msg"><?php echo htmlspecialchars($serverErrors['valid_id']); ?></span>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <!-- House verification section -->
+        <div class="form-row homeowner" style="align-items: flex-start; justify-content: space-between; gap: 1rem; border: 1px solid #eee; padding: 10px; border-radius: 8px; background: #fafafa;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <img src="images/signuppage/location.svg" alt="Location" style="width: 20px;">
+              <span style="font-weight: 600; color: #23412e; font-size: 1.1rem;">Your House Number <span style="font-weight: 400; color: #999; font-size: 0.9em;">(Residents Only)</span></span>
+            </div>
+            <p style="font-size: 0.75rem; color: #777; margin: 0 0 0 28px; line-height: 1.3;">
+              Reminders: For Residents, Please Use Your Designated House number Above.
+            </p>
+          </div>
+          
+          <button type="button" onclick="openHouseModal()" id="houseVerifyBtn" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f0f0f0; cursor: pointer; color: #888; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
+            VH-0000
+          </button>
+          
           <input type="hidden" id="houseHidden" name="house_number" value="<?php echo htmlspecialchars($verified_house); ?>">
         </div>
           <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
@@ -293,54 +363,70 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       </div>
 
-      <p class="instructions"><i>Residents: Please verify your unique House Number on the next page to confirm residency.</i></p>
+      <p class="instructions" style="display:none;"><i>Residents: Please verify your unique House Number to confirm residency.</i></p>
     </div>
 
     <!-- Terms Modal -->
     <div id="termsModal" class="modal">
-      <div class="modal-content">
-        <span class="close" onclick="closeTerms()">&times;</span>
-        <h2>Terms & Services</h2>
-        <p><strong>In using this website you are deemed to have read and agreed to the following terms and conditions:</strong></p>
-        <p>
-          The following terminology applies to these Terms and Conditions, Privacy Statement and Disclaimer Notice and any or all Agreements:
-          "Customer", "You" and "Your" refers to you, the person accessing this website and accepting the Company's terms and conditions.
+      <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
+        <span class="close" onclick="closeTerms()" style="top: 20px; right: 25px;">&times;</span>
+        <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Terms & Services</h2>
+        
+        <p style="text-align: center; font-weight: 600; margin-bottom: 25px; line-height: 1.5; color: #000;">
+          In using this website you are deemed to have read and agreed to the following terms and conditions:
         </p>
-        <h3>Effective Date: [September 01, 2026]</h3>
-        <h4>1. User Roles</h4>
-        <ul>
-          <li>Residents: Must provide accurate info, manage guest entries responsibly, and use the system for valid purposes only.</li>
-          <li>Visitors: Must present valid QR codes and follow subdivision rules.</li>
-          <li>Admins/Guards/HOA: Manage logs, approve entries, and maintain system security.</li>
-        </ul>
-        <h4>2. Privacy and Data</h4>
-        <ul>
-          <li>Your data is used only for entry validation and amenity booking.</li>
-          <li>No data will be shared without consent unless required by law.</li>
-        </ul>
-        <h4>3. Amenity Booking</h4>
-        <ul>
-          <li>Bookings are first-come, first-served.</li>
-          <li>Cancel if unable to attend.</li>
-          <li>Misuse may result in account restriction.</li>
-          <li>All billings will be done by walk-in.</li>
-        </ul>
-        <h4>4. QR Code Rules</h4>
-        <ul>
-          <li>QR codes are unique and time-limited.</li>
-          <li>Sharing or tampering with codes is prohibited.</li>
-        </ul>
-        <h4>5. Violations</h4>
-        <ul>
-          <li>Misuse may result in blacklisting or suspension.</li>
-          <li>HOA reserves the right to restrict access if rules are broken.</li>
-        </ul>
-        <h4>6. System Use</h4>
-        <ul>
-          <li>System may go offline for updates.</li>
-          <li>Users accept possible downtime.</li>
-        </ul>
-        <button class="btn confirm" onclick="agreeTerms()">I Agree</button>
+
+        <div style="font-size: 0.95rem; color: #333; line-height: 1.6;">
+          <p style="margin-bottom: 15px;">
+            The following terminology applies to these Terms and Conditions, Privacy Statement and Disclaimer Notice and any or all Agreements: “Customer”, “You” and “Your” refers to you, the person accessing this website and accepting the Company’s terms and conditions.
+          </p>
+          <p style="margin-bottom: 25px;">Effective Date: [September 00, 2025]</p>
+
+          <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">User Roles</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>Residents: Must provide accurate info, manage guest entries responsibly, and use the system for valid purposes only.</li>
+              <li>Visitors: Must present valid QR codes and follow subdivision rules.</li>
+              <li>Admins/Guards/HOA: Manage logs, approve entries, and maintain system security.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">Privacy and Data</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>Your data is used only for entry validation and amenity booking.</li>
+              <li>No data will be shared without consent unless required by law.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">Amenity Booking</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>Bookings are first-come, first-served.</li>
+              <li>Cancel if unable to attend.</li>
+              <li>Misuse may result in account restriction.</li>
+              <li>All billings will be done by walk-in.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">QR Code Rules</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>QR codes are unique and time-limited.</li>
+              <li>Sharing or tampering with codes is prohibited.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 30px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">System Use</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>System may go offline for updates.</li>
+              <li>Users accept possible downtime.</li>
+            </ul>
+          </div>
+        </div>
+
+        <button class="btn confirm" onclick="agreeTerms()" style="width: 100%; background-color: #355340; padding: 12px; border-radius: 6px; font-size: 1rem;">Confirm</button>
       </div>
     </div>
 
@@ -350,6 +436,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <span class="close" onclick="closeHouseModal()">&times;</span>
         <h2>Verify House Number</h2>
         <p>Enter your registered House Number as listed in HOA records.</p>
+        <p style="font-size:0.9rem;color:#555;margin-bottom:10px;"><i>Residents: Please verify your unique House Number to confirm residency.</i></p>
         <input type="text" id="houseInput" placeholder="e.g., VH-1023" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-family:'Poppins',sans-serif;">
         <div style="display:flex;gap:10px;margin-top:12px;">
           <button class="btn cancel" onclick="closeHouseModal()">Cancel</button>
@@ -513,6 +600,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       const password = document.getElementById('password');
       const confirmPwd = document.getElementById('confirm_password');
       const houseHidden = document.getElementById('houseHidden');
+      const isVisitor = document.getElementById('isVisitor');
+      const homeownerRow = document.querySelector('.homeowner');
+      const addressField = document.getElementById('addressField');
       const form = document.getElementById('signupForm');
 
       function blockDigits(e) {
@@ -561,6 +651,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         });
       }
 
+      function applyVisitorMode(){
+        if (!isVisitor) return;
+        const idWrap = document.getElementById('visitorIdWrap');
+        if (isVisitor.checked) {
+          if (homeownerRow) homeownerRow.style.display = 'none';
+          if (addressField) { addressField.required = false; addressField.style.display = 'none'; addressField.value = ''; }
+          if (houseHidden) { houseHidden.value = ''; }
+          if (idWrap) idWrap.style.display = 'block';
+          setWarning('houseHidden', '');
+        } else {
+          if (homeownerRow) homeownerRow.style.display = 'flex';
+          if (addressField) { addressField.required = true; addressField.style.display = 'block'; }
+          if (idWrap) idWrap.style.display = 'none';
+        }
+      }
+      if (isVisitor) {
+        isVisitor.addEventListener('change', applyVisitorMode);
+        applyVisitorMode();
+      }
+
       if (form) {
         form.addEventListener('submit', function(e) {
           let valid = true;
@@ -602,11 +712,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             valid = false;
           }
 
-          // Require verified house number: open verify modal when missing
-          if (houseHidden && !houseHidden.value.trim()) {
-            setWarning('houseHidden', 'Please verify your House Number.');
-            if (typeof openHouseModal === 'function') openHouseModal();
-            valid = false;
+          if (!isVisitor || !isVisitor.checked) {
+            if (houseHidden && !houseHidden.value.trim()) {
+              setWarning('houseHidden', 'Please verify your House Number.');
+              if (typeof openHouseModal === 'function') openHouseModal();
+              valid = false;
+            }
+          } else {
+            setWarning('houseHidden', '');
           }
 
           // Terms: show inline warning and block submit until agreed
@@ -695,9 +808,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         const data = await res.json();
         if(data && data.success){
           document.getElementById('houseHidden').value = house;
-          const badge = document.getElementById('houseVerifiedBadge');
-          badge.style.display = 'inline';
-          badge.textContent = 'Verified: ' + house;
+          
+          // Update button appearance
+          const btn = document.getElementById('houseVerifyBtn');
+          if(btn) {
+            btn.textContent = house;
+            btn.style.background = '#e6ffed';
+            btn.style.borderColor = '#23412e';
+            btn.style.color = '#23412e';
+            btn.style.fontWeight = '600';
+          }
+
           status.style.display = 'block';
           status.style.color = '#23412e';
           status.textContent = 'House number is valid and saved.';
@@ -716,27 +837,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
   </script>
 
-  <script>
-    function togglePassword(id, el) {
-      const input = document.getElementById(id);
-      input.type = input.type === "password" ? "text" : "password";
-      el.textContent = input.type === "password" ? "👁️" : "🙈";
-    }
 
-    function openTerms() {
-      document.getElementById("termsModal").style.display = "block";
-    }
-    function closeTerms() {
-      document.getElementById("termsModal").style.display = "none";
-    }
-    function agreeTerms() {
-      const checkbox = document.getElementById("terms");
-      checkbox.disabled = false;
-      checkbox.checked = true;
-      const ta = document.getElementById('terms_agreed');
-      if (ta) { ta.value = '1'; }
-      closeTerms();
-    }
-  </script>
 </body>
 </html>

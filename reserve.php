@@ -391,7 +391,8 @@ $stmtGate = $con->prepare("SELECT payment_status, amenity, start_date FROM reser
 }
 }
 // Enforce gate for visitors (no resident session or entry_pass_id provided)
-if ((!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'resident') && (!isset($_GET['entry_pass_id']) || $_GET['entry_pass_id'] === '')) {
+// Allow logged-in visitors to proceed without entry_pass_id
+if ((!isset($_SESSION['user_type']) || ($_SESSION['user_type'] !== 'resident' && $_SESSION['user_type'] !== 'visitor')) && (!isset($_GET['entry_pass_id']) || $_GET['entry_pass_id'] === '')) {
   if ($refFromQuery === '') { $canSubmit = false; }
 }
 

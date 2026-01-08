@@ -70,7 +70,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($row['user_type'] === 'resident') {
                     echo "<script>window.location.href='profileresident.php';</script>";
                 } else {
-                    echo "<script>window.location.href='mainpage.php';</script>";
+                    echo "<script>window.location.href='dashboardvisitor.php';</script>";
                 }
                 exit();
             } else {

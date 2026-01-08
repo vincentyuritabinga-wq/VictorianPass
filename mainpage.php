@@ -29,25 +29,73 @@ function ensureEntryPassesTable($con) {
 
 ensureEntryPassesTable($con);
 
+// Ensure users table schema supports visitors
+function ensureUserSchema($con){
+  // Add 'visitor' to user_type enum if missing
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'user_type'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strpos($row['Type'], "visitor") === false) {
+      $con->query("ALTER TABLE users MODIFY COLUMN user_type ENUM('resident','visitor') DEFAULT 'resident'");
+    }
+  }
+  // Make house_number nullable
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'house_number'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN house_number VARCHAR(50) NULL");
+    }
+  }
+  // Make address nullable
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'address'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN address VARCHAR(255) NULL");
+    }
+  }
+}
+ensureUserSchema($con);
+
 $error = '';
 
-// Load resident mini profile data (for dropdown)
-$residentName = '';
-$residentHouse = '';
-$hasResidentProfile = false;
-if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
+// Load user profile data (resident or visitor)
+$userName = '';
+$userHouse = '';
+$userType = '';
+$isLoggedIn = false;
+$isResident = false;
+$isVisitor = false;
+
+if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
+  $isLoggedIn = true;
   $uid = (int)$_SESSION['user_id'];
-  if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number FROM users WHERE id = ? LIMIT 1")) {
-    $stmt->bind_param("i", $uid);
-    if ($stmt->execute()) {
-      $stmt->bind_result($first, $middle, $last, $house);
-      if ($stmt->fetch()) {
-        $residentName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
-        $residentHouse = $house ?? '';
-        $hasResidentProfile = true;
+  $userType = $_SESSION['user_type'];
+  
+  if ($userType === 'resident') {
+    $isResident = true;
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number FROM users WHERE id = ? LIMIT 1")) {
+      $stmt->bind_param("i", $uid);
+      if ($stmt->execute()) {
+        $stmt->bind_result($first, $middle, $last, $house);
+        if ($stmt->fetch()) {
+          $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userHouse = $house ?? '';
+        }
       }
+      $stmt->close();
     }
-    $stmt->close();
+  } elseif ($userType === 'visitor') {
+    $isVisitor = true;
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name FROM users WHERE id = ? LIMIT 1")) {
+      $stmt->bind_param("i", $uid);
+      if ($stmt->execute()) {
+        $stmt->bind_result($first, $middle, $last);
+        if ($stmt->fetch()) {
+          $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userHouse = 'Visitor';
+        }
+      }
+      $stmt->close();
+    }
   }
 }
 
@@ -164,29 +212,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <a href="#about-system">About the System</a>
       </nav>
       <div class="nav-actions">
-        <a href="checkurstatus.php" class="btn-nav btn-status" id="checkStatusNav" style="display: none;">Check Status</a>
-        <div class="nav-links" id="navLinks" style="display: none;">
-          <a href="login.php" class="btn-nav btn-login">Login</a>
-          <a href="signup.php" class="btn-nav btn-register">Register</a>
-          <div id="profileIcon" class="profile-icon-wrap" style="display: none;">
-            <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon">
-            <?php if ($hasResidentProfile): ?>
-            <div id="profileDropdown" class="profile-dropdown" role="dialog" aria-label="Resident quick profile">
-              <div class="mini-profile">
-                <img src="images/mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
-                <div class="mini-text">
-                  <span class="mini-name"><?php echo htmlspecialchars($residentName); ?></span>
-                  <span class="mini-house">House No.: <?php echo htmlspecialchars($residentHouse); ?></span>
+        <?php if ($isLoggedIn): ?>
+          <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
+             <span>Hi, <?php echo htmlspecialchars($userName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
+             <div id="profileIcon" class="profile-icon-wrap">
+                <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon" onclick="toggleProfileDropdown()">
+                <div id="profileDropdown" class="profile-dropdown">
+                  <div class="mini-profile">
+                    <img src="images/mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
+                    <div class="mini-text">
+                      <span class="mini-name"><?php echo htmlspecialchars($userName ?: 'User'); ?></span>
+                      <?php if($userHouse): ?>
+                      <span class="mini-house"><?php echo ($isResident ? 'House No.: ' : '') . htmlspecialchars($userHouse); ?></span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <a href="<?php echo $isResident ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="btn btn-view">Dashboard</a>
+                    <a href="logout.php" class="btn btn-logout">Log Out</a>
+                  </div>
                 </div>
-              </div>
-              <div class="actions">
-                <a href="profileresident.php" class="btn btn-view">Dashboard</a>
-                <a href="logout.php" class="btn btn-logout">Log Out</a>
-              </div>
-            </div>
-            <?php endif; ?>
+             </div>
           </div>
-        </div>
+        <?php else: ?>
+          <div class="nav-links" style="display:flex;">
+            <a href="login.php" class="btn-nav btn-login">Login</a>
+            <a href="signup.php" class="btn-nav btn-register">Register</a>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
 
@@ -198,15 +251,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <?php if ($error !== '') { echo '<div class="error">' . htmlspecialchars($error) . '</div>'; } ?>
     <div class="hero-content">
       
-
-      <div class="hero-icons" id="entryPassButtonWrapper" style="display:none;">
-        <a href="entrypass.html" class="icon-box" id="entryFormButton">
-          <img src="images/entrypass.svg" alt="Entry Pass">
-          <span>Entry Pass Form</span>
-        </a>
-      
-      </div>
-      <br>
       <h2>WELCOME TO</h2>
       <div class="hero-brand">
         <h1>VictorianPass</h1>
@@ -217,40 +261,58 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <img src="images/logo.svg" alt="Emblem">
         <span class="line"></span>
       </div>
-      <!--<h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
-      <p class="welcome-subtitle">
-        VictorianPass: An Online Amenity Reservation System<br>
-        with QR-based Entry Pass Security<br>
-        for Victorian Heights Subdivision
-      </p> -->      <!-- Moved User Type Dropdown to bottom of hero -->
-      <div class="user-type-center">
-        <div class="user-type-dropdown" id="userTypeDropdown">
-          <button class="dropdown-btn" id="dropdownBtn">
-            <span>Pick User Role</span>
-            <span class="dropdown-arrow">▼</span>
+
+      <p class="tagline">Every home has a Story. Starts Your in a Place Worth Remembering</p>
+
+      <div class="action-buttons" style="margin-top: 30px; display:flex; gap:15px; flex-wrap:wrap;">
+        <?php if (!$isLoggedIn): ?>
+          <button class="btn-change" onclick="window.location.href='login.php'" style="padding: 16px 40px; font-size: 1.2rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Let’s Start</button>
+          
+          <button class="btn-change" onclick="document.getElementById('loginModal').style.display='flex'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: transparent; color: #fff; border: 2px solid #f2c24f; cursor:pointer; font-weight:600;">
+            Check Status
           </button>
-          <div class="dropdown-content" id="dropdownContent">
-            <a href="#" onclick="selectUserType('resident')">Resident</a>
-            <?php if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'): ?>
-              <a href="#" onclick="return false" title="Log out to switch">Visitor</a>
-            <?php else: ?>
-              <a href="#" onclick="selectUserType('visitor')">Visitor</a>
-            <?php endif; ?>
+        <?php else: ?>
+          <?php if ($isVisitor): ?>
+             <button class="btn-change" onclick="window.location.href='reserve.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Reserve an Amenity</button>
+             <button class="btn-change" onclick="window.location.href='dashboardvisitor.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #23412e; color: #fff; box-shadow: 0 4px 15px rgba(35, 65, 46, 0.4); border:1px solid #f2c24f; cursor:pointer; font-weight:600;">Check Status</button>
+          <?php else: ?>
+             <button class="btn-change" onclick="window.location.href='profileresident.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #23412e; color: #fff; box-shadow: 0 4px 15px rgba(35, 65, 46, 0.4); border:1px solid #f2c24f; cursor:pointer; font-weight:600;">My Dashboard</button>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
+      
+      <!-- Login Required Modal -->
+      <div id="loginModal" class="flash-overlay" style="display:none;">
+        <div class="flash-modal" style="text-align:center; padding:30px;">
+          <div class="title" style="color:#23412e; font-size:1.5rem; margin-bottom:10px;">Login Required</div>
+          <div class="text" style="color:#555; margin-bottom:20px;">Please login to view your status.</div>
+          <div style="display:flex; gap:10px; justify-content:center;">
+             <button onclick="window.location.href='login.php'" style="padding:10px 20px; background:#23412e; color:#fff; border:none; border-radius:5px; cursor:pointer;">Login</button>
+             <button onclick="document.getElementById('loginModal').style.display='none'" style="padding:10px 20px; background:#ccc; color:#333; border:none; border-radius:5px; cursor:pointer;">Cancel</button>
           </div>
         </div>
       </div>
-      <p class="tagline">Every home holds a story, start yours in a place worth remembering.</p>
 
-      
+      <script>
+         // Close modal when clicking outside
+         document.getElementById('loginModal').addEventListener('click', function(e) {
+             if (e.target === this) this.style.display = 'none';
+         });
+      </script>
 
-
-
-      <!-- Change user type helper (shown after selection) -->
-      <div class="user-type-center" id="userTypeSwitch" style="display:none;">
-        <button class="btn-change" onclick="resetUserType()">Change User Type</button>
+      <div class="scroll-down" style="margin-top: 60px;">
+         <img src="images/arrow.svg" alt="Scroll Down" style="width: 30px; animation: bounce 2s infinite;">
       </div>
     </div>
   </section>
+
+  <style>
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+      40% {transform: translateY(-10px);}
+      60% {transform: translateY(-5px);}
+    }
+  </style>
 
   <section id="about-us" class="section">
     <h2 class="section-title">About Us</h2>
@@ -316,131 +378,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- Visitor-friendly instructions box fixed at the bottom-left -->
    <br>
    <br>
-  <div class="bottom-instructions" id="bottomInstructions" style="display: none;">
-    <strong>Visitor Tips</strong><br>
-    • Click <b>Entry Pass Form</b> to apply for a visitor pass.<br>
-    • Use <b>Check Status</b> to look up your code or track your request.
-  </div>
+  <!-- REMOVED OLD INSTRUCTIONS -->
 
   <script>
     const isResidentLoggedIn = <?php echo (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') ? 'true' : 'false'; ?>;
-    function selectUserType(type) {
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const checkStatusNav = document.getElementById('checkStatusNav');
-      const bottomInstructions = document.getElementById('bottomInstructions');
-      const switcher = document.getElementById('userTypeSwitch');
-
-      if (type === 'resident') {
-        // Hide dropdown and show navigation links
-        dropdown.style.display = 'none';
-        navLinks.style.display = 'flex';
-        if (checkStatusNav) checkStatusNav.style.display = 'none';
-        if (bottomInstructions) bottomInstructions.style.display = 'none';
-        switcher.style.display = 'block';
-        // Hide Entry Pass button/instruction for residents
-        var epBtn = document.getElementById('entryPassButtonWrapper');
-        var epInst = document.getElementById('entryPassInstruction');
-        if (epBtn) epBtn.style.display = 'none';
-        if (epInst) epInst.style.display = 'none';
-        try{ localStorage.setItem('vp_user_type','resident'); }catch(e){}
-
-        // Check if user is logged in (you can modify this logic based on your session handling)
-        <?php if (isset($_SESSION['user_id'])): ?>
-          profileIcon.style.display = 'block';
-        <?php endif; ?>
-
-      } else if (type === 'visitor') {
-        if (isResidentLoggedIn) { alert('You are logged in as a resident. Please log out to switch to Visitor.'); return; }
-        // Hide dropdown and show entry form and check status
-        dropdown.style.display = 'none';
-        navLinks.style.display = 'none';
-        profileIcon.style.display = 'none';
-        if (checkStatusNav) checkStatusNav.style.display = 'inline-block';
-        if (bottomInstructions) bottomInstructions.style.display = 'block';
-        switcher.style.display = 'block';
-        // Show Entry Pass button/instruction for visitors
-        var epBtn = document.getElementById('entryPassButtonWrapper');
-        var epInst = document.getElementById('entryPassInstruction');
-        if (epBtn) epBtn.style.display = 'flex';
-        if (epInst) epInst.style.display = 'block';
-        try{ localStorage.setItem('vp_user_type','visitor'); }catch(e){}
+    
+    function toggleProfileDropdown() {
+      const dropdown = document.getElementById('profileDropdown');
+      if(dropdown) {
+         dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
       }
     }
-
-    function resetUserType(){
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const checkStatusNav = document.getElementById('checkStatusNav');
-      const bottomInstructions = document.getElementById('bottomInstructions');
-      const switcher = document.getElementById('userTypeSwitch');
-      const epBtn = document.getElementById('entryPassButtonWrapper');
-      const epInst = document.getElementById('entryPassInstruction');
-
-      // Reset to initial state
-      dropdown.style.display = 'block';
-      const content = document.getElementById('dropdownContent');
-      if (content) content.style.display = 'none';
-      navLinks.style.display = 'none';
-      // No inline entry form on main page
-      if (profileIcon) profileIcon.style.display = 'none';
-      if (checkStatusNav) checkStatusNav.style.display = 'none';
-      if (bottomInstructions) bottomInstructions.style.display = 'none';
-      switcher.style.display = 'none';
-      if (epBtn) epBtn.style.display = 'none';
-      if (epInst) epInst.style.display = 'none';
-      try{ localStorage.removeItem('vp_user_type'); }catch(e){}
-    }
-
-    // Toggle dropdown visibility
-    document.getElementById('dropdownBtn').addEventListener('click', function(event) {
-      event.stopPropagation();
-      const wrap = document.getElementById('userTypeDropdown');
-      const content = document.getElementById('dropdownContent');
-      const open = wrap.classList.toggle('open');
-      if (content) { content.style.display = open ? 'block' : 'none'; }
-    });
 
     // Close dropdown when clicking outside
     window.addEventListener('click', function(event) {
-      const wrap = document.getElementById('userTypeDropdown');
-      if (wrap && !event.target.closest('#userTypeDropdown')) {
-        wrap.classList.remove('open');
-        const content = document.getElementById('dropdownContent');
-        if (content) { content.style.display = 'none'; }
+      const iconWrap = document.getElementById('profileIcon');
+      const dropdown = document.getElementById('profileDropdown');
+      if (iconWrap && dropdown && !iconWrap.contains(event.target)) {
+        dropdown.style.display = 'none';
       }
     });
   </script>
-  <script>
-    // Persist selected user type across navigation
-    document.addEventListener('DOMContentLoaded',function(){
-      try{
-        var saved = localStorage.getItem('vp_user_type');
-        if(saved==='visitor' && isResidentLoggedIn){ selectUserType('resident'); return; }
-        if(saved==='resident' || saved==='visitor'){ selectUserType(saved); }
-      }catch(e){}
-    });
-  </script>
   <script src="js/logout-modal.js"></script>
-  <script>
-    // Auto-show resident nav state after login
-    document.addEventListener('DOMContentLoaded', function(){
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const loginBtn = document.querySelector('.btn-login');
-      const registerBtn = document.querySelector('.btn-register');
-      <?php if (isset($_SESSION['user_id'])): ?>
-        if (dropdown) dropdown.style.display = 'none';
-        if (navLinks) navLinks.style.display = 'flex';
-        if (profileIcon) profileIcon.style.display = 'block';
-        if (loginBtn) loginBtn.style.display = 'none';
-        if (registerBtn) registerBtn.style.display = 'none';
-      <?php endif; ?>
-    });
-  </script>
   <script>
     (function(){var t=document.getElementById('navToggle');var c=document.getElementById('navCollapse');if(!t||!c)return;t.addEventListener('click',function(){var o=c.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');});window.addEventListener('click',function(e){if(!c.contains(e.target)&&!t.contains(e.target)){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});window.addEventListener('resize',function(){if(window.innerWidth>900){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});})();
   </script>
