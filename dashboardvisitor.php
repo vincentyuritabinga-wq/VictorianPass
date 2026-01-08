@@ -124,7 +124,7 @@ if ($con) {
       </a>
     </div>
     <div class="user-mini">
-      <img src="images/mainpage/profile.jpg" alt="Profile">
+      <img src="images/mainpage/profile'.jpg" alt="Profile">
       <div>
         <h4><?php echo htmlspecialchars($user_data['first_name']); ?></h4>
         <p>Visitor</p>
