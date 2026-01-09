@@ -268,9 +268,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php if (!$isLoggedIn): ?>
           <button class="btn-change" onclick="window.location.href='login.php'" style="padding: 16px 40px; font-size: 1.2rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Let’s Start</button>
           
-          <button class="btn-change" onclick="document.getElementById('loginModal').style.display='flex'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: transparent; color: #fff; border: 2px solid #f2c24f; cursor:pointer; font-weight:600;">
-            Check Status
-          </button>
         <?php else: ?>
           <?php if ($isVisitor): ?>
              <button class="btn-change" onclick="window.location.href='reserve.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Reserve an Amenity</button>
@@ -281,25 +278,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php endif; ?>
       </div>
       
-      <!-- Login Required Modal -->
-      <div id="loginModal" class="flash-overlay" style="display:none;">
-        <div class="flash-modal" style="text-align:center; padding:30px;">
-          <div class="title" style="color:#23412e; font-size:1.5rem; margin-bottom:10px;">Login Required</div>
-          <div class="text" style="color:#555; margin-bottom:20px;">Please login to view your status.</div>
-          <div style="display:flex; gap:10px; justify-content:center;">
-             <button onclick="window.location.href='login.php'" style="padding:10px 20px; background:#23412e; color:#fff; border:none; border-radius:5px; cursor:pointer;">Login</button>
-             <button onclick="document.getElementById('loginModal').style.display='none'" style="padding:10px 20px; background:#ccc; color:#333; border:none; border-radius:5px; cursor:pointer;">Cancel</button>
-          </div>
-        </div>
-      </div>
-
-      <script>
-         // Close modal when clicking outside
-         document.getElementById('loginModal').addEventListener('click', function(e) {
-             if (e.target === this) this.style.display = 'none';
-         });
-      </script>
-
       <div class="scroll-down" style="margin-top: 60px;">
          <img src="images/arrow.svg" alt="Scroll Down" style="width: 30px; animation: bounce 2s infinite;">
       </div>

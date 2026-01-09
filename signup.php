@@ -314,11 +314,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </p>
           </div>
           
-          <button type="button" onclick="openHouseModal()" id="houseVerifyBtn" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f0f0f0; cursor: pointer; color: #888; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
-            VH-0000
-          </button>
-          
-          <input type="hidden" id="houseHidden" name="house_number" value="<?php echo htmlspecialchars($verified_house); ?>">
+          <input type="text" id="houseHidden" name="house_number" placeholder="VH-0000" value="<?php echo htmlspecialchars($verified_house); ?>" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f0f0f0; color: #888; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
         </div>
           <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
         <div class="form-row">
@@ -430,21 +426,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
     </div>
 
-    <!-- House Verification Modal -->
-    <div id="houseModal" class="modal" style="display:none;">
-      <div class="modal-content">
-        <span class="close" onclick="closeHouseModal()">&times;</span>
-        <h2>Verify House Number</h2>
-        <p>Enter your registered House Number as listed in HOA records.</p>
-        <p style="font-size:0.9rem;color:#555;margin-bottom:10px;"><i>Residents: Please verify your unique House Number to confirm residency.</i></p>
-        <input type="text" id="houseInput" placeholder="e.g., VH-1023" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-family:'Poppins',sans-serif;">
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="btn cancel" onclick="closeHouseModal()">Cancel</button>
-          <button class="btn confirm" onclick="performHouseVerify()">Verify</button>
-        </div>
-        <p id="verifyStatus" style="margin-top:10px;font-size:0.9rem;color:#23412e;display:none;"></p>
-      </div>
-    </div>
+    
   </div>
   
 
