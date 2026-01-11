@@ -31,6 +31,31 @@ function ensureVisitorSchema($con){
 }
 ensureVisitorSchema($con);
 
+// AJAX endpoint: check email availability
+if (isset($_GET['action']) && $_GET['action'] === 'check_email') {
+  header('Content-Type: application/json');
+  $email = isset($_GET['email']) ? strtolower(trim($_GET['email'])) : '';
+  $resp = ['ok' => false, 'message' => 'Invalid email'];
+  if ($email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    try {
+      $stmt = $con->prepare("SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1");
+      $stmt->bind_param('s', $email);
+      $stmt->execute();
+      $stmt->store_result();
+      if ($stmt->num_rows > 0) {
+        $resp = ['ok' => false, 'message' => 'Email already exists.'];
+      } else {
+        $resp = ['ok' => true, 'message' => 'Available'];
+      }
+      $stmt->close();
+    } catch (Throwable $e) {
+      $resp = ['ok' => false, 'message' => 'Lookup failed'];
+    }
+  }
+  echo json_encode($resp);
+  exit;
+}
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $first_name = trim($_POST['first_name']);
   $middle_name = trim($_POST['middle_name']);
@@ -65,6 +90,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
   if ($password !== $confirm_password) {
     $serverErrors['confirm_password'] = 'Passwords do not match.';
+  }
+
+  // Password strength validation
+  $commonPasswords = file('common_passwords.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+  if (in_array($password, $commonPasswords)) {
+    $serverErrors['password'] = 'Password is too weak.';
+  }
+  if (strlen($password) < 6) {
+    $serverErrors['password'] = 'Password must be at least 6 characters long.';
+  }
+  if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password) || !preg_match('/[^A-Za-z0-9]/', $password)) {
+    $serverErrors['password'] = 'Password must include uppercase, lowercase, number, and special character.';
   }
 
   if ($terms_agreed !== '1') {
@@ -236,6 +273,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .field-warning:empty { display: none; }
     .close-warn { cursor: pointer; color: #888; line-height: 1; }
     .close-warn:hover { color: #555; }
+    /* compact inline warning for house number to avoid layout shifts */
+    .field-warning-inline {
+      color: #333;
+      font-size: 0.85rem;
+      margin-top: 6px;
+      background: #fff;
+      border-left: 4px solid #c0392b;
+      border-radius: 6px;
+      padding: 6px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 220px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    .field-warning-inline .warn-icon{ width:14px; height:14px; font-size:0.7rem; }
   </style>
 </head>
 
@@ -243,7 +296,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <div class="page-wrapper">
     <div class="image-side">
       <img src="images/signuppage/sign up pic.jpg" alt="Victorian Heights Subdivision">
-      <p class="branding">VictorianPass.</p>
+      <p class="branding">VictorianPass</p>
     </div>
 
     <div class="form-side">
@@ -336,10 +389,60 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="password" id="password" name="password" placeholder="Password*" required>
           <span class="toggle-password" onclick="togglePassword('password', this)">👁️</span>
         </div>
+        <div id="passwordWarning" class="field-warning" style="display:none;">
+          <span class="warn-icon">!</span>
+          <div class="msg" id="passwordWarningMsg"></div>
+          <button class="close-warn" type="button" onclick="document.getElementById('passwordWarning').style.display='none'">×</button>
+        </div>
 
         <div class="password-field">
           <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password*" required>
           <span class="toggle-password" onclick="togglePassword('confirm_password', this)">👁️</span>
+        </div>
+        <div id="confirmWarning" class="field-warning" style="display:none;">
+          <span class="warn-icon">!</span>
+          <div class="msg" id="confirmWarningMsg"></div>
+          <button class="close-warn" type="button" onclick="document.getElementById('confirmWarning').style.display='none'">×</button>
+        </div>
+
+        <script>
+          const passwordInput = document.getElementById('password');
+          const passwordWarning = document.getElementById('passwordWarning');
+          const passwordWarningMsg = document.getElementById('passwordWarningMsg');
+
+          passwordInput.addEventListener('blur', () => {
+            const password = passwordInput.value;
+            let warnings = [];
+
+            if (password.length < 6) {
+              warnings.push('Password must be at least 6 characters long.');
+            }
+            if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+              warnings.push('Password must include uppercase, lowercase, number, and special character.');
+            }
+
+            // Simple check for common weak passwords (client-side)
+            const commonPasswords = ['password', '123456', 'qwerty'];
+            if (commonPasswords.includes(password)) {
+              warnings.push('Password is too weak.');
+            }
+
+            if (warnings.length > 0) {
+              passwordWarningMsg.innerHTML = warnings.join('<br>');
+              passwordWarning.style.display = 'flex';
+            } else {
+              passwordWarning.style.display = 'none';
+            }
+          });
+        </script>
+
+        <div class="terms">
+          <input type="checkbox" id="terms" required disabled>
+          <label for="terms">
+            By using the <strong>VictorianPass</strong>, you agree to the rules set for security, privacy, and orderly access.
+            <a onclick="openTerms()" style="text-decoration: underline; color: rgb(245, 63, 169);">Read Terms & Conditions</a>
+          </label>
+
         </div>
 
         <div class="form-actions">
@@ -350,16 +453,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <p class="login-link">Already have an account? <a href="login.php">Log in</a></p>
       </form>
 
-      <div class="terms">
-        <input type="checkbox" id="terms" required disabled>
-        <label for="terms">
-          By using the <strong>VictorianPass</strong>, you agree to the rules set for security, privacy, and orderly access.
-          <a onclick="openTerms()" style="text-decoration: underline; color: rgb(245, 63, 169);">Read Terms & Conditions</a>
-        </label>
-
-      </div>
-
-      <p class="instructions" style="display:none;"><i>Residents: Please verify your unique House Number to confirm residency.</i></p>
+      
     </div>
 
     <!-- Terms Modal -->
@@ -376,7 +470,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <p style="margin-bottom: 15px;">
             The following terminology applies to these Terms and Conditions, Privacy Statement and Disclaimer Notice and any or all Agreements: “Customer”, “You” and “Your” refers to you, the person accessing this website and accepting the Company’s terms and conditions.
           </p>
-          <p style="margin-bottom: 25px;">Effective Date: [September 00, 2025]</p>
+          <p style="margin-bottom: 25px;">Effective Date: [September 2026]</p>
 
           <div style="margin-bottom: 20px;">
             <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">User Roles</h4>
@@ -459,6 +553,55 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       // Clear any popover on terms
       if (typeof setWarning === 'function') setWarning('terms', '');
     }
+
+    // Password validation: length, complexity, and weak-password blocking
+    (function(){
+      const pw = document.getElementById('password');
+      const cpw = document.getElementById('confirm_password');
+      const pwWarn = document.getElementById('passwordWarning');
+      const pwMsg = document.getElementById('passwordWarningMsg');
+      const cpwWarn = document.getElementById('confirmWarning');
+      const cpwMsg = document.getElementById('confirmWarningMsg');
+      const weakList = ['password','123456','12345678','qwerty','abc123','111111','letmein','welcome','iloveyou','password1','admin','123456789'];
+
+      function showPW(msg){ if(pwWarn && pwMsg){ pwMsg.textContent=msg; pwWarn.style.display='flex'; }}
+      function hidePW(){ if(pwWarn){ pwWarn.style.display='none'; pwMsg.textContent=''; }}
+      function showCPW(msg){ if(cpwWarn && cpwMsg){ cpwMsg.textContent=msg; cpwWarn.style.display='flex'; }}
+      function hideCPW(){ if(cpwWarn){ cpwWarn.style.display='none'; cpwMsg.textContent=''; }}
+
+      function checkPassword(){
+        if(!pw) return true;
+        const v = pw.value || '';
+        if(v.length < 6){ showPW('Password must be at least 6 characters long.'); return false; }
+        const hasUpper = /[A-Z]/.test(v);
+        const hasLower = /[a-z]/.test(v);
+        const hasDigit = /[0-9]/.test(v);
+        const hasSpecial = /[^A-Za-z0-9]/.test(v);
+        if(!(hasUpper && hasLower && hasDigit && hasSpecial)){ showPW('Password must include uppercase, lowercase, number, and special character.'); return false; }
+        const lowered = v.toLowerCase();
+        if(weakList.includes(lowered) || /^\d{6,}$/.test(lowered)){ showPW('Password is too weak.'); return false; }
+        hidePW();
+        return true;
+      }
+
+      function checkConfirm(){
+        if(!cpw) return true;
+        if(cpw.value !== pw.value){ showCPW('Passwords do not match.'); return false; }
+        hideCPW();
+        return true;
+      }
+
+      if(pw) pw.addEventListener('input', function(){ checkPassword(); checkConfirm(); });
+      if(cpw) cpw.addEventListener('input', function(){ checkConfirm(); });
+
+      const form = document.getElementById('signupForm');
+      if(form){
+        form.addEventListener('submit', function(e){
+          const ok = checkPassword() && checkConfirm();
+          if(!ok){ e.preventDefault(); const first = document.querySelector('.field-warning[style*="display:flex"]'); if(first) first.scrollIntoView({behavior:'smooth', block:'center'}); return false; }
+        });
+      }
+    })();
     // Floating popover warnings anchored under inputs
     const _popovers = {};
     function _ensureLayer(){ return document.getElementById('warnLayer'); }
@@ -524,15 +667,37 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         container = inputEl.closest('.input-wrap') || inputEl.closest('.password-field') || inputEl.closest('.form-group');
       }
       if (!container) return;
-      let warnEl = container.querySelector('.field-warning[data-for="'+key+'"]');
-      if (message){
-        if (!warnEl){
-          warnEl = document.createElement('div');
-          warnEl.className = 'field-warning';
-          warnEl.setAttribute('data-for', key);
-          warnEl.setAttribute('role','alert');
-          container.appendChild(warnEl);
+      // Special-case: houseHidden should show a compact inline warning next to the input
+      let warnEl;
+      if (key === 'houseHidden') {
+        const inputEl = document.getElementById('houseHidden');
+        if (!inputEl) return;
+        // attach after the input so it doesn't expand the whole homeowner container
+        warnEl = inputEl.parentNode.querySelector('.field-warning-inline[data-for="'+key+'"]');
+        if (message){
+          if (!warnEl){
+            warnEl = document.createElement('div');
+            warnEl.className = 'field-warning-inline';
+            warnEl.setAttribute('data-for', key);
+            warnEl.setAttribute('role','alert');
+            // insert after the input element
+            if (inputEl.nextSibling) inputEl.parentNode.insertBefore(warnEl, inputEl.nextSibling);
+            else inputEl.parentNode.appendChild(warnEl);
+          }
         }
+      } else {
+        warnEl = container.querySelector('.field-warning[data-for="'+key+'"]');
+        if (message){
+          if (!warnEl){
+            warnEl = document.createElement('div');
+            warnEl.className = 'field-warning';
+            warnEl.setAttribute('data-for', key);
+            warnEl.setAttribute('role','alert');
+            container.appendChild(warnEl);
+          }
+        }
+      }
+      if (message){
         // Build notification-style content
         let icon = warnEl.querySelector('.warn-icon');
         if (!icon){
@@ -621,6 +786,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           }
         });
       }
+
+        // Email format check + async existence check
+        const emailEl = document.getElementById('email');
+        let emailTimer = null;
+        if (emailEl) {
+          emailEl.addEventListener('input', function(e){
+            const v = e.target.value.trim();
+            // quick format validation
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+              setWarning('email', 'Invalid email');
+            } else {
+              setWarning('email', '');
+            }
+            // debounce async check
+            if (emailTimer) clearTimeout(emailTimer);
+            emailTimer = setTimeout(function(){
+              if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return;
+              fetch('signup.php?action=check_email&email=' + encodeURIComponent(v)).then(r=>r.json()).then(function(data){
+                if (data && data.ok === false) {
+                  setWarning('email', data.message || 'Email already exists.');
+                } else {
+                  setWarning('email', '');
+                }
+              }).catch(function(){ /* ignore network */ });
+            }, 550);
+          });
+        }
 
       // Live password mismatch feedback
       if (confirmPwd) {

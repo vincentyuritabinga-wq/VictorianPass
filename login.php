@@ -70,7 +70,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($row['user_type'] === 'resident') {
                     echo "<script>window.location.href='profileresident.php';</script>";
                 } else {
-                    echo "<script>window.location.href='dashboardvisitor.php';</script>";
+                    echo "<script>window.location.href='mainpage.php';</script>";
                 }
                 exit();
             } else {
@@ -296,7 +296,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <!-- Left Side -->
     <div class="login-left">
       <div class="branding">
-        <h1>VictorianPass<span>.</span></h1>
+        <h1>VictorianPass</h1>
         <p>Begin your story in a home where memories are made and every moment matters.</p>
       </div>
     </div>
