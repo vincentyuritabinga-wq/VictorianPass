@@ -1436,14 +1436,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       if(!window.__verifyConfirmed){
         e.preventDefault();
         const priceTxt = (priceEl && priceEl.textContent) ? priceEl.textContent : '₱0';
-        const unitsLabel = isHourBasedAmenity(amenVal) ? 'Hours' : 'Persons';
-        const unitsValue = isHourBasedAmenity(amenVal) ? (parseInt(document.getElementById('hoursInput').value||'1',10)) : (parseInt(document.getElementById('personsInput').value||'1',10));
+        const hoursVal = parseInt(document.getElementById('hoursInput').value||'1', 10);
+        const personsVal = parseInt(document.getElementById('personsInput').value||'1', 10);
         const summary = [
           ['Amenity', amenVal||'-'],
           ['Start', s||'-'],
           ['End', eD||'-'],
           ['Time', (st||'') + (et?(' → '+et):'')],
-          [unitsLabel, String(unitsValue)],
+          ['Hours', String(hoursVal)],
+          ['Persons', String(personsVal)],
           ['Total Price', priceTxt],
           ['Downpayment', (dpVal!==''?('₱'+Number(dpVal).toFixed(2)):'—')]
         ].map(function(x){ return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>'; }).join('');

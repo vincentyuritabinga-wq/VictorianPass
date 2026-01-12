@@ -22,171 +22,186 @@ if ($con) {
     }
     $stmt->close();
 }
+$fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 
-// Fetch entry passes / reservations
-$reservations = [];
-if ($con) {
-    // Join reservations with entry_passes (if needed) or just fetch by user_id
-    // Note: In entrypass.php, we insert into reservations with user_id.
-    $stmt = $con->prepare("
-        SELECT r.ref_code, r.amenity, r.start_date, r.status, r.approval_status, r.created_at, ep.valid_id_path
-        FROM reservations r
-        LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
-        WHERE r.user_id = ?
-        ORDER BY r.created_at DESC
-    ");
+// Fetch Activities
+$activities = [];
+
+// Reservations
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
-        $reservations[] = $row;
+        $start = $row['start_date'];
+        $timeStr = ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? '');
+        $activities[] = [
+            'type' => 'reservation',
+            'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
+            'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
+            'status' => $row['status'] ?? 'pending',
+            'date' => $row['created_at'],
+            'ref_code' => $row['ref_code'] ?? 'RES'
+        ];
     }
     $stmt->close();
 }
+
+// Sort by date DESC (though single source is already sorted, good practice if we add more sources)
+usort($activities, function($a, $b) {
+    return strtotime($b['date']) - strtotime($a['date']);
+});
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visitor Dashboard - VictorianPass</title>
-  <link rel="icon" type="image/png" href="images/logo.svg">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    body { margin:0; font-family:'Poppins',sans-serif; background:#f5f5f5; color:#333; display:flex; min-height:100vh; }
-    
-    /* Sidebar */
-    .sidebar { width:260px; background:#2b2b2b; color:#fff; display:flex; flex-direction:column; position:fixed; height:100%; left:0; top:0; }
-    .logo-area { padding:20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #444; }
-    .logo-area img { width:32px; }
-    .logo-area span { font-size:1.1rem; font-weight:600; color:#f2c24f; }
-    .nav-links { padding:20px 0; flex:1; }
-    .nav-item { display:flex; align-items:center; padding:12px 25px; color:#aaa; text-decoration:none; transition:0.3s; }
-    .nav-item:hover, .nav-item.active { background:#3a3a3a; color:#fff; border-left:4px solid #f2c24f; }
-    .nav-item i { margin-right:10px; width:20px; text-align:center; }
-    .user-mini { padding:20px; border-top:1px solid #444; display:flex; align-items:center; gap:10px; }
-    .user-mini img { width:40px; height:40px; border-radius:50%; object-fit:cover; background:#fff; }
-    .user-mini div { overflow:hidden; }
-    .user-mini h4 { margin:0; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .user-mini p { margin:0; font-size:0.75rem; color:#888; }
-
-    /* Main Content */
-    .main-content { margin-left:260px; flex:1; padding:30px; }
-    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; }
-    .header h1 { margin:0; font-size:1.8rem; color:#23412e; }
-    .btn-create { background:#23412e; color:#fff; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:500; display:inline-flex; align-items:center; gap:8px; }
-    .btn-create:hover { background:#1a3322; }
-
-    /* Cards */
-    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-bottom:30px; }
-    .stat-card { background:#fff; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
-    .stat-card h3 { margin:0 0 5px 0; font-size:2rem; color:#f2c24f; }
-    .stat-card p { margin:0; color:#666; font-size:0.9rem; }
-
-    /* Table */
-    .table-container { background:#fff; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05); overflow:hidden; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { padding:15px 20px; text-align:left; border-bottom:1px solid #eee; }
-    th { background:#f9f9f9; font-weight:600; color:#555; }
-    tr:last-child td { border-bottom:none; }
-    .status-badge { padding:5px 10px; border-radius:20px; font-size:0.8rem; font-weight:500; }
-    .status-pending { background:#fff3cd; color:#856404; }
-    .status-approved { background:#d4edda; color:#155724; }
-    .status-rejected { background:#f8d7da; color:#721c24; }
-    .status-expired { background:#e2e3e5; color:#383d41; }
-    
-    @media (max-width: 768px) {
-        .sidebar { width:70px; }
-        .logo-area span, .user-mini div, .nav-item span { display:none; }
-        .main-content { margin-left:70px; padding:20px; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visitor Dashboard - Victorian Heights</title>
+<link rel="icon" type="image/png" href="images/logo.svg">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+<!-- FontAwesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
-  <div class="sidebar">
-    <div class="logo-area">
-      <img src="images/logo.svg" alt="Logo">
-      <span>VictorianPass</span>
-    </div>
-    <div class="nav-links">
-      <a href="dashboardvisitor.php" class="nav-item active">
-        <i>📊</i> <span>Dashboard</span>
-      </a>
-      <a href="reserve.php" class="nav-item">
-        <i>🎫</i> <span>Reserve Amenity</span>
-      </a>
-      <a href="mainpage.php" class="nav-item">
-        <i>🏠</i> <span>Home</span>
-      </a>
-      <a href="logout.php" class="nav-item">
-        <i>🚪</i> <span>Log Out</span>
-      </a>
-    </div>
-    <div class="user-mini">
-      <img src="images/mainpage/profile'.jpg" alt="Profile">
-      <div>
-        <h4><?php echo htmlspecialchars($user_data['first_name']); ?></h4>
-        <p>Visitor</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="main-content">
-    <div class="header">
-      <h1>My Reservations</h1>
-      <a href="reserve.php" class="btn-create">
-        <span>+</span> Reserve Amenity
-      </a>
+<div class="app-container">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="mainpage.php" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <h3><?php echo count($reservations); ?></h3>
-        <p>Total Requests</p>
-      </div>
-      <!-- Add more stats if needed -->
-    </div>
+    <nav class="nav-menu">
+      <a href="#" class="nav-item"><i class="fa-solid fa-inbox"></i> <span>Inbox</span> <span class="nav-badge">3</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-bullhorn"></i> <span>Announcement</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-clock"></i> <span>On Going</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-paper-plane"></i> <span>Request</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-receipt"></i> <span>Receipt</span> <span class="nav-badge">1</span></a>
+      <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span> <span class="nav-badge">3</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-circle-question"></i> <span>Help</span></a>
+    </nav>
 
-    <div class="table-container">
-      <?php if (empty($reservations)): ?>
-        <div style="padding:40px; text-align:center; color:#888;">
-          <p>No reservations found. Reserve one to get started!</p>
+    <div class="sidebar-footer">
+      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-brand">
+        <img src="images/logo.svg" alt="Logo">
+        <div class="brand-text">
+          <span class="brand-main">VictorianPass</span>
+          <span class="brand-sub">Victorian Heights Subdivision</span>
         </div>
-      <?php else: ?>
-        <table>
-          <thead>
-            <tr>
-              <th>Ref Code</th>
-              <th>Amenity / Purpose</th>
-              <th>Visit Date</th>
-              <th>Status</th>
-              <th>Created At</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($reservations as $r): ?>
-              <?php 
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+        <button class="icon-btn"><i class="fa-solid fa-bars"></i></button>
+        <div class="user-profile">
+          <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
+          <img src="images/mainpage/profile'.jpg" alt="Profile" class="user-avatar">
+        </div>
+      </div>
+    </header>
+
+    <div class="content-wrapper">
+      <!-- Left Panel: Calendar -->
+      <div class="left-panel">
+        <div class="calendar-widget">
+           <div class="calendar-header">
+             <span><?php echo date('F'); ?></span>
+           </div>
+           <div class="calendar-grid">
+             <div class="calendar-day-name">m</div>
+             <div class="calendar-day-name">t</div>
+             <div class="calendar-day-name">w</div>
+             <div class="calendar-day-name">t</div>
+             <div class="calendar-day-name">f</div>
+             <div class="calendar-day-name">s</div>
+             <div class="calendar-day-name">s</div>
+             <!-- Mock Calendar Days -->
+             <?php
+               $daysInMonth = date('t');
+               $startDay = date('N', strtotime(date('Y-m-01'))) - 1; // 0 (Mon) - 6 (Sun)
+               for ($i = 0; $i < $startDay; $i++) echo '<div></div>';
+               $today = date('j');
+               for ($d = 1; $d <= $daysInMonth; $d++) {
+                 $class = ($d == $today) ? 'calendar-day active' : 'calendar-day';
+                 echo "<div class='$class'>$d</div>";
+               }
+             ?>
+           </div>
+        </div>
+        <div class="upcoming-entries">
+          <h4>Your Upcoming Entries</h4>
+          <div class="no-events">
+            No upcoming events
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: List -->
+      <div class="right-panel">
+        <div class="toolbar">
+           <div class="toolbar-actions">
+             <i class="fa-regular fa-square"></i>
+             <i class="fa-solid fa-rotate-right" onclick="location.reload()"></i>
+             <i class="fa-solid fa-trash"></i>
+             <i class="fa-solid fa-ellipsis-vertical"></i>
+           </div>
+           <div class="search-bar">
+             <i class="fa-solid fa-magnifying-glass"></i>
+             <input type="text" placeholder="Search keyword ex. HV-0000">
+           </div>
+           <div class="pagination-info">
+             1-<?php echo count($activities); ?> of <?php echo count($activities); ?> &nbsp; <i class="fa-solid fa-chevron-left"></i> <i class="fa-solid fa-chevron-right"></i>
+           </div>
+        </div>
+
+        <div class="item-list">
+          <?php if (empty($activities)): ?>
+            <div style="padding:20px; text-align:center; color:#777;">No records found.</div>
+          <?php else: ?>
+            <?php foreach ($activities as $act):
                 $statusClass = 'status-pending';
-                if ($r['approval_status'] === 'approved') $statusClass = 'status-approved';
-                elseif ($r['approval_status'] === 'denied' || $r['approval_status'] === 'rejected') $statusClass = 'status-rejected';
+                $s = strtolower($act['status']);
+                if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                 
-                // Override if main status is expired
-                if ($r['status'] === 'expired') $statusClass = 'status-expired';
-              ?>
-              <tr>
-                <td><strong><?php echo htmlspecialchars($r['ref_code']); ?></strong></td>
-                <td><?php echo htmlspecialchars($r['amenity']); ?></td>
-                <td><?php echo htmlspecialchars($r['start_date']); ?></td>
-                <td><span class="status-badge <?php echo $statusClass; ?>"><?php echo ucfirst($r['approval_status']); ?></span></td>
-                <td><?php echo date('M d, Y', strtotime($r['created_at'])); ?></td>
-              </tr>
+                $displayStatus = ucfirst($act['status']);
+            ?>
+            <div class="list-item">
+               <div class="item-checkbox"><input type="checkbox"></div>
+               <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
+               <div class="item-content">
+                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                   <div>
+                     <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
+                     <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                     <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                   </div>
+                   <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
+                 </div>
+                 <div style="font-size:0.8rem; color:#999; margin-left: 80px;">
+                   <?php echo htmlspecialchars($act['ref_code']); ?>
+                 </div>
+               </div>
+            </div>
             <?php endforeach; ?>
-          </tbody>
-        </table>
-      <?php endif; ?>
+          <?php endif; ?>
+        </div>
+      </div>
     </div>
-  </div>
+  </main>
+</div>
 
 </body>
 </html>

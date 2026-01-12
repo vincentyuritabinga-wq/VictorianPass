@@ -13,7 +13,7 @@ $user = null;
 
 // Fetch resident details
 if ($con) {
-$stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address FROM users WHERE id = ?");
+$stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, status FROM users WHERE id = ?");
   if ($stmt) {
     mysqli_stmt_bind_param($stmt, 'i', $userId);
     mysqli_stmt_execute($stmt);
@@ -25,16 +25,17 @@ $stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, ema
   }
 }
 
-// Disable resident-side editing; only Admin can update details
-$updateMessage = '';
-
 if (!$user) {
-  // Fallback if user not found
   header('Location: mainpage.php');
   exit;
 }
 // Compose full name for display
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+
+// Normalize phone
+$displayPhone = $user['phone'] ?? '';
+if (preg_match('/^\+63(9\d{9})$/', $displayPhone)) { $displayPhone = '0' . substr($displayPhone, 3); }
+
 
 // Prepare resident QR link and local image path
 $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
@@ -47,416 +48,276 @@ $qrAbsPath = __DIR__ . '/' . $qrRelPath;
 $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
 $img = @file_get_contents($qrUrl);
 if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath = $qrUrl; }
+
+// Fetch Activities (Reservations, Reports, Guest Forms)
+$activities = [];
+
+// 1. Reservations
+// Ensure start_time/end_time exist, if not use created_at or defaults
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+if ($stmt) {
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $start = $row['start_date'];
+        $timeStr = ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? '');
+        $activities[] = [
+            'type' => 'reservation',
+            'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
+            'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
+            'status' => $row['status'] ?? 'pending',
+            'date' => $row['created_at'],
+            'ref_code' => $row['ref_code'] ?? 'RES'
+        ];
+    }
+    $stmt->close();
+}
+
+// 2. Incident Reports
+$stmt = $con->prepare("SELECT 'report' as type, nature, address, status, created_at, id FROM incident_reports WHERE user_id = ? ORDER BY created_at DESC");
+if ($stmt) {
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $activities[] = [
+            'type' => 'report',
+            'title' => 'Report - ' . ($row['nature'] ?? 'Incident'),
+            'details' => 'Address: ' . ($row['address'] ?? ''),
+            'status' => $row['status'] ?? 'new',
+            'date' => $row['created_at'],
+            'ref_code' => 'REP-' . $row['id']
+        ];
+    }
+    $stmt->close();
+}
+
+// 3. Guest Forms
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+if ($stmt) {
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $vName = ($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? '');
+        $activities[] = [
+            'type' => 'guest_form',
+            'title' => 'Guest Request - ' . $vName,
+            'details' => 'Visit: ' . date('M d, Y', strtotime($row['visit_date'])) . ' ' . ($row['visit_time'] ?? ''),
+            'status' => $row['approval_status'] ?? 'pending',
+            'date' => $row['created_at'],
+            'ref_code' => $row['ref_code'] ?? 'GST'
+        ];
+    }
+    $stmt->close();
+}
+
+// Sort by date DESC
+usort($activities, function($a, $b) {
+    return strtotime($b['date']) - strtotime($a['date']);
+});
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>User Profile - Residents</title>
+<title>Resident Dashboard - Victorian Heights</title>
 <link rel="icon" type="image/png" href="images/logo.svg">
-
-
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-<style>
-  /* GLOBAL */
-  body {
-    margin: 0;
-    font-family: 'Poppins', sans-serif;
-    background: #f5f5f5;
-    color: #333;
-  }
-  .header {
-    background: #305c3c;
-    padding: 12px 20px;
-    font-weight: 600;
-    border-bottom: 1px solid #ddd;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #f1f9f1;
-  }
-  .brand img { width: 28px; height: 28px; }
-  /* Header actions removed in favor of sidebar-only navigation */
-
-  .container { display: flex; min-height: calc(100vh - 50px); }
-
-  /* SIDEBAR */
-  .sidebar {
-    width: 250px;
-    background: #2b2b2b;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* ✅ pushes report button to bottom */
-    padding-top: 20px;
-  }
-  .menu-top {
-    display: flex;
-    flex-direction: column;
-  }
-  .menu-bottom {
-    padding: 20px 15px;
-    border-top: 1px solid #444;
-  }
-  .menu-item {
-    background: #f3ebd2;
-    color: #333;
-    margin: 10px 15px;
-    padding: 12px 20px;
-    border-radius: 20px 0 0 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-  }
-  .menu-item.compact { margin: 6px 15px; }
-  .menu-item:hover { background: #ddd3b8; transform: translateX(5px); }
-  .menu-item a {
-    text-decoration: none;
-    color: inherit;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .menu-item img { width: 20px; height: 20px; flex-shrink: 0; }
-  .menu-item.logout { color: #c62828; font-weight: 600; }
-  .menu-item.logout:hover { background: #f8d7da; }
-
-  .menu-item.report { color: #3e8e41; font-weight: 600; }
-  .menu-item.report:hover { background: #d4d6d2; }
-  .report-note {
-    display: none; /* removed: bottom section will only have logout */
-  }
-  .menu-note, .menu-note-pair {
-    font-size: 12px;
-    color: #aaaaaa;
-    margin: 4px 15px 8px 15px;
-    line-height: 1.3;
-  }
-  .menu-note-pair { margin-top: 2px; }
-
-  /* MAIN */
-  .main {
-    flex: 1;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-  }
-  .card {
-    background: #fff;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    font-size: 14px;
-  }
-
-  /* PROFILE */
-  .profile-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
-  }
-  .profile-header img { width: 60px; height: 60px; border-radius: 50%; }
-  .profile-header h3 { margin: 0; font-size: 18px; font-weight: 600; }
-  .profile-header p { font-size: 13px; color: #666; margin: 0; }
-  .info-row {
-    display: flex;
-    justify-content: space-between;
-    margin: 12px 0;
-    font-size: 14px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 8px;
-  }
-  .info-label { font-weight: 500; color: #444; }
-  .info-value { color: #666; }
-  .save-btn {
-    background: #305c3c;
-    color: #fff;
-    padding: 10px 20px;
-    border-radius: 8px;
-    margin-top: 15px;
-    font-size: 14px;
-    cursor: pointer;
-    border: none;
-    transition: all 0.3s ease;
-  }
-  .save-btn:hover { background: #264d31; transform: scale(1.05); }
-
-  /* (Removed guest form duplicate button styles) */
-
-  /* ENTRIES TABLE */
-  .entries-card h3 {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
-    background: #305c3c;
-    padding: 8px 12px;
-    border-radius: 6px 6px 0 0;
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { padding: 10px; text-align: left; }
-  th { background: #f1f1f1; color: #333; }
-  tr:nth-child(even) { background: #f9f9f9; }
-  tr:hover { background: #f1f9f1; transition: 0.3s; }
-  .status { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-  .active  { background: #4caf50; color: #fff; }
-  .pending { background: #2196f3; color: #fff; }
-  .expired { background: #9e9e9e; color: #fff; }
-  .denied  { background: #e53935; color: #fff; }
-
-  /* VIEW BUTTONS */
-  .view-btn {
-    display: inline-block;
-    padding: 6px 14px;
-    background: #305c3c;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: 'Poppins', sans-serif;
-    transition: all 0.25s ease;
-    text-decoration: none;
-  }
-  .view-btn:hover {
-    background: #264d31;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  }
-
-  .qr-container { text-align: left; padding-top: 20px; }
-  .qr-container img { width: 200px; height: 200px; object-fit: contain; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
-  .qr-container p { font-size: 14px; margin: 5px 0; color: #23412e; }
-  .flash-notice { background:#e8f5e9; color:#23412e; padding:10px 12px; border-left:4px solid #23412e; border-radius:10px; margin:10px 20px; box-shadow:0 4px 10px rgba(0,0,0,0.08); font-weight:600 }
-  .flash-close { margin-left:10px; background:#23412e; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer }
-
-  /* RESPONSIVE */
-  @media (max-width: 992px) { .main { grid-template-columns: 1fr; } }
-  @media (max-width: 768px) { .sidebar { width: 200px; } }
-  @media (max-width: 576px) {
-    .container { flex-direction: column; }
-    .sidebar {
-      width: 100%;
-      flex-direction: column;
-    }
-    .menu-item { border-radius: 10px; margin: 5px 15px; justify-content: center; font-size: 12px; }
-    .main { padding: 15px; }
-  }
-</style>
+<link rel="stylesheet" href="css/dashboard.css">
+<!-- FontAwesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
-
 <body>
-  <div class="header">
-    <div class="brand">
-      <img src="images/logo.svg" alt="VictorianPass">
-      <span>Your Profile & Dashboard</span>
-    </div>
-  </div>
-  <?php $flash = isset($_SESSION['flash_notice']) ? $_SESSION['flash_notice'] : ''; if ($flash !== '') { unset($_SESSION['flash_notice']); ?>
-    <div class="flash-notice" id="prFlash">
-      <span class="flash-text"><?php echo htmlspecialchars($flash); ?></span>
-      <button type="button" class="flash-close" id="prFlashClose">Close</button>
-    </div>
-    <script>
-      (function(){ var c=document.getElementById('prFlashClose'); var n=document.getElementById('prFlash'); if(c&&n){ c.addEventListener('click', function(){ n.style.display='none'; }); } })();
-    </script>
-  <?php } ?>
 
-  <div class="container">
-    <!-- Sidebar -->
-    <div class="sidebar">
-      <div class="menu-top">
-        <div class="menu-item"><a href="mainpage.php"><img src="images/mainpage/start.svg">Main Page</a></div><br>
-        <div class="menu-item" id="reserveMenu"><a href="reserve.php"><img src="images/mainpage/ticket.svg">Reserve an Amenity</a></div><div class="menu-note-pair"> Make a reservation to use an amenity for yourself as a resident.</div>
-        <br><div class="menu-item compact"><a href="guestform.php"><img src="images/mainpage/ticket.svg">Guest Form</a></div>
-         <div class="menu-note-pair"> Submit a guest entry request for your visitor.</div>
-        <br><div class="menu-item compact report"><a href="residentreport.php"><img src="images/mainpage/report.svg">Report Incident</a></div>
-        <div class="menu-note-pair"><br> Report suspicious persons or activities within the subdivision.
+<div class="app-container">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="mainpage.php" class="back-btn"><i class="fa-solid fa-arrow-left"></i></a>
+    </div>
+
+    <nav class="nav-menu">
+      <a href="#" class="nav-item"><i class="fa-solid fa-inbox"></i> <span>Inbox</span> <span class="nav-badge">3</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-bullhorn"></i> <span>Announcement</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-clock"></i> <span>On Going</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-paper-plane"></i> <span>Request</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-receipt"></i> <span>Receipt</span> <span class="nav-badge">1</span></a>
+      <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span> <span class="nav-badge">3</span></a>
+      <a href="residentreport.php" class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
+      <a href="guestform.php" class="nav-item"><i class="fa-solid fa-user-group"></i> <span>Guest Form</span></a>
+      <a href="#" class="nav-item"><i class="fa-solid fa-circle-question"></i> <span>Help</span></a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="qr-section">
+        <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:#555;">My Personal QR Code</div>
+        <!-- Visible Simple QR Image -->
+        <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="Personal QR Code" style="width:100%; max-width:150px; border-radius:8px; display:block; margin:0 auto;">
+        
+        <a href="#" onclick="downloadPersonalQR(); return false;" class="download-qr-btn">Download Personal QR</a>
+      </div>
+      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+    </div>
+
+    <!-- Hidden ID Card for Download Generation -->
+    <div style="position:fixed; left:-9999px; top:0;">
+        <div class="resident-id-card" id="residentCard" style="width:360px;">
+          <div class="card-header">
+            <div class="brand"><img src="images/logo.svg" alt="VP"><div class="text">VictorianPass</div></div>
+          </div>
+          <div class="id-top">
+            <div class="avatar"><img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="QR"></div>
+            <div class="top-info">
+              <div class="name"><?php echo htmlspecialchars($fullName); ?></div>
+              <div class="contact"><?php echo htmlspecialchars($user['email']); ?></div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="id-body">
+            <div class="row"><div class="label">Block</div><div class="value"><?php echo htmlspecialchars($user['house_number']??'-'); ?></div></div>
+            <div class="row"><div class="label">Unit</div><div class="value"><?php echo htmlspecialchars($user['address']??'-'); ?></div></div>
+            <div class="row"><div class="label">Contact</div><div class="value"><?php echo htmlspecialchars($displayPhone?:'-'); ?></div></div>
+            <div class="row"><div class="label">Status</div><div class="value"><span class="badge <?php echo ((strtolower($user['status']??'active')==='active')?'active':'disabled'); ?>"><?php echo htmlspecialchars(ucfirst($user['status']??'active')); ?></span></div></div>
+          </div>
+          <div class="foot">Scan to verify • Resident Access</div>
+        </div>
+    </div>
+
+    <script>
+    function downloadPersonalQR(){
+      var element = document.getElementById('residentCard');
+      html2canvas(element, {
+        scale: 3, // High resolution
+        useCORS: true,
+        backgroundColor: null
+      }).then(function(canvas) {
+        var link = document.createElement('a');
+        link.download = 'My_Personal_QR_Code.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+    </script>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-brand">
+        <img src="images/logo.svg" alt="Logo">
+        <div class="brand-text">
+          <span class="brand-main">VictorianPass</span>
+          <span class="brand-sub">Victorian Heights Subdivision</span>
         </div>
       </div>
-
-      <div class="menu-bottom">
-        <div class="menu-item logout"><a href="logout.php"><img src="images/login.svg">Log Out</a></div>
+      <div class="header-actions">
+        <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+        <button class="icon-btn"><i class="fa-solid fa-bars"></i></button>
+        <div class="user-profile">
+          <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
+          <img src="images/mainpage/profile'.jpg" alt="Profile" class="user-avatar">
+        </div>
       </div>
-    </div>
+    </header>
 
-    <!-- Main Content -->
-    <div class="main">
-      <!-- Profile Info -->
-      <div class="card">
-        <div class="profile-header">
-          <img src="images/mainpage/profile'.jpg" alt="Profile Picture">
-          <div>
-            <h3><?php echo htmlspecialchars($fullName ?: 'Resident'); ?></h3>
-            <p><?php echo htmlspecialchars($user['email']); ?></p>
+    <div class="content-wrapper">
+      <!-- Left Panel: Calendar -->
+      <div class="left-panel">
+        <div class="calendar-widget">
+           <div class="calendar-header">
+             <span><?php echo date('F'); ?></span>
+           </div>
+           <div class="calendar-grid">
+             <div class="calendar-day-name">m</div>
+             <div class="calendar-day-name">t</div>
+             <div class="calendar-day-name">w</div>
+             <div class="calendar-day-name">t</div>
+             <div class="calendar-day-name">f</div>
+             <div class="calendar-day-name">s</div>
+             <div class="calendar-day-name">s</div>
+             <!-- Mock Calendar Days -->
+             <?php
+               $daysInMonth = date('t');
+               $startDay = date('N', strtotime(date('Y-m-01'))) - 1; // 0 (Mon) - 6 (Sun)
+               for ($i = 0; $i < $startDay; $i++) echo '<div></div>';
+               $today = date('j');
+               for ($d = 1; $d <= $daysInMonth; $d++) {
+                 $class = ($d == $today) ? 'calendar-day active' : 'calendar-day';
+                 echo "<div class='$class'>$d</div>";
+               }
+             ?>
+           </div>
+        </div>
+        <div class="upcoming-entries">
+          <h4>Your Upcoming Entries</h4>
+          <div class="no-events">
+            No upcoming events
           </div>
         </div>
-        <a class="view-btn" href="<?php echo htmlspecialchars($qrLink); ?>">OPEN DIGITAL QR CODE</a>
-        <div class="info-row"><span class="info-label">Name:</span><span class="info-value"><?php echo htmlspecialchars($fullName); ?></span></div>
-        <div class="info-row"><span class="info-label">Email:</span><span class="info-value" id="emailVal"><?php echo htmlspecialchars($user['email']); ?></span></div>
-
-        <?php
-          $dispPhone = isset($user['phone']) ? $user['phone'] : '';
-          if (preg_match('/^\+63(9\d{9})$/', $dispPhone)) { $dispPhone = '0' . substr($dispPhone, 3); }
-        ?>
-        <div class="info-row"><span class="info-label">Mobile:</span><span class="info-value"><?php echo htmlspecialchars($dispPhone ?: ''); ?></span></div>
-        <div class="info-row"><span class="info-label">Address:</span><span class="info-value"><?php echo htmlspecialchars($user['address'] ?? ''); ?></span></div>
-        <div class="info-row"><span class="info-label">Birth date:</span><span class="info-value"><?php echo htmlspecialchars($user['birthdate'] ?? ''); ?></span></div>
       </div>
 
-      <!-- Entries & Requests -->
-      <div class="card entries-card">
-        <h3>Entries & Requests</h3>
-        <?php
-          // Fetch latest reservations/requests for this resident
-          $reservations = [];
-          if ($con) {
-            // Existing reservations
-            $stmtR = mysqli_prepare($con, "SELECT ref_code, amenity, start_date, end_date, approval_status, approval_date, payment_status, created_at FROM reservations WHERE user_id = ? ORDER BY created_at DESC LIMIT 20");
-            if ($stmtR) {
-              mysqli_stmt_bind_param($stmtR, 'i', $userId);
-              mysqli_stmt_execute($stmtR);
-              $resR = mysqli_stmt_get_result($stmtR);
-              if ($resR) {
-                while ($rowR = mysqli_fetch_assoc($resR)) { $rowR['source'] = 'reservations'; $reservations[] = $rowR; }
-              }
-              mysqli_stmt_close($stmtR);
-            }
-            // Resident amenity reservations (new table)
-            $stmtRR = mysqli_prepare($con, "SELECT ref_code, amenity, start_date, end_date, approval_status, created_at FROM resident_reservations WHERE user_id = ? ORDER BY created_at DESC LIMIT 20");
-            if ($stmtRR) {
-              mysqli_stmt_bind_param($stmtRR, 'i', $userId);
-              mysqli_stmt_execute($stmtRR);
-              $resRR = mysqli_stmt_get_result($stmtRR);
-              if ($resRR) {
-                while ($rowRR = mysqli_fetch_assoc($resRR)) { $rowRR['source'] = 'resident_reservations'; $reservations[] = $rowRR; }
-              }
-              mysqli_stmt_close($stmtRR);
-            }
-            // Guest entry requests and guest amenity reservations from guest_forms
-            $stmtGF = mysqli_prepare($con, "SELECT ref_code, amenity, start_date, end_date, visit_date, approval_status, created_at FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC LIMIT 20");
-            if ($stmtGF) {
-              mysqli_stmt_bind_param($stmtGF, 'i', $userId);
-              mysqli_stmt_execute($stmtGF);
-              $resGF = mysqli_stmt_get_result($stmtGF);
-              if ($resGF) {
-                while ($rowGF = mysqli_fetch_assoc($resGF)) {
-                  $reservations[] = [
-                    'ref_code' => $rowGF['ref_code'] ?? null,
-                    'amenity' => !empty($rowGF['amenity']) ? $rowGF['amenity'] : 'Guest Entry',
-                    'start_date' => !empty($rowGF['start_date']) ? $rowGF['start_date'] : ($rowGF['visit_date'] ?? null),
-                    'end_date' => !empty($rowGF['end_date']) ? $rowGF['end_date'] : ($rowGF['visit_date'] ?? null),
-                    'approval_status' => $rowGF['approval_status'] ?? 'pending',
-                    'created_at' => $rowGF['created_at'] ?? null,
-                    'source' => 'guest_forms',
-                  ];
-                }
-              }
-              mysqli_stmt_close($stmtGF);
-            }
-            // Deduplicate across sources by ref_code when present, otherwise by amenity+dates
-            $pref = ['reservations' => 3, 'resident_reservations' => 2, 'guest_forms' => 1];
-            $map = [];
-            foreach ($reservations as $row) {
-              $key = '';
-              if (!empty($row['ref_code'])) {
-                $key = 'RC:' . strtolower(trim($row['ref_code']));
-              } else {
-                $amen = strtolower(trim($row['amenity'] ?? ''));
-                $sd = $row['start_date'] ?? '';
-                $ed = $row['end_date'] ?? '';
-                $key = 'K:' . $amen . '|' . $sd . '|' . $ed;
-              }
-              if (!isset($map[$key])) {
-                $map[$key] = $row;
-              } else {
-                $cur = $map[$key];
-                $a = $pref[$row['source']] ?? 0;
-                $b = $pref[$cur['source']] ?? 0;
-                if ($a > $b) { $map[$key] = $row; }
-                elseif ($a === $b) {
-                  if (($row['created_at'] ?? '') > ($cur['created_at'] ?? '')) { $map[$key] = $row; }
-                }
-              }
-            }
-            $reservations = array_values($map);
-            // Sort combined list by created_at desc
-            usort($reservations, function($a, $b){ return strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''); });
-          }
+      <!-- Right Panel: List -->
+      <div class="right-panel">
+        <div class="toolbar">
+           <div class="toolbar-actions">
+             <i class="fa-regular fa-square"></i>
+             <i class="fa-solid fa-rotate-right" onclick="location.reload()"></i>
+             <i class="fa-solid fa-trash"></i>
+             <i class="fa-solid fa-ellipsis-vertical"></i>
+           </div>
+           <div class="search-bar">
+             <i class="fa-solid fa-magnifying-glass"></i>
+             <input type="text" placeholder="Search keyword ex. HV-0000">
+           </div>
+           <div class="pagination-info">
+             1-<?php echo count($activities); ?> of <?php echo count($activities); ?> &nbsp; <i class="fa-solid fa-chevron-left"></i> <i class="fa-solid fa-chevron-right"></i>
+           </div>
+        </div>
 
-          // Helper to compute status and css class
-          function vp_compute_status($row) {
-            $today = date('Y-m-d');
-            $src = strtolower($row['source'] ?? '');
-            $pay = strtolower($row['payment_status'] ?? '');
-            if ($src === 'reservations' && $pay === 'rejected') { return ['rejected','denied']; }
-            $raw = isset($row['approval_status']) && $row['approval_status'] !== '' ? strtolower($row['approval_status']) : 'pending';
-            if ($raw === 'approved') {
-              if (!empty($row['end_date']) && $row['end_date'] < $today) { return ['expired','expired']; }
-              return ['approved','active']; }
-            if ($raw === 'denied' || $raw === 'rejected') { return ['denied','denied']; }
-            if (!empty($row['end_date']) && $row['end_date'] < $today) { return ['expired','expired']; }
-            return ['pending','pending'];
-          }
-        ?>
-        <table>
-          <tr>
-            <th>Type</th>
-            <th>Dates</th>
-            <th>Status</th>
-            <th>View</th>
-          </tr>
-          <?php if (!empty($reservations)) { ?>
-            <?php foreach ($reservations as $r) { list($statusText, $cssClass) = vp_compute_status($r); ?>
-              <tr>
-                <td><?php echo htmlspecialchars($r['amenity']); ?></td>
-                <td>
-                  <small>
-                    <?php echo htmlspecialchars(date('M d, Y', strtotime($r['start_date']))); ?>
-                    —
-                    <?php echo htmlspecialchars(date('M d, Y', strtotime($r['end_date']))); ?>
-                  </small>
-                </td>
-                <td><span class="status <?php echo $cssClass; ?>"><?php echo ucfirst($statusText); ?></span></td>
-                <td>
-                  <?php if (!empty($r['ref_code'])) { ?>
-                    <a class="view-btn" href="status_view.php?code=<?php echo urlencode($r['ref_code']); ?>">View</a>
-                  <?php } else { ?>
-                    <span style="color:#777;">N/A</span>
-                  <?php } ?>
-                </td>
-              </tr>
-            <?php } ?>
-          <?php } else { ?>
-            <tr>
-              <td colspan="4" style="text-align:center;color:#777;">No requests yet. Create one via Guest Form or Amenity Reservation.</td>
-            </tr>
-          <?php } ?>
-        </table>
-
-        
+        <div class="item-list">
+          <?php if (empty($activities)): ?>
+            <div style="padding:20px; text-align:center; color:#777;">No records found.</div>
+          <?php else: ?>
+            <?php foreach ($activities as $act):
+                $statusClass = 'status-pending';
+                $s = strtolower($act['status']);
+                if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
+                
+                // Title display logic based on type
+                $displayStatus = ucfirst($act['status']);
+            ?>
+            <div class="list-item">
+               <div class="item-checkbox"><input type="checkbox"></div>
+               <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
+               <div class="item-content">
+                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                   <div>
+                     <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
+                     <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                     <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                   </div>
+                   <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
+                 </div>
+                 <div style="font-size:0.8rem; color:#999; margin-left: 80px;">
+                   <?php echo htmlspecialchars($act['ref_code']); ?>
+                 </div>
+               </div>
+            </div>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
-  </div>
-  
-  <script src="js/logout-modal.js"></script>
+  </main>
+</div>
+
 </body>
 </html>
-<script>
-  (function(){ var el=document.getElementById('reserveMenu'); if(!el) return; el.addEventListener('click', function(e){ var a=this.querySelector('a'); if(a){ window.location.href=a.getAttribute('href'); } }); })();
-</script>

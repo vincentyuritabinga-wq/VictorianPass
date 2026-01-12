@@ -1,0 +1,524 @@
+/* Dashboard Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+    overflow-x: hidden;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.app-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background-color: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    height: 100vh;
+    z-index: 100;
+}
+
+.sidebar-header {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.back-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #23412e;
+    color: #23412e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.back-btn:hover {
+    background-color: #23412e;
+    color: #fff;
+}
+
+.nav-menu {
+    flex: 1;
+    padding: 20px 0;
+    overflow-y: auto;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 25px;
+    text-decoration: none;
+    color: #555;
+    font-size: 0.95rem;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nav-item:hover, .nav-item.active {
+    background-color: #f0f0f0;
+    color: #23412e;
+    font-weight: 600;
+}
+
+.nav-item i, .nav-item img {
+    margin-right: 15px;
+    width: 20px;
+    text-align: center;
+}
+
+.nav-badge {
+    margin-left: auto;
+    background-color: #e0e0e0;
+    color: #555;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+}
+
+.sidebar-footer {
+    padding: 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.qr-section {
+    text-align: center;
+}
+
+.download-qr-btn {
+    display: block;
+    background-color: #23412e;
+    color: #fff;
+    text-align: center;
+    padding: 8px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.logout-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d9534f;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.logout-btn:hover {
+    background-color: #d9534f;
+    color: #fff;
+}
+
+/* Resident ID Card Styles (Ported from resident_qr_view.php) */
+.resident-id-card {
+    width: 360px; /* Fixed width as per original design */
+    background: #1e1e1e;
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+    overflow: hidden;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    transform-origin: top left; /* For scaling */
+    margin: 0 auto; /* Center if scaling allows */
+}
+
+.resident-id-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #111;
+}
+
+.resident-id-card .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.resident-id-card .brand img {
+    height: 28px;
+    width: auto;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.resident-id-card .brand .text {
+    font-weight: 700;
+    color: #e5ddc6;
+    font-size: 1rem;
+}
+
+.resident-id-card .id-top {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #181818;
+}
+
+.resident-id-card .avatar {
+    width: 100px; /* Reduced from 160px for sidebar compactness */
+    height: 100px;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #23412e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.4rem;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.resident-id-card .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border: none;
+    padding: 0;
+}
+
+.resident-id-card .top-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.resident-id-card .top-info .name {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    color: #eaeaea;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resident-id-card .top-info .contact {
+    font-size: 0.8rem;
+    color: #cfcfcf;
+    word-break: break-all;
+}
+
+.resident-id-card .divider {
+    height: 1px;
+    background: #2f2f2f;
+    margin: 0 16px;
+}
+
+.resident-id-card .id-body {
+    padding: 10px 16px;
+}
+
+.resident-id-card .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 0;
+}
+
+.resident-id-card .label {
+    color: #bdbdbd;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.resident-id-card .value {
+    color: #eaeaea;
+    font-size: 0.85rem;
+}
+
+.resident-id-card .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.resident-id-card .badge.active {
+    background: #23412e;
+    color: #e5ddc6;
+}
+
+.resident-id-card .badge.disabled {
+    background: #a83b3b;
+    color: #fff;
+}
+
+.resident-id-card .foot {
+    padding: 10px 16px;
+    color: #aaa;
+    font-size: 0.7rem;
+    text-align: center;
+}
+
+/* Main Content Area */
+.main-content {
+    flex: 1;
+    margin-left: 260px; /* Width of sidebar */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Top Header */
+.top-header {
+    background-color: #2d2d2d; /* Dark theme */
+    color: #fff;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-brand img {
+    height: 35px;
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-main {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #fff;
+    letter-spacing: 1px;
+}
+
+.brand-sub {
+    color: #f2c24f; /* Goldish color */
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-name {
+    color: #f2c24f;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.user-avatar {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #555;
+}
+
+/* Content Layout */
+.content-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden; /* Prevent body scroll if we want internal scrolling */
+    background-color: #fff;
+}
+
+/* Left Panel - Calendar */
+.left-panel {
+    width: 350px;
+    padding: 25px;
+    border-right: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+}
+
+.calendar-widget {
+    margin-bottom: 30px;
+}
+
+/* Simple Calendar Styling */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.calendar-day-name {
+    color: #888;
+    margin-bottom: 10px;
+}
+
+.calendar-day {
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.calendar-day.active {
+    background-color: #23412e;
+    color: #fff;
+}
+
+.calendar-day.today {
+    border: 1px solid #23412e;
+}
+
+.upcoming-entries {
+    flex: 1;
+}
+
+.upcoming-entries h4 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.no-events {
+    color: #999;
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* Right Panel - Activity List */
+.right-panel {
+    flex: 1;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    background-color: #f9f9f9;
+    overflow-y: auto;
+}
+
+.activity-list-header {
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.activity-item {
+    background-color: #fff;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.activity-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.item-icon {
+    width: 40px;
+    height: 40px;
+    background-color: #f0f0f0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    color: #555;
+}
+
+.item-content {
+    flex: 1;
+}
+
+.status-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-right: 8px;
+}
+
+.status-ongoing { background-color: #e3f2fd; color: #1976d2; }
+.status-pending { background-color: #fff3e0; color: #f57c00; }
+.status-denied, .status-cancelled { background-color: #ffebee; color: #c62828; }
+.status-completed { background-color: #e8f5e9; color: #2e7d32; }
+
+.item-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.95rem;
+}
+
+.item-details {
+    color: #777;
+    font-size: 0.9rem;
+}
+
+.item-time {
+    font-size: 0.85rem;
+    color: #999;
+}
