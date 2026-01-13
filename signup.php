@@ -426,7 +426,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         <div class="input-wrap" id="visitorIdWrap" style="display:none; margin-bottom: 15px;">
           <label for="valid_id" style="display:block; margin-bottom:5px; font-weight:600; color:#23412e;">Upload Valid ID (Required for Visitors)</label>
-          <input type="file" name="valid_id" id="valid_id" accept="image/*,.pdf" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%;">
+          
+          <div id="fileUploadContainer">
+            <input type="file" name="valid_id" id="valid_id" accept="image/*,.pdf" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%;">
+          </div>
+
+          <div id="filePreviewContainer" style="display:none; margin-top: 10px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; align-items: center; justify-content: space-between; background: #fafafa;">
+            <div id="previewContent" style="display: flex; align-items: center; gap: 10px;">
+              <!-- Preview content will be injected here -->
+            </div>
+            <button type="button" id="removeFileBtn" style="background: #ff4d4d; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;">Remove</button>
+          </div>
+
+          <p style="font-size: 0.75rem; color: #555; margin-top: 10px; line-height: 1.5; background: #f0f7f4; padding: 10px; border-radius: 6px; border-left: 4px solid #23412e;">
+             <strong>Data Privacy Notice:</strong> Your uploaded ID is used only for verification and stored securely. Access is limited to authorized staff, in accordance with the Data Privacy Act of 2012.
+          </p>
+
           <?php if (isset($serverErrors['valid_id'])): ?>
             <div class="field-warning" role="alert" style="display: flex;">
               <span class="warn-icon">!</span>
@@ -804,6 +819,61 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         */
       }
 
+      // Real-time password validation (debounce)
+      let pwdTimer = null;
+      if (password) {
+        password.addEventListener('input', function() {
+          clearTimeout(pwdTimer);
+          // Clear warning while typing to avoid flickering or annoying messages
+          setWarning('password', ''); 
+          
+          pwdTimer = setTimeout(function() {
+             const val = password.value || '';
+             if (val.length === 0) return;
+             
+             // Check requirements: at least 6 chars, letters, and numbers
+             if (val.length < 6 || !/[a-zA-Z]/.test(val) || !/[0-9]/.test(val)) {
+                setWarning('password', 'Password must be at least 6 characters and include letters and numbers.');
+             } else {
+                setWarning('password', '');
+             }
+             
+             // Also re-check match if confirm password has value
+             if (confirmPwd && confirmPwd.value) {
+                 if (val !== confirmPwd.value) {
+                     setWarning('confirm_password', 'Passwords do not match.');
+                 } else {
+                     setWarning('confirm_password', '');
+                 }
+             }
+          }, 800); // Check after user stops typing
+        });
+      }
+
+      // Confirm Password validation (debounce)
+      let confirmTimer = null;
+      if (confirmPwd) {
+        confirmPwd.addEventListener('input', function() {
+           clearTimeout(confirmTimer);
+           setWarning('confirm_password', '');
+           
+           confirmTimer = setTimeout(function() {
+              const val = confirmPwd.value || '';
+              // No mismatch error will be shown while the Confirm Password field is empty
+              if (!val) {
+                 setWarning('confirm_password', '');
+                 return;
+              }
+              
+              if (password && val !== password.value) {
+                 setWarning('confirm_password', 'Passwords do not match.');
+              } else {
+                 setWarning('confirm_password', '');
+              }
+           }, 800);
+        });
+      }
+
         // Email format check + async existence check
         const emailEl = document.getElementById('email');
         let emailTimer = null;
@@ -863,6 +933,78 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if (isVisitor) {
         isVisitor.addEventListener('change', applyVisitorMode);
         applyVisitorMode();
+      }
+
+      // ID Upload Preview Logic
+      const validIdInput = document.getElementById('valid_id');
+      const fileUploadContainer = document.getElementById('fileUploadContainer');
+      const filePreviewContainer = document.getElementById('filePreviewContainer');
+      const previewContent = document.getElementById('previewContent');
+      const removeFileBtn = document.getElementById('removeFileBtn');
+
+      if (validIdInput && filePreviewContainer && previewContent && removeFileBtn && fileUploadContainer) {
+        
+        validIdInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          // Clear previous preview
+          previewContent.innerHTML = '';
+
+          if (file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.style.maxWidth = '60px';
+            img.style.maxHeight = '60px';
+            img.style.borderRadius = '4px';
+            img.style.objectFit = 'cover';
+            img.style.border = '1px solid #ddd';
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+            previewContent.appendChild(img);
+          } else {
+            // For PDF or other types
+            const icon = document.createElement('span');
+            icon.textContent = '📄'; // Simple icon
+            icon.style.fontSize = '24px';
+            previewContent.appendChild(icon);
+          }
+
+          const infoDiv = document.createElement('div');
+          infoDiv.style.display = 'flex';
+          infoDiv.style.flexDirection = 'column';
+          // infoDiv.style.marginLeft = '10px';
+          
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = file.name;
+          nameSpan.style.fontSize = '0.85rem';
+          nameSpan.style.fontWeight = '500';
+          nameSpan.style.color = '#333';
+          nameSpan.style.wordBreak = 'break-all'; 
+          
+          const sizeSpan = document.createElement('span');
+          sizeSpan.textContent = (file.size / 1024).toFixed(1) + ' KB';
+          sizeSpan.style.fontSize = '0.75rem';
+          sizeSpan.style.color = '#777';
+
+          infoDiv.appendChild(nameSpan);
+          infoDiv.appendChild(sizeSpan);
+          previewContent.appendChild(infoDiv);
+
+          // Show preview, hide upload input
+          fileUploadContainer.style.display = 'none';
+          filePreviewContainer.style.display = 'flex';
+        });
+
+        removeFileBtn.addEventListener('click', function() {
+          validIdInput.value = ''; // Clear input
+          previewContent.innerHTML = '';
+          filePreviewContainer.style.display = 'none';
+          fileUploadContainer.style.display = 'block';
+        });
       }
 
       if (form) {
@@ -1085,6 +1227,40 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
     })();
   </script>
+
+  <!-- Image Preview Modal -->
+  <div id="imagePreviewModal" class="center-modal" style="display:none; background-color: rgba(0,0,0,0.8);">
+    <div class="center-modal-content" style="background: transparent; box-shadow: none; width: auto; max-width: 90%; text-align: center; padding: 0;">
+      <span class="close-center" onclick="closeImagePreview()" style="color: #fff; top: -30px; right: 0; font-size: 30px; opacity: 1;">&times;</span>
+      <img id="fullImagePreview" src="" alt="Full Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 2px solid #fff;">
+    </div>
+  </div>
+
+  <script>
+    function openImagePreview(src) {
+      const modal = document.getElementById('imagePreviewModal');
+      const img = document.getElementById('fullImagePreview');
+      if (modal && img) {
+        img.src = src;
+        modal.style.display = 'flex';
+      }
+    }
+
+    function closeImagePreview() {
+      const modal = document.getElementById('imagePreviewModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+    
+    // Close modal when clicking outside the image
+    document.getElementById('imagePreviewModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeImagePreview();
+      }
+    });
+  </script>
+
   <!-- Inline warnings are inserted per field; floating layer removed -->
   <?php if (!empty($serverErrors ?? [])) { ?>
   <!-- Old server-side error rendering removed since we use AJAX now, but kept for fallback if needed -->
@@ -1200,5 +1376,73 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </div>
 
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const validIdInput = document.getElementById('valid_id');
+      const previewContainer = document.getElementById('filePreviewContainer');
+      const previewContent = document.getElementById('previewContent');
+      const removeBtn = document.getElementById('removeFileBtn');
+      const uploadContainer = document.getElementById('fileUploadContainer');
+
+      if (validIdInput) {
+          validIdInput.addEventListener('change', function(e) {
+              const file = e.target.files[0];
+              if (file) {
+                  // Show preview
+                  previewContainer.style.display = 'flex';
+                  uploadContainer.style.display = 'none'; 
+                  
+                  previewContent.innerHTML = '';
+                  
+                  if (file.type.startsWith('image/')) {
+                      const img = document.createElement('img');
+                      img.src = URL.createObjectURL(file);
+                      img.style.maxWidth = '60px';
+                      img.style.maxHeight = '60px';
+                      img.style.borderRadius = '4px';
+                      img.style.objectFit = 'cover';
+                      previewContent.appendChild(img);
+                      
+                      const name = document.createElement('span');
+                      name.textContent = file.name;
+                      name.style.marginLeft = '10px';
+                      name.style.fontSize = '0.9rem';
+                      name.style.color = '#333';
+                      name.style.fontWeight = '500';
+                      // Truncate long names
+                      if (name.textContent.length > 20) {
+                          name.textContent = name.textContent.substring(0, 17) + '...';
+                      }
+                      previewContent.appendChild(name);
+                  } else {
+                      const icon = document.createElement('span');
+                      icon.textContent = '📄';
+                      icon.style.fontSize = '24px';
+                      previewContent.appendChild(icon);
+                      
+                      const name = document.createElement('span');
+                      name.textContent = file.name;
+                      name.style.marginLeft = '10px';
+                      name.style.fontSize = '0.9rem';
+                      name.style.color = '#333';
+                      name.style.fontWeight = '500';
+                       if (name.textContent.length > 20) {
+                          name.textContent = name.textContent.substring(0, 17) + '...';
+                      }
+                      previewContent.appendChild(name);
+                  }
+              }
+          });
+      }
+
+      if (removeBtn) {
+          removeBtn.addEventListener('click', function() {
+              validIdInput.value = ''; // Clear input
+              previewContainer.style.display = 'none';
+              uploadContainer.style.display = 'block';
+          });
+      }
+    });
+  </script>
 </body>
 </html>
