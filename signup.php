@@ -109,14 +109,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   }
 
   if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $serverErrors['email'] = 'Please enter a valid email address.';
+    $serverErrors['email'] = 'Invalid email address.';
   } else {
     $checkEmail = $con->prepare("SELECT id FROM users WHERE LOWER(email) = ?");
     $checkEmail->bind_param("s", $email);
     $checkEmail->execute();
     $checkEmail->store_result();
     if ($checkEmail->num_rows > 0) {
-      $serverErrors['email'] = 'Email already exists.';
+      $serverErrors['email'] = 'This email is already registered.';
     }
     $checkEmail->close();
   }
@@ -130,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $checkHouse->execute();
       $checkHouse->store_result();
       if ($checkHouse->num_rows === 0) {
-        $serverErrors['houseHidden'] = 'Invalid or unregistered House Number.';
+        $serverErrors['houseHidden'] = 'Invalid house number.';
       }
       $checkHouse->close();
 
@@ -139,9 +139,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $checkDuplicate->execute();
       $checkDuplicate->store_result();
       if ($checkDuplicate->num_rows > 0) {
-        $serverErrors['houseHidden'] = 'This house number is already registered.';
+        $serverErrors['houseHidden'] = 'This house number is already in use.';
       }
       $checkDuplicate->close();
+    }
+    
+    if (empty($address)) {
+      $serverErrors['addressField'] = 'Please enter your full address.';
     }
   } else {
     $house_number = null;
@@ -164,19 +168,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $newUserId = $stmt->insert_id;
       $_SESSION['user_id'] = $newUserId;
       $_SESSION['user_type'] = $user_type;
-      if ($user_type === 'resident') {
-        header('Location: profileresident.php');
-      } else {
-        header('Location: mainpage.php');
+      
+      $redirect = ($user_type === 'resident') ? 'profileresident.php' : 'mainpage.php';
+
+      if (isset($_POST['ajax']) && $_POST['ajax'] === '1') {
+        echo json_encode(['success' => true, 'redirect' => $redirect]);
+        exit;
       }
+
+      header("Location: $redirect");
       exit;
     } else {
       if ($con->errno === 1062) {
-        $serverErrors['email'] = 'Email already exists.';
+        $serverErrors['email'] = 'This email is already registered.';
       } else {
         $serverErrors['form'] = 'An error occurred. Please try again.';
       }
     }
+  }
+
+  if (isset($_POST['ajax']) && $_POST['ajax'] === '1') {
+    echo json_encode(['success' => false, 'errors' => $serverErrors]);
+    exit;
   }
 }
 ?>
@@ -261,7 +274,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       z-index: 2; /* ensure close button clickable over toggle icon */
     }
     .password-field { position: relative; display: block; }
-    .toggle-password { top: 50%; transform: translateY(-50%); z-index: 0; }
+    .toggle-password { 
+      position: absolute; 
+      right: 10px; 
+      top: 50%; 
+      transform: translateY(-50%); 
+      z-index: 10; 
+      cursor: pointer;
+    }
     .field-warning .warn-icon {
       width: 18px; height: 18px; border-radius: 50%;
       background: #c0392b; color: #fff; display: inline-flex;
@@ -289,6 +309,66 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       box-shadow: 0 1px 6px rgba(0,0,0,0.08);
     }
     .field-warning-inline .warn-icon{ width:14px; height:14px; font-size:0.7rem; }
+    
+    /* Center Modal Styles */
+    .center-modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+    }
+    .center-modal-content {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      animation: fadeIn 0.3s;
+    }
+    .center-modal-content h3 {
+      margin-top: 0;
+      color: #c0392b;
+    }
+    .center-modal-content p {
+      color: #333;
+      margin: 15px 0;
+    }
+    .center-modal-btn {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 10px 20px;
+      background-color: #23412e;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .center-modal-btn:hover {
+      background-color: #1a3022;
+    }
+    .close-center {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #888;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 
@@ -367,9 +447,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </p>
           </div>
           
-          <input type="text" id="houseHidden" name="house_number" placeholder="VH-0000" value="<?php echo htmlspecialchars($verified_house); ?>" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f0f0f0; color: #888; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
+          <input type="text" id="houseHidden" name="house_number" placeholder="VH-0000" value="<?php echo htmlspecialchars($verified_house); ?>" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #333; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
         </div>
+
+        <div class="input-wrap">
           <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <select name="sex" required>
@@ -389,51 +472,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="password" id="password" name="password" placeholder="Password*" required>
           <span class="toggle-password" onclick="togglePassword('password', this)">👁️</span>
         </div>
-        <div id="passwordWarning" class="field-warning" style="display:none;">
-          <span class="warn-icon">!</span>
-          <div class="msg" id="passwordWarningMsg"></div>
-          <button class="close-warn" type="button" onclick="document.getElementById('passwordWarning').style.display='none'">×</button>
-        </div>
 
         <div class="password-field">
           <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password*" required>
           <span class="toggle-password" onclick="togglePassword('confirm_password', this)">👁️</span>
         </div>
-        <div id="confirmWarning" class="field-warning" style="display:none;">
-          <span class="warn-icon">!</span>
-          <div class="msg" id="confirmWarningMsg"></div>
-          <button class="close-warn" type="button" onclick="document.getElementById('confirmWarning').style.display='none'">×</button>
-        </div>
 
         <script>
           const passwordInput = document.getElementById('password');
-          const passwordWarning = document.getElementById('passwordWarning');
-          const passwordWarningMsg = document.getElementById('passwordWarningMsg');
+          const confirmPwd = document.getElementById('confirm_password');
 
-          passwordInput.addEventListener('blur', () => {
-            const password = passwordInput.value;
-            let warnings = [];
+      // Password complexity check - removed real-time validation
+      // passwordInput.addEventListener('blur', () => { ... });
 
-            if (password.length < 6) {
-              warnings.push('Password must be at least 6 characters long.');
-            }
-            if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-              warnings.push('Password must include uppercase, lowercase, number, and special character.');
-            }
+      // Password match check - removed real-time validation
+      // if (confirmPwd) { confirmPwd.addEventListener('blur', ...); }
 
-            // Simple check for common weak passwords (client-side)
-            const commonPasswords = ['password', '123456', 'qwerty'];
-            if (commonPasswords.includes(password)) {
-              warnings.push('Password is too weak.');
-            }
-
-            if (warnings.length > 0) {
-              passwordWarningMsg.innerHTML = warnings.join('<br>');
-              passwordWarning.style.display = 'flex';
-            } else {
-              passwordWarning.style.display = 'none';
-            }
-          });
         </script>
 
         <div class="terms">
@@ -554,54 +608,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if (typeof setWarning === 'function') setWarning('terms', '');
     }
 
-    // Password validation: length, complexity, and weak-password blocking
-    (function(){
-      const pw = document.getElementById('password');
-      const cpw = document.getElementById('confirm_password');
-      const pwWarn = document.getElementById('passwordWarning');
-      const pwMsg = document.getElementById('passwordWarningMsg');
-      const cpwWarn = document.getElementById('confirmWarning');
-      const cpwMsg = document.getElementById('confirmWarningMsg');
-      const weakList = ['password','123456','12345678','qwerty','abc123','111111','letmein','welcome','iloveyou','password1','admin','123456789'];
-
-      function showPW(msg){ if(pwWarn && pwMsg){ pwMsg.textContent=msg; pwWarn.style.display='flex'; }}
-      function hidePW(){ if(pwWarn){ pwWarn.style.display='none'; pwMsg.textContent=''; }}
-      function showCPW(msg){ if(cpwWarn && cpwMsg){ cpwMsg.textContent=msg; cpwWarn.style.display='flex'; }}
-      function hideCPW(){ if(cpwWarn){ cpwWarn.style.display='none'; cpwMsg.textContent=''; }}
-
-      function checkPassword(){
-        if(!pw) return true;
-        const v = pw.value || '';
-        if(v.length < 6){ showPW('Password must be at least 6 characters long.'); return false; }
-        const hasUpper = /[A-Z]/.test(v);
-        const hasLower = /[a-z]/.test(v);
-        const hasDigit = /[0-9]/.test(v);
-        const hasSpecial = /[^A-Za-z0-9]/.test(v);
-        if(!(hasUpper && hasLower && hasDigit && hasSpecial)){ showPW('Password must include uppercase, lowercase, number, and special character.'); return false; }
-        const lowered = v.toLowerCase();
-        if(weakList.includes(lowered) || /^\d{6,}$/.test(lowered)){ showPW('Password is too weak.'); return false; }
-        hidePW();
-        return true;
-      }
-
-      function checkConfirm(){
-        if(!cpw) return true;
-        if(cpw.value !== pw.value){ showCPW('Passwords do not match.'); return false; }
-        hideCPW();
-        return true;
-      }
-
-      if(pw) pw.addEventListener('input', function(){ checkPassword(); checkConfirm(); });
-      if(cpw) cpw.addEventListener('input', function(){ checkConfirm(); });
-
-      const form = document.getElementById('signupForm');
-      if(form){
-        form.addEventListener('submit', function(e){
-          const ok = checkPassword() && checkConfirm();
-          if(!ok){ e.preventDefault(); const first = document.querySelector('.field-warning[style*="display:flex"]'); if(first) first.scrollIntoView({behavior:'smooth', block:'center'}); return false; }
-        });
-      }
-    })();
     // Floating popover warnings anchored under inputs
     const _popovers = {};
     function _ensureLayer(){ return document.getElementById('warnLayer'); }
@@ -712,7 +718,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           msgSpan.className = 'msg';
           warnEl.appendChild(msgSpan);
         }
-        msgSpan.textContent = message;
+        msgSpan.innerHTML = message;
         let closer = warnEl.querySelector('.close-warn');
         if (!closer){
           closer = document.createElement('button');
@@ -738,6 +744,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
     }
 
+    // Prevent Enter key from submitting form
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        return false;
+      }
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
       const first = document.getElementById('first_name');
       const last = document.getElementById('last_name');
@@ -755,7 +769,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       function blockDigits(e) {
         if (/[0-9]/.test(e.key)) {
           e.preventDefault();
-          setWarning(e.target.id, 'Numbers are not allowed in this field.');
+          // setWarning(e.target.id, 'Numbers are not allowed in this field.'); // Disabled real-time warning
         }
       }
 
@@ -764,7 +778,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         const cleaned = val.replace(/[0-9]/g, '');
         if (val !== cleaned) {
           e.target.value = cleaned;
-          setWarning(e.target.id, 'Numbers were removed.');
+          // setWarning(e.target.id, 'Numbers were removed.'); // Disabled real-time warning
         } else {
           // no toast for clearing
         }
@@ -777,6 +791,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       });
 
       if (phone) {
+        // Real-time phone validation removed
+        /*
         phone.addEventListener('input', function(e) {
           const val = e.target.value.trim();
           if (!/^09\d{9}$/.test(val)) {
@@ -785,45 +801,49 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             setWarning('phone', '');
           }
         });
+        */
       }
 
         // Email format check + async existence check
         const emailEl = document.getElementById('email');
         let emailTimer = null;
         if (emailEl) {
-          emailEl.addEventListener('input', function(e){
-            const v = e.target.value.trim();
-            // quick format validation
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
-              setWarning('email', 'Invalid email');
-            } else {
-              setWarning('email', '');
-            }
-            // debounce async check
-            if (emailTimer) clearTimeout(emailTimer);
-            emailTimer = setTimeout(function(){
-              if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return;
-              fetch('signup.php?action=check_email&email=' + encodeURIComponent(v)).then(r=>r.json()).then(function(data){
-                if (data && data.ok === false) {
-                  setWarning('email', data.message || 'Email already exists.');
-                } else {
-                  setWarning('email', '');
-                }
-              }).catch(function(){ /* ignore network */ });
-            }, 550);
-          });
+          // Real-time email validation removed
+          /*
+          emailEl.addEventListener('input', function(e){ ... });
+          */
         }
 
-      // Live password mismatch feedback
-      if (confirmPwd) {
-        confirmPwd.addEventListener('input', function(e) {
-          if (password && password.value !== e.target.value) {
-            setWarning('confirm_password', 'Passwords do not match.');
-          } else {
-            setWarning('confirm_password', '');
-          }
+
+
+      // House number verification on blur - removed real-time validation
+      /*
+      if (houseHidden) {
+        houseHidden.addEventListener('blur', function(e) {
+             const val = e.target.value.trim();
+             if (!val) {
+                setWarning('houseHidden', '');
+                return;
+             }
+             
+             // Check against server
+             fetch('verify_house.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ ajax:'1', house_number: val }).toString()
+             })
+             .then(r => r.json())
+             .then(data => {
+                if (!data.success) {
+                    setWarning('houseHidden', data.message || 'Invalid House Number');
+                } else {
+                    setWarning('houseHidden', '');
+                }
+             })
+             .catch(err => console.error(err));
         });
       }
+      */
 
       function applyVisitorMode(){
         if (!isVisitor) return;
@@ -847,29 +867,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       if (form) {
         form.addEventListener('submit', function(e) {
+          e.preventDefault();
           let valid = true;
 
-      // Names: require first and last; middle optional but must not contain digits
-      [first, last].forEach(function(inp) {
-        if (!inp) return;
-        if (/\d/.test(inp.value)) {
-          setWarning(inp.id, 'Numbers are not allowed in this field.');
-          valid = false;
-        }
-        if (!inp.value.trim()) {
-          setWarning(inp.id, 'This field is required.');
-          valid = false;
-        }
-      });
-      if (middle) {
-        const val = middle.value || '';
-        if (/\d/.test(val)) {
-          setWarning('middle_name', 'Numbers are not allowed in this field.');
-          valid = false;
-        } else {
-          setWarning('middle_name', '');
-        }
-      }
+          // Names: require first and last; middle optional but must not contain digits
+          [first, last].forEach(function(inp) {
+            if (!inp) return;
+            if (/\d/.test(inp.value)) {
+              setWarning(inp.id, 'Numbers are not allowed in this field.');
+              valid = false;
+            }
+            if (!inp.value.trim()) {
+              setWarning(inp.id, 'This field is required.');
+              valid = false;
+            }
+          });
+          if (middle) {
+            const val = middle.value || '';
+            if (/\d/.test(val)) {
+              setWarning('middle_name', 'Numbers are not allowed in this field.');
+              valid = false;
+            } else {
+              setWarning('middle_name', '');
+            }
+          }
 
           // Phone format: 09 followed by 9 digits (PH mobile)
           if (phone) {
@@ -877,6 +898,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (!/^09\d{9}$/.test(val)) {
               setWarning('phone', 'Phone number must be 11 digits and start with 09.');
               valid = false;
+            }
+          }
+
+          // Password complexity check
+          if (password) {
+            const v = password.value || '';
+            if (v.length < 6 || !/[a-zA-Z]/.test(v) || !/[0-9]/.test(v)) {
+              setWarning('password', 'Password must be at least 6 characters and include letters and numbers.');
+              valid = false;
+            } else {
+              setWarning('password', '');
             }
           }
 
@@ -888,12 +920,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
           if (!isVisitor || !isVisitor.checked) {
             if (houseHidden && !houseHidden.value.trim()) {
-              setWarning('houseHidden', 'Please verify your House Number.');
-              if (typeof openHouseModal === 'function') openHouseModal();
+              setWarning('houseHidden', 'Please enter your House Number.');
+              valid = false;
+            }
+            if (addressField && !addressField.value.trim()) {
+              setWarning('addressField', 'Please enter your full address.');
               valid = false;
             }
           } else {
             setWarning('houseHidden', '');
+            if (addressField) setWarning('addressField', '');
           }
 
           // Terms: show inline warning and block submit until agreed
@@ -902,10 +938,130 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             valid = false;
           }
 
-          if (!valid) e.preventDefault();
+          if (!valid) return;
+
+          // AJAX Submission
+          const formData = new FormData(form);
+          formData.append('ajax', '1');
+          
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalBtnText = submitBtn.textContent;
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Processing...';
+
+          fetch('signup.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+               window.location.href = data.redirect;
+            } else {
+               submitBtn.disabled = false;
+               submitBtn.textContent = originalBtnText;
+               
+               const errors = data.errors || {};
+               let modalShown = false;
+
+               const hasHouseError = errors.houseHidden && (errors.houseHidden.includes('already in use') || errors.houseHidden.includes('Invalid'));
+               const hasEmailError = errors.email && errors.email.includes('already registered');
+
+               // Check for House Number Error
+               if (hasHouseError) {
+                 let cooldown = 30;
+                 submitBtn.disabled = true;
+                 
+                 const updateCooldown = () => {
+                   if (cooldown > 0) {
+                     submitBtn.textContent = `Try again in ${cooldown}s`;
+                     cooldown--;
+                     setTimeout(updateCooldown, 1000);
+                   } else {
+                     submitBtn.disabled = false;
+                     submitBtn.textContent = originalBtnText;
+                   }
+                 };
+                 
+                 // If email error also exists, chain it to show after house modal closes
+                 const onCloseAction = hasEmailError ? () => {
+                     showCenterModal('Email Already Exists', 
+                       '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
+                     );
+                 } : null;
+
+                 showCenterModal('House Number Error', 
+                   `<p>${errors.houseHidden}</p><p>Please try again later.</p>`,
+                   onCloseAction
+                 );
+                 updateCooldown();
+                 modalShown = true;
+               }
+               // Check for Email Error (only if no house error, or handled via chain above)
+               else if (hasEmailError) {
+                 showCenterModal('Email Already Exists', 
+                   '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
+                 );
+                 modalShown = true;
+               }
+
+               // Show inline warnings for all errors (including those in modal)
+               Object.entries(errors).forEach(([key, msg]) => {
+                 setWarning(key, msg);
+               });
+               
+               if (!modalShown) {
+                 const firstErrorKey = Object.keys(errors)[0];
+                 const firstErrorEl = document.getElementById(firstErrorKey) || document.querySelector(`[name="${firstErrorKey}"]`);
+                 if (firstErrorEl) firstErrorEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+               }
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+            alert('An error occurred. Please try again.');
+          });
         });
       }
     });
+  </script>
+
+  <!-- House Verification Modal (Removed) -->
+  <!-- 
+  <div id="houseModal" class="center-modal">
+    ...
+  </div>
+  -->
+
+  <!-- Center Warning Modal -->
+  <div id="centerWarningModal" class="center-modal">
+    <div class="center-modal-content">
+      <span class="close-center" onclick="closeCenterModal()">&times;</span>
+      <h3 id="centerModalTitle">Warning</h3>
+      <div id="centerModalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    window._modalCloseCallback = null;
+
+    function closeCenterModal() {
+      document.getElementById('centerWarningModal').style.display = 'none';
+      if (typeof window._modalCloseCallback === 'function') {
+        const cb = window._modalCloseCallback;
+        window._modalCloseCallback = null;
+        cb();
+      }
+    }
+    
+    function showCenterModal(title, bodyHtml, onClose) {
+      document.getElementById('centerModalTitle').textContent = title;
+      document.getElementById('centerModalBody').innerHTML = bodyHtml;
+      document.getElementById('centerWarningModal').style.display = 'flex';
+      window._modalCloseCallback = onClose || null;
+    }
   </script>
 
   <script>
@@ -931,12 +1087,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   </script>
   <!-- Inline warnings are inserted per field; floating layer removed -->
   <?php if (!empty($serverErrors ?? [])) { ?>
+  <!-- Old server-side error rendering removed since we use AJAX now, but kept for fallback if needed -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const warnings = <?php echo json_encode($serverErrors, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-      Object.entries(warnings).forEach(function([key, msg]) {
-        setWarning(key, msg);
-      });
+      
+      // Check for errors that should be displayed in a modal
+       let modalMessage = '';
+       if (warnings.email && (warnings.email.includes('already exists') || warnings.email.includes('Invalid') || warnings.email.includes('valid') || warnings.email.includes('registered'))) {
+           modalMessage = warnings.email;
+       } else if (warnings.houseHidden && (warnings.houseHidden.includes('already registered') || warnings.houseHidden.includes('Invalid') || warnings.houseHidden.includes('registered') || warnings.houseHidden.includes('use'))) {
+           modalMessage = warnings.houseHidden;
+       }
+ 
+       if (modalMessage) {
+           const modal = document.getElementById('errorModal');
+           const msg = document.getElementById('errorModalMessage');
+           if (modal && msg) {
+               msg.textContent = modalMessage;
+               modal.style.display = 'block';
+           }
+       }
+ 
+       Object.entries(warnings).forEach(function([key, msg]) {
+         setWarning(key, msg);
+       });
     });
   </script>
   <?php } ?>
@@ -1011,6 +1186,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
   </script>
 
+
+    <!-- Generic Error Modal -->
+  <div id="errorModal" class="modal">
+    <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px; border-radius: 12px; position: relative; top: 50%; transform: translateY(-50%); margin: auto;">
+      <span class="close" onclick="document.getElementById('errorModal').style.display='none'">&times;</span>
+      <div style="margin-bottom: 15px;">
+         <span style="font-size: 3rem;">⚠️</span>
+      </div>
+      <h3 style="color: #c0392b; margin-bottom: 10px;">Error</h3>
+      <div id="errorModalMessage" style="color: #555; font-size: 1rem;"></div>
+      <button class="btn confirm" onclick="document.getElementById('errorModal').style.display='none'" style="margin-top: 20px; background-color: #c0392b; width: 100%;">OK</button>
+    </div>
+  </div>
 
 </body>
 </html>
