@@ -480,11 +480,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   <div id="notifyLayer" class="toast"></div>
    
 <header class="navbar">
-  <div class="logo">
-    <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
-    <div class="brand-text">
-      <h1>VictorianPass</h1>
-      <p>Victorian Heights Subdivision</p>
+  <div class="logo-wrap">
+    <div class="logo">
+      <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
+      <div class="brand-text">
+        <h1>VictorianPass</h1>
+        <p>Victorian Heights Subdivision</p>
+      </div>
     </div>
   </div>
 </header>
@@ -492,19 +494,67 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
 <section class="hero">
   <div class="layout">
     <div class="left-panel">
-      <div class="section-header"><h2>Amenities</h2><p>Select an amenity</p></div>
-      <div class="amenity-desc" id="amenityDescBox">
-        <div class="media">
-          <img class="desc-img" data-key="pool" src="images/pool.svg" alt="Pool">
-          <img class="desc-img" data-key="clubhouse" src="images/clubhouse.svg" alt="Clubhouse">
-          <img class="desc-img" data-key="basketball" src="images/basketball.svg" alt="Basketball Court">
-          <img class="desc-img" data-key="tennis" src="images/tennis.jpg" alt="Tennis Court">
-          <div>
-            <div id="hoursNotice" class="avail" style="display:none"></div>
-            <h3 id="amenityDescTitle">No Amenity Selected</h3>
-            <p id="amenityDescText">“Click ‘View Description’ on an amenity to see its details here.”</p>
+      <div class="amenities-wrapper">
+        <div class="amenities-left">
+          <div class="section-header" id="amenitiesHeader"><h2>Amenities</h2><p>Select an amenity</p></div>
+          <div id="amenityDescBox" class="amenity-desc">
+            <div class="media">
+              <img class="desc-img" data-key="pool" src="images/pool.svg" alt="Pool">
+              <img class="desc-img" data-key="clubhouse" src="images/clubhouse.svg" alt="Clubhouse">
+              <img class="desc-img" data-key="basketball" src="images/basketball.svg" alt="Basketball Court">
+              <img class="desc-img" data-key="tennis" src="images/tennis.jpg" alt="Tennis Court">
+              <div class="desc-content">
+                <h3 id="amenityDescTitle">No Amenity Selected</h3>
+                <div id="hoursNotice" class="avail" style="display:none"></div>
+                <div class="meta-grid">
+                  <p id="amenityDescDays" class="amenity-meta-line"></p>
+                  <p id="amenityDescPrice" class="amenity-meta-line"></p>
+                  <p id="amenityDescCapacity" class="amenity-meta-line amenity-meta-capacity"></p>
+                </div>
+                <p id="amenityDescText" class="amenity-desc-note">Select an amenity from the list to view details and check availability.</p>
+              </div>
+            </div>
           </div>
         </div>
+        <div class="amenities-right">
+          <div class="amenities-list" id="amenitiesList">
+            <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175">
+              <img src="images/pool.svg" alt="Pool">
+              <div class="info">
+                <div class="title-block"><div class="name">Community Pool</div><div class="price">₱175 / person</div></div>
+                <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
+              </div>
+              <div class="schedule-panel" data-schedule-panel></div>
+            </div>
+            <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="200">
+              <img src="images/clubhouse.svg" alt="Clubhouse">
+              <div class="info">
+                <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱200 / hour</div></div>
+                <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
+              </div>
+              <div class="schedule-panel" data-schedule-panel></div>
+            </div>
+            <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150">
+              <img src="images/basketball.svg" alt="Basketball">
+              <div class="info">
+                <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
+                <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
+              </div>
+              <div class="schedule-panel" data-schedule-panel></div>
+            </div>
+            <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150">
+              <img src="images/tennis.jpg" alt="Tennis">
+              <div class="info">
+                <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
+                <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
+              </div>
+              <div class="schedule-panel" data-schedule-panel></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section-actions">
+        <button type="button" id="amenityReturnBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-arrow-rotate-left"></i> Return to amenities</button>
       </div>
       <div id="amenityImageModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
         <div style="position:relative; background:#fff; border-radius:12px; padding:12px; max-width:90vw; max-height:90vh;">
@@ -512,138 +562,121 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           <img id="amenityImageModalImg" src="" alt="Amenity" style="display:block; max-width:85vw; max-height:80vh;">
         </div>
       </div>
-      <div class="amenities-list" id="amenitiesList">
-        <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175" role="button" tabindex="0">
-          <img src="images/pool.svg" alt="Pool">
-          <div class="info">
-            <div class="title-block"><div class="name">Community Pool</div><div class="price">₱175 / person</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
-          </div>
-          <div class="schedule-panel" data-schedule-panel></div>
-        </div>
-        <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="200" role="button" tabindex="0">
-          <img src="images/clubhouse.svg" alt="Clubhouse">
-          <div class="info">
-            <div class="title-block"><div class="name">Clubhouse</div><div class="price">₱200 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
-          </div>
-          <div class="schedule-panel" data-schedule-panel></div>
-        </div>
-        <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150" role="button" tabindex="0">
-          <img src="images/basketball.svg" alt="Basketball">
-          <div class="info">
-            <div class="title-block"><div class="name">Basketball Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
-          </div>
-          <div class="schedule-panel" data-schedule-panel></div>
-        </div>
-        <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150" role="button" tabindex="0">
-          <img src="images/tennis.jpg" alt="Tennis">
-          <div class="info">
-            <div class="title-block"><div class="name">Tennis Court</div><div class="price">₱150 / hour</div></div>
-            <div class="meta"><button type="button" class="btn-main small" data-action="book-now">Book Now</button><button type="button" class="btn-link" data-action="view-desc">View Description</button></div>
-          </div>
-          <div class="schedule-panel" data-schedule-panel></div>
-        </div>
-      </div>
     </div>
 
     <div class="right-panel">
-      <div class="section-header"><h2 id="reservationTitle">Reserve an Amenity</h2><p id="reservationHint">Select an amenity to continue</p></div>
-      <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
-      <form method="POST">
-        <input type="hidden" name="purpose" value="Amenity Reservation">
-        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-        <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
-        <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
-        <input type="hidden" id="submitAllowed" value="1">
-        <div class="reservation-card" id="reservationCard" style="display:none;">
-          <div class="calendar" style="width:100%">
-            <div class="calendar-header">
-              <button id="prevMonth">&lt;</button>
-              <h3 id="monthAndYear"></h3>
-              <button id="nextMonth">&gt;</button>
+      <div class="booking-shell">
+        <div class="booking-steps" aria-label="Booking steps">
+          <div class="booking-step is-active">
+            <div class="step-index">1</div>
+            <div class="step-content">
+              <div class="step-title">Choose amenity</div>
+              <div class="step-subtitle">Pick a facility from the list</div>
             </div>
-            <table>
-              <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
-              <tbody id="calendar-body"></tbody>
-            </table>
           </div>
-          <input type="hidden" name="amenity" id="amenityField" value="">
-          <div class="res-item" id="singleDayRow"><label class="single-day"><input type="checkbox" id="singleDayToggle"> Single-day reservation</label></div>
-          <div class="date-row" id="dateRow">
-          <div class="res-item date-item" id="startDateGroup">
-            <div class="res-label"><small>Start Date</small></div>
-            <div class="date-line"><p id="startDate">--</p><button type="button" class="clear-date" id="clearStartBtn" title="Clear start date">Clear</button></div>
-            <input type="hidden" name="startDate" id="startDateInput">
-            <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="display:none;">
-            <div id="startDateError" class="time-error" style="display:none;"></div>
-            <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
-            <div class="counter" id="hoursCounter" style="display:none;">
-              <button type="button" onclick="changeHours(-1)">-</button>
-              <span id="hoursCount">1</span>
-              <button type="button" onclick="changeHours(1)">+</button>
+          <div class="booking-step">
+            <div class="step-index">2</div>
+            <div class="step-content">
+              <div class="step-title">Pick date &amp; time</div>
+              <div class="step-subtitle">Use the calendar to set your schedule</div>
             </div>
-            <input type="hidden" name="hours" id="hoursInput" value="1">
-            <input type="hidden" id="hoursChosen" value="0">
-            <div class="res-label" id="hoursSectionLabel" style="margin-top:8px; display:none;"><small>Hours</small><div class="label-help">Pick how many hours</div></div>
-            <select id="hoursSelect" class="hours-select" style="display:none;"></select>
-            <div id="durationContainer" style="display:none;"></div>
-            <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small><div class="label-help">Pick your starting time</div></div>
-            <div id="timeSlotContainer"></div>
-            <div id="selectedTimeRange" class="selected-time-range" style="display:none;"></div>
-            <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
           </div>
-          <div class="res-item date-item" id="endDateGroup">
-            <div class="res-label"><small>End Date</small></div>
-            <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
-            <input type="hidden" name="endDate" id="endDateInput">
-            <div id="dateError" class="time-error" style="display:none;"></div>
-          <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
-          <div id="timeError" class="time-error" style="display:none;"></div>
-        </div>
-        </div>
-        <div class="res-item persons">
-          <div class="res-label"><small>How Many Persons</small></div>
-          <div class="counter" style="margin-top:6px;">
-            <button type="button" onclick="changePersons(-1)">-</button>
-            <span id="personCount">1</span>
-            <button type="button" onclick="changePersons(1)">+</button>
+          <div class="booking-step">
+            <div class="step-index">3</div>
+            <div class="step-content">
+              <div class="step-title">Review &amp; confirm</div>
+              <div class="step-subtitle">Check summary and submit</div>
+            </div>
           </div>
-          <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
-          <small id="price">$1</small>
-          <input type="hidden" name="persons" id="personsInput" value="1">
         </div>
-        <div class="res-item">
-          <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
-          <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
-          <small class="dp-info" style="display:block;color:#666;margin-top:6px;">A partial downpayment is required to reserve your slot. You can pay the partial amount online now and settle the remaining balance onsite.</small>
-          <small class="nonrefundable">Downpayment is non-refundable.</small>
-        </div>
-        <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button type="button" class="btn-submit" onclick="goBack()">Go Back</button>
-          <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
-        </div>
+        <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
+        <form method="POST">
+          <input type="hidden" name="purpose" value="Amenity Reservation">
+          <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+          <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
+          <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
+          <input type="hidden" id="submitAllowed" value="1">
+          <div class="reservation-card" id="reservationCard" style="display:none;">
+            <input type="hidden" name="amenity" id="amenityField" value="">
+            <div class="reservation-grid">
+              <div class="calendar" style="width:100%">
+                <div class="calendar-header">
+                  <button id="prevMonth">&lt;</button>
+                  <h3 id="monthAndYear"></h3>
+                  <button id="nextMonth">&gt;</button>
+                </div>
+                <table>
+                  <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
+                  <tbody id="calendar-body"></tbody>
+                </table>
+              </div>
+              <div class="reservation-left">
+                <div class="res-item" id="singleDayRow">
+                  <label class="single-day"><input type="checkbox" id="singleDayToggle"> Single-day reservation</label>
+                  <div class="date-note">You can reserve up to 7 days (maximum 1 week per booking).</div>
+                </div>
+                <div class="date-row" id="dateRow">
+                  <div class="res-item date-item" id="startDateGroup">
+                    <div class="res-label"><small>Start Date</small></div>
+                    <div class="date-line"><p id="startDate">--</p><button type="button" class="clear-date" id="clearStartBtn" title="Clear start date">Clear</button></div>
+                    <input type="hidden" name="startDate" id="startDateInput">
+                    <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="display:none;">
+                    <div id="startDateError" class="time-error" style="display:none;"></div>
+                    <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
+                    <div class="counter" id="hoursCounter" style="display:none;">
+                      <button type="button" onclick="changeHours(-1)">-</button>
+                      <span id="hoursCount">1</span>
+                      <button type="button" onclick="changeHours(1)">+</button>
+                    </div>
+                    <input type="hidden" name="hours" id="hoursInput" value="1">
+                    <input type="hidden" id="hoursChosen" value="0">
+                    <div class="res-label" id="hoursSectionLabel" style="margin-top:8px; display:none;"><small>Hours</small><div class="label-help">Pick how many hours</div></div>
+                    <select id="hoursSelect" class="hours-select" style="display:none;"></select>
+                    <div id="durationContainer" style="display:none;"></div>
+                    <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small><div class="label-help">Pick your starting time</div></div>
+                    <div id="timeSlotContainer"></div>
+                    <div id="selectedTimeRange" class="selected-time-range" style="display:none;"></div>
+                    <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
+                  </div>
+                  <div class="res-item date-item" id="endDateGroup">
+                    <div class="res-label"><small>End Date</small></div>
+                    <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
+                    <input type="hidden" name="endDate" id="endDateInput">
+                    <div id="dateError" class="time-error" style="display:none;"></div>
+                    <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
+                    <div id="timeError" class="time-error" style="display:none;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="reservation-right">
+                <div class="res-item persons">
+                <div class="res-label"><small>How Many Persons</small></div>
+                <div class="counter" style="margin-top:6px;">
+                  <button type="button" onclick="changePersons(-1)">-</button>
+                  <span id="personCount">1</span>
+                  <button type="button" onclick="changePersons(1)">+</button>
+                </div>
+                <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
+                <small id="price">$1</small>
+                <input type="hidden" name="persons" id="personsInput" value="1">
+              </div>
+                <div class="res-item">
+                  <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
+                  <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
+                  <small class="dp-info" style="display:block;color:#666;margin-top:6px;">Note: A partial 50% downpayment is required to reserve your slot. After paying the 50% downpayment online, the remaining balance must be settled onsite at the admin office.</small>
+                  <small class="nonrefundable">Downpayment is non-refundable.</small>
+                </div>
+                <div id="submitWrap" class="res-item" style="flex-basis:100%; margin-top:8px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
       </div>
-    </form>
-</div>
-</div>
+    </div>
+  </div>
 </section>
-
-<div id="refModal" class="modal" style="<?php echo $generatedCode ? 'display:flex;' : ''; ?>">
-  <div class="modal-content">
-    <h2>Reservation Submitted!</h2>
-    <p>Your Status Code:</p>
-    <div class="ref-code"><?php echo htmlspecialchars($generatedCode); ?></div>
-    <p>Use this code in the <b>Check Status</b> page to track your reservation.</p>
-    <div style="text-align:center;margin-top:8px;">
-      <button class="close-btn" onclick="closeModal()">OK</button>
-    </div>
-    <div style="text-align:center;margin-top:12px;">
-      <a href="mainpage.php#" class="btn-secondary" title="Back to Visitor Home">← Back to Visitor Home</a>
-    </div>
-</div>
-</div>
 
 <div id="verifyModal" class="modal" style="display:none;">
   <div class="modal-content">
@@ -794,6 +827,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     showIncompleteWarnings(false);
     updateActionStates();
     updateSelectedTimeRange();
+    updateBookingSummary();
   }
 
   function clearStartDate(){
@@ -808,6 +842,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     showIncompleteWarnings(false);
     updateActionStates();
     updateSelectedTimeRange();
+    updateBookingSummary();
   }
   function clearEndDate(){
     selectedEnd=null;
@@ -819,6 +854,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     showIncompleteWarnings(false);
     updateActionStates();
     updateSelectedTimeRange();
+    updateBookingSummary();
   }
 
   function initSingleDayToggle(){
@@ -834,15 +870,100 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       updateActionStates();
       showIncompleteWarnings(false);
       updateSelectedTimeRange();
+      updateBookingSummary();
     });
   }
 
   const amenityData={
-    pool:{title:'Community Pool',value:'Pool',img:'images/pool.svg',desc:'Relax and enjoy the pool with convenient reservation options.'},
-    clubhouse:{title:'Clubhouse',value:'Clubhouse',img:'images/clubhouse.svg',desc:'Host gatherings and events in the subdivision clubhouse.'},
-    basketball:{title:'Basketball Court',value:'Basketball Court',img:'images/basketball.svg',desc:'Play and practice on our outdoor basketball court.'},
-    tennis:{title:'Tennis Court',value:'Tennis Court',img:'images/tennis.jpg',desc:'Reserve time to enjoy a game at the tennis court.'}
+    pool:{
+      title:'Community Pool',
+      value:'Pool',
+      img:'images/pool.svg',
+      desc:'Enjoy the community pool with friends and family in a controlled-capacity setting.',
+      days:'Monday – Friday (Weekdays)',
+      priceLabel:'₱175 per person',
+      capacity:20
+    },
+    clubhouse:{
+      title:'Clubhouse',
+      value:'Clubhouse',
+      img:'images/clubhouse.svg',
+      desc:'Reserve the clubhouse for events, gatherings, and celebrations.',
+      days:'Monday – Sunday',
+      priceLabel:'₱200 per hour',
+      capacity:200
+    },
+    basketball:{
+      title:'Basketball Court',
+      value:'Basketball Court',
+      img:'images/basketball.svg',
+      desc:'Book the outdoor court for games, practice, or training sessions.',
+      days:'Monday – Sunday',
+      priceLabel:'₱150 per hour',
+      capacity:30
+    },
+    tennis:{
+      title:'Tennis Court',
+      value:'Tennis Court',
+      img:'images/tennis.jpg',
+      desc:'Reserve a court time for casual or competitive tennis games.',
+      days:'Monday – Sunday',
+      priceLabel:'₱150 per hour',
+      capacity:60
+    }
   };
+
+  function updateAmenityDescription(key){
+    const info=amenityData[key]||amenityData.pool;
+    const titleEl=document.getElementById('amenityDescTitle');
+    if(titleEl){ titleEl.textContent=info.title; }
+    const descEl=document.getElementById('amenityDescText');
+    if(descEl){ descEl.textContent=info.desc; }
+    document.querySelectorAll('.amenity-desc .desc-img').forEach(function(img){ img.style.display='none'; });
+    const imgEl=document.querySelector('.amenity-desc .desc-img[data-key="'+key+'"]');
+    if(imgEl){ imgEl.style.display='block'; }
+    const hn=document.getElementById('hoursNotice');
+    if(hn){
+      const hrs=getAmenityHours(info.value);
+      const minH=parseInt(hrs.min.split(':')[0],10);
+      const maxH=parseInt(hrs.max.split(':')[0],10);
+      hn.textContent=`Available ${formatTimeSlot(minH)} – ${formatTimeSlot(maxH)}`;
+      hn.style.display='block';
+    }
+    const daysEl=document.getElementById('amenityDescDays');
+    if(daysEl){
+      if(info.days){ daysEl.textContent=info.days; daysEl.style.display='block'; }
+      else { daysEl.textContent=''; daysEl.style.display='none'; }
+    }
+    const priceEl=document.getElementById('amenityDescPrice');
+    if(priceEl){
+      if(info.priceLabel){ priceEl.textContent=info.priceLabel; priceEl.style.display='block'; }
+      else { priceEl.textContent=''; priceEl.style.display='none'; }
+    }
+    const capEl=document.getElementById('amenityDescCapacity');
+    if(capEl){
+      const cap=Number.isFinite(info.capacity)?info.capacity:getAmenityMaxPersons(info.value);
+      if(cap && cap!==Infinity){ capEl.textContent=`Capacity: ${cap} max`; capEl.style.display='block'; }
+      else { capEl.textContent=''; capEl.style.display='none'; }
+    }
+  }
+
+  function showInlineAmenityDetails(key){
+    const info=amenityData[key]||amenityData.pool;
+    const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
+    if(!card) return;
+    const panel=card.querySelector('[data-schedule-panel]');
+    if(!panel) return;
+    let html='<div class="inline-amenity-details">';
+    html+=`<div class="inline-title">${info.title}</div>`;
+    if(info.desc){ html+=`<p class="inline-text">${info.desc}</p>`; }
+    if(info.days){ html+=`<p class="inline-meta">${info.days}</p>`; }
+    if(info.priceLabel){ html+=`<p class="inline-meta">${info.priceLabel}</p>`; }
+    if(Number.isFinite(info.capacity)){ html+=`<p class="inline-meta">Capacity: ${info.capacity}</p>`; }
+    html+='</div>';
+    panel.innerHTML=html;
+    panel.style.display='block';
+  }
 
   function openAmenityImageModal(key){
     try{
@@ -899,40 +1020,47 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }catch(_){ }
   }
 
-  document.querySelectorAll('.amenity-card').forEach(function(card){
-    card.addEventListener('click',function(){
-      const key=card.getAttribute('data-key');
-      selectAmenityByKey(key);
-      openAmenityImageModal(key);
+  document.querySelectorAll('.amenity-card img').forEach(function(img){
+    img.addEventListener('click',function(e){
+      e.stopPropagation();
+      const card=img.closest('.amenity-card');
+      if(card){
+        const key=card.getAttribute('data-key');
+        openAmenityImageModal(key);
+      }
     });
   });
 
   const amenitiesList=document.getElementById('amenitiesList');
-  if(amenitiesList){
-    amenitiesList.addEventListener('click',function(e){
-      const bookBtn=e.target.closest('button[data-action="book-now"]');
-      if(bookBtn){
-        const card=e.target.closest('.amenity-card');
-        if(card){
-          selectAmenityByKey(card.getAttribute('data-key'));
-          try{
-            const rc=document.getElementById('reservationCard');
-            rc.style.display='flex';
-            document.getElementById('reservationTitle').textContent='Reservation';
-            document.getElementById('reservationHint').textContent='Select date, time, and persons';
-            rc.scrollIntoView({behavior:'smooth',block:'start'});
-          }catch(_){}
-        }
-        return;
-      }
-    const card=e.target.closest('.amenity-card');
-    if(card){ const key=card.getAttribute('data-key'); selectAmenityByKey(key); openAmenityImageModal(key); }
-    });
-    amenitiesList.addEventListener('keydown',function(e){
-      if(e.key==='Enter'||e.key===' '){
-        const card=e.target.closest('.amenity-card');
-        if(card){ e.preventDefault(); selectAmenityByKey(card.getAttribute('data-key')); }
-      }
+
+  const amenityReturnBtn=document.getElementById('amenityReturnBtn');
+  if(amenityReturnBtn){
+    amenityReturnBtn.addEventListener('click',function(){
+      document.querySelectorAll('.amenity-card').forEach(function(c){
+        c.style.display='';
+        c.classList.remove('selected');
+      });
+      document.querySelectorAll('.schedule-panel').forEach(function(p){
+        p.style.display='none';
+        p.innerHTML='';
+      });
+      document.querySelectorAll('button[data-action="view-desc"]').forEach(function(btn){
+        btn.style.display='';
+      });
+      document.querySelectorAll('button[data-action="book-now"]').forEach(function(btn){
+        btn.style.display='';
+      });
+      const rc=document.getElementById('reservationCard');
+      if(rc){ rc.style.display='none'; }
+      const descBox=document.getElementById('amenityDescBox');
+      if(descBox){ descBox.style.display='flex'; }
+      const amenitiesHeader=document.getElementById('amenitiesHeader');
+      if(amenitiesHeader){ amenitiesHeader.style.display=''; }
+      const t=document.getElementById('reservationTitle');
+      if(t){ t.textContent='Reserve an Amenity'; }
+      const h=document.getElementById('reservationHint');
+      if(h){ h.textContent='Select an amenity to continue'; }
+      amenityReturnBtn.style.display='none';
     });
   }
 
@@ -947,6 +1075,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     if(count>=max){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); } else { setFieldWarning('personsInput',''); }
     updateDisplayedPrice();
     updateDownpaymentSuggestion();
+    updateBookingSummary();
   }
   function changeHours(val){
     const hoursSpan=document.getElementById('hoursCount');
@@ -960,6 +1089,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     updateDisplayedPrice();
     updateDownpaymentSuggestion();
     renderTimeSlotButtons();
+    updateBookingSummary();
   }
 
   function selectDuration(hours){
@@ -975,6 +1105,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const dc=document.getElementById('durationContainer'); if(dc){ Array.from(dc.children).forEach(b=>b.classList.remove('selected')); const sel=Array.from(dc.children).find(b=>b.dataset.hours===String(hoursInput.value)); if(sel){ sel.classList.add('selected'); } }
     updateActionStates();
     const hc=document.getElementById('hoursChosen'); if(hc){ hc.value='1'; }
+    updateBookingSummary();
   }
 
   async function fetchBookedTimesFor(date){ if(!document.getElementById('amenityField').value) return []; try{ const res=await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(selectedAmenity)}&date=${encodeURIComponent(date)}`); const data=await res.json(); return data.times||[]; }catch(_){ return []; } }
@@ -993,6 +1124,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const downpayment=(base*dpPercent);
     const priceEl=document.getElementById('price'); if(priceEl){ priceEl.textContent = '₱' + base.toFixed(2); }
     const dpText=document.getElementById('dpAmountText'); if(dpText){ dpText.textContent='₱' + downpayment.toFixed(2); }
+    updateBookingSummary();
   }
   function updateDownpaymentSuggestion(){
     const dp=document.getElementById('downpaymentInput'); if(!dp) return;
@@ -1007,6 +1139,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const downpayment=(base*dpPercent);
     dp.value = downpayment.toFixed(2);
     const dpText=document.getElementById('dpAmountText'); if(dpText){ dpText.textContent='₱' + downpayment.toFixed(2); }
+    updateBookingSummary();
   }
 
   function configureFieldsForAmenity(amen){
@@ -1131,6 +1264,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     updateActionStates();
     updateDisplayedPrice();
     updateSelectedTimeRange();
+    updateBookingSummary();
   }
 
   function updateSelectedTimeRange(){
@@ -1147,6 +1281,35 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     const maxH=parseInt(hrsRange.max.split(':')[0],10);
     el.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)} • Overall: ${formatTimeSlot(minH)} - ${formatTimeSlot(maxH)}`;
     el.style.display='block';
+  }
+
+  function updateBookingSummary(){
+    const start=document.getElementById('startDateInput')?.value||'';
+    const end=document.getElementById('endDateInput')?.value||'';
+    const hours=document.getElementById('hoursInput')?.value||'';
+    const startTime=document.getElementById('startTimeInput')?.value||'';
+    const persons=document.getElementById('personsInput')?.value||'';
+    const priceText=document.getElementById('price')?.textContent||'';
+    const dpInput=document.getElementById('downpaymentInput');
+    const dpRaw=dpInput && dpInput.value ? dpInput.value : '';
+    const sdEl=document.getElementById('summaryStartDate');
+    if(sdEl){ sdEl.textContent=start||'--'; }
+    const edEl=document.getElementById('summaryEndDate');
+    if(edEl){ edEl.textContent=end||'--'; }
+    const hrsEl=document.getElementById('summaryHours');
+    if(hrsEl){ hrsEl.textContent=hours||'--'; }
+    const stEl=document.getElementById('summaryStartTime');
+    if(stEl){ stEl.textContent=startTime||'--'; }
+    const pEl=document.getElementById('summaryPersons');
+    if(pEl){ pEl.textContent=persons||'--'; }
+    const priceEl=document.getElementById('summaryPrice');
+    if(priceEl){ priceEl.textContent=priceText || '₱0.00'; }
+    const dpEl=document.getElementById('summaryDownpayment');
+    if(dpEl){
+      const n=parseFloat(dpRaw||'0');
+      const val=isNaN(n)?0:n;
+      dpEl.textContent='₱'+val.toFixed(2);
+    }
   }
 
   async function computeAvailability(){
@@ -1339,13 +1502,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       e.stopPropagation();
       const card=this.closest('.amenity-card');
       if(card){
-        selectAmenityByKey(card.getAttribute('data-key'));
+        this.style.display='none';
+        const key=card.getAttribute('data-key');
+        selectAmenityByKey(key);
+        showInlineAmenityDetails(key);
+        const viewBtn=card.querySelector('button[data-action="view-desc"]');
+        if(viewBtn){ viewBtn.style.display='none'; }
+        const descBox=document.getElementById('amenityDescBox');
+        if(descBox){ descBox.style.display='none'; }
+        const amenitiesHeader=document.getElementById('amenitiesHeader');
+        if(amenitiesHeader){ amenitiesHeader.style.display='none'; }
+        document.querySelectorAll('.amenity-card').forEach(function(c){
+          if(c!==card) c.style.display='none';
+        });
+        const ret=document.getElementById('amenityReturnBtn');
+        if(ret){ ret.style.display='inline-flex'; }
         try{
           const rc=document.getElementById('reservationCard');
-          rc.style.display='flex';
-          document.getElementById('reservationTitle').textContent='Reservation';
-          document.getElementById('reservationHint').textContent='Select date, time, and persons';
-          rc.scrollIntoView({behavior:'smooth',block:'start'});
+          if(rc){
+            rc.style.display='flex';
+            document.getElementById('reservationTitle').textContent='Reservation';
+            document.getElementById('reservationHint').textContent='Select date, time, and persons';
+            rc.scrollIntoView({behavior:'smooth',block:'start'});
+          }
         }catch(_){}
       }
     });
@@ -1357,20 +1536,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       const card=btn.closest('.amenity-card');
       if(card){
         const key=card.getAttribute('data-key');
-        const info=amenityData[key]||amenityData.pool;
-        const t=document.getElementById('amenityDescTitle'); if(t){ t.textContent=info.title; }
-        const d=document.getElementById('amenityDescText'); if(d){ d.textContent=info.desc; }
-        document.querySelectorAll('.amenity-desc .desc-img').forEach(function(img){ img.style.display='none'; });
-        const imgEl=document.querySelector('.amenity-desc .desc-img[data-key="'+key+'"]');
-        if(imgEl){ imgEl.style.display='block'; }
-        const hn=document.getElementById('hoursNotice');
-        if(hn){
-          const hrs=getAmenityHours(info.value);
-          const minH=parseInt(hrs.min.split(':')[0],10);
-          const maxH=parseInt(hrs.max.split(':')[0],10);
-          hn.textContent = `Available ${formatTimeSlot(minH)} – ${formatTimeSlot(maxH)}`;
-          hn.style.display='block';
-        }
+        selectAmenityByKey(key);
+        updateAmenityDescription(key);
       }
     });
   });
@@ -1458,6 +1625,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         setTimeout(function(){ submitting = false; }, 3000);
       }
     });
+    formEl.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){
+        const target=e.target||e.srcElement;
+        const tag=(target && target.tagName)?String(target.tagName).toUpperCase():'';
+        const type=(target && target.getAttribute)?String(target.getAttribute('type')||'').toLowerCase():'';
+        if(tag!=='TEXTAREA' && tag!=='BUTTON' && type!=='button' && type!=='submit'){
+          e.preventDefault();
+        }
+      }
+    });
   }
   (function(){
     const btn=document.getElementById('submitBtn');
@@ -1489,7 +1666,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         const f=document.querySelector('form');
         if(f){
           e.preventDefault();
-          const vm=document.getElementById('verifyModal'); if(vm){ vm.style.display='flex'; }
+          f.requestSubmit();
         }
       });
     }
@@ -1562,7 +1739,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
-  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); initSingleDayToggle(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
+  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
@@ -1576,7 +1753,36 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
 
   function renderHoursChipsForAmenity(){ const amen=document.getElementById('amenityField').value; const dc=document.getElementById('durationContainer'); const lbl=document.getElementById('hoursSectionLabel'); if(!dc) return; dc.innerHTML=''; if(!isHourBasedAmenity(amen)){ dc.style.display='none'; if(lbl) lbl.style.display='none'; return; } dc.style.display='flex'; if(lbl) lbl.style.display='block'; dc.style.flexWrap='wrap'; dc.style.gap='8px'; dc.style.margin='8px 0 0 0'; const maxH=amen==='Clubhouse'?12:9; for(let h=1; h<=maxH; h++){ const b=document.createElement('button'); b.type='button'; b.className='dur-btn'; b.textContent=`${h}h`; b.dataset.hours=String(h); b.onclick=function(){ selectDuration(h); }; dc.appendChild(b); } const currentH=parseInt(document.getElementById('hoursInput').value||'1',10); const sel=Array.from(dc.children).find(b=>b.dataset.hours===String(currentH)); if(sel) sel.classList.add('selected'); }
 
-  function renderTimeSlotButtons(){ const amen=document.getElementById('amenityField').value; const container=document.getElementById('timeSlotContainer'); const tLbl=document.getElementById('timeSectionLabel'); const notice=document.getElementById('availabilityNotice'); if(!container) return; container.innerHTML=''; if(notice){ notice.style.display='none'; notice.textContent=''; } if(!(amen==='Pool' || isHourBasedAmenity(amen))){ container.style.display='none'; if(tLbl) tLbl.style.display='none'; return; } container.style.display='flex'; if(tLbl) tLbl.style.display='block'; container.style.flexWrap='wrap'; container.style.gap='8px'; container.style.margin='8px 0 0 0'; const slots=generateTimeSlots(amen); const date=document.getElementById('startDateInput').value; const hours=parseInt(document.getElementById('hoursInput').value||'1',10);
+  function renderTimeSlotButtons(){
+    const amen=document.getElementById('amenityField').value;
+    const container=document.getElementById('timeSlotContainer');
+    const tLbl=document.getElementById('timeSectionLabel');
+    const notice=document.getElementById('availabilityNotice');
+    if(!container) return;
+    container.innerHTML='';
+    if(notice){ notice.style.display='none'; notice.textContent=''; }
+    if(!(amen==='Pool' || isHourBasedAmenity(amen))){
+      container.style.display='none';
+      if(tLbl) tLbl.style.display='none';
+      return;
+    }
+    container.style.display='grid';
+    try{
+      const w = window.innerWidth || document.documentElement.clientWidth || 1366;
+      let cols = 5;
+      if(w < 1280) cols = 4;
+      if(w < 1100) cols = 3;
+      if(w < 860) cols = 2;
+      container.style.gridTemplateColumns = `repeat(${cols},minmax(0,1fr))`;
+    }catch(_){
+      container.style.gridTemplateColumns='repeat(5,minmax(0,1fr))';
+    }
+    container.style.gap='8px';
+    container.style.margin='8px 0 0 0';
+    if(tLbl) tLbl.style.display='block';
+    const slots=generateTimeSlots(amen);
+    const date=document.getElementById('startDateInput').value;
+    const hours=parseInt(document.getElementById('hoursInput').value||'1',10);
     // If user hasn't explicitly chosen hours yet, prompt them and disable slots
     const hoursChosenEl = document.getElementById('hoursChosen');
     if(hoursChosenEl && String(hoursChosenEl.value) !== '1'){

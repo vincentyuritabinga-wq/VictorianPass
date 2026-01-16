@@ -958,10 +958,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             img.style.borderRadius = '4px';
             img.style.objectFit = 'cover';
             img.style.border = '1px solid #ddd';
-            
+            img.style.cursor = 'pointer';
+
             const reader = new FileReader();
             reader.onload = function(evt) {
-              img.src = evt.target.result;
+              const src = evt.target.result;
+              img.src = src;
+              img.addEventListener('click', function() {
+                openImagePreview(src);
+              });
             };
             reader.readAsDataURL(file);
             previewContent.appendChild(img);

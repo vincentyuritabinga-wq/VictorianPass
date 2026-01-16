@@ -28,18 +28,26 @@ $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name
 $activities = [];
 
 // Reservations
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
         $start = $row['start_date'];
-        $timeStr = ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? '');
+        $end = $row['end_date'] ?? null;
+        $dateStr = '';
+        if (!empty($start) && !empty($end)) {
+            $dateStr = date('M d, Y', strtotime($start)) . ' - ' . date('M d, Y', strtotime($end));
+        } elseif (!empty($start)) {
+            $dateStr = date('M d, Y', strtotime($start));
+        } else {
+            $dateStr = 'Date not set';
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
-            'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
+            'details' => $dateStr,
             'status' => $row['status'] ?? 'pending',
             'date' => $row['created_at'],
             'ref_code' => $row['ref_code'] ?? 'RES'
@@ -119,13 +127,13 @@ usort($activities, function($a, $b) {
              <span><?php echo date('F'); ?></span>
            </div>
            <div class="calendar-grid">
-             <div class="calendar-day-name">m</div>
-             <div class="calendar-day-name">t</div>
-             <div class="calendar-day-name">w</div>
-             <div class="calendar-day-name">t</div>
-             <div class="calendar-day-name">f</div>
-             <div class="calendar-day-name">s</div>
-             <div class="calendar-day-name">s</div>
+             <div class="calendar-day-name">M</div>
+             <div class="calendar-day-name">T</div>
+             <div class="calendar-day-name">W</div>
+             <div class="calendar-day-name">T</div>
+             <div class="calendar-day-name">F</div>
+             <div class="calendar-day-name">S</div>
+             <div class="calendar-day-name">S</div>
              <!-- Mock Calendar Days -->
              <?php
                $daysInMonth = date('t');
