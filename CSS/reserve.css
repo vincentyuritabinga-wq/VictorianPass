@@ -32,10 +32,10 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 @media (min-width:1024px){
   .booking-steps{
     position:fixed;
-    left:32px;
-    bottom:24px;
+    right:32px;
+    top:110px;
     z-index:900;
-    max-width:360px;
+    max-width:320px;
   }
 }
 
@@ -109,13 +109,14 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .inline-amenity-details{display:flex;flex-direction:column;gap:12px;font-size:0.9rem;color:#4b5563;margin-top:12px}
 .inline-amenity-details .inline-title{font-weight:700;font-size:1.15rem;color:#111827;letter-spacing:-0.01em;margin-bottom:4px}
 .inline-amenity-details .inline-meta{font-size:0.9rem;color:#4b5563;line-height:1.6}
-.reservation-card{background:#fff;color:#111827;padding:22px;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #e5e7eb;display:flex;flex-direction:column;gap:18px}
+.reservation-card{background:#fff;color:#111827;padding:24px;border-radius:16px;box-shadow:0 4px 16px rgba(15,23,42,0.08);border:1px solid #e5e7eb;display:flex;flex-direction:column;gap:20px}
 .reservation-grid{display:flex;flex-direction:column;gap:16px}
 .amenity-preview{background:#fff;color:#111827;padding:16px;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #e5e7eb;display:flex;flex-direction:column;gap:10px}
 .amenity-preview-img{width:100%;height:150px;border-radius:12px;object-fit:cover}
 .amenity-preview-header{font-weight:800;font-size:1rem;color:#111827}
 .amenity-preview-title{margin:0}
 .amenity-preview-meta{font-size:0.85rem;color:#4b5563}
+.amenity-preview .amenity-return{margin-top:12px;align-self:flex-start}
 .reservation-left{display:flex;flex-direction:column;gap:12px}
 .reservation-left #submitWrap{display:flex;justify-content:flex-end;margin-top:16px}
 .reservation-right{display:flex;flex-direction:column;gap:12px}
@@ -133,14 +134,20 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .res-label small{font-size:0.85rem}
 .res-label .label-help{font-size:0.8rem;color:#6b7280;margin-left:auto}
 .selected-time-range{margin-top:8px}
-#timeSlotContainer{margin-top:8px}
+#timeSlotContainer{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px}
 .price-inline{margin-top:8px;color:#23412e;font-weight:700;display:inline-block;font-size:1.1rem}
-.res-item{flex:0 0 auto;text-align:left;min-width:120px;padding:8px 0}
+.res-item{flex:0 0 auto;text-align:left;min-width:120px;padding:10px 0}
 .date-item{padding:8px 0}
 .res-label{display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-bottom:6px;font-size:0.85rem;color:#666;font-weight:500;text-transform:capitalize}
-.persons .counter{justify-content:flex-start;margin-top:6px}
+.persons .counter{justify-content:center;margin-top:10px}
 .note{display:block;color:#666;font-size:.85rem;margin-top:6px}
-.reservation-card p{margin:0;font-weight:600;color:#333}
+.reservation-card p{margin:0;font-weight:500;color:#374151;line-height:1.5}
+
+@media (min-width:1024px){
+  .reservation-left .res-item{
+    max-width:420px;
+  }
+}
 /* Button Styles - Updated from signup.css */
 .btn {
   flex: 1;
@@ -556,8 +563,8 @@ input:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
-  padding: 0 16px;
+  height: 44px;
+  padding: 0 18px;
   border-radius: 8px;
   border: 1.5px solid #d1d5db;
   background: #fff;
@@ -568,6 +575,7 @@ input:focus-visible {
   transition: all 0.2s ease;
   cursor: pointer;
   font-family: 'Poppins', sans-serif;
+  flex: 0 0 calc(50% - 8px);
 }
 
 .slot-btn:hover {
@@ -608,8 +616,19 @@ input:focus-visible {
 }
 
 .persons .counter {
-  justify-content: flex-start;
+  justify-content: center;
   margin-top: 8px;
+}
+
+.persons .res-label{
+  justify-content:center;
+  text-align:center;
+}
+
+@media (max-width:640px){
+  .slot-btn{
+    flex:0 0 100%;
+  }
 }
 
 .summary-header .res-label small{letter-spacing:.03em;text-transform:uppercase}

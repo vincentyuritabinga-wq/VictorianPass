@@ -506,9 +506,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
       <div class="section-header" id="amenitiesHeader"><h2>Amenities</h2><p>Select an amenity</p></div>
       <div class="amenities-wrapper">
         <div class="amenities-right">
-          <div class="section-actions">
-            <button type="button" id="amenityReturnBtn" class="btn-secondary" style="display:none;"><i class="fa-solid fa-arrow-rotate-left"></i> Return to amenities</button>
-          </div>
           <div class="amenities-list" id="amenitiesList">
             <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175">
               <div class="amenity-media">
@@ -563,27 +560,27 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
               <div class="schedule-panel" data-schedule-panel></div>
             </div>
           </div>
-          <div class="booking-shell">
+            <div class="booking-shell">
             <div class="booking-steps" aria-label="Booking steps">
               <div class="booking-step is-active">
                 <div class="step-index">1</div>
                 <div class="step-content">
-                  <div class="step-title">Choose amenity</div>
-                  <div class="step-subtitle">Pick a facility from the list</div>
+                  <div class="step-title">Select amenity</div>
+                  <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
                 </div>
               </div>
               <div class="booking-step">
                 <div class="step-index">2</div>
                 <div class="step-content">
-                  <div class="step-title">Pick date &amp; time</div>
-                  <div class="step-subtitle">Use the calendar to set your schedule</div>
+                  <div class="step-title">Set schedule</div>
+                  <div class="step-subtitle">Pick an available date and time from the calendar</div>
                 </div>
               </div>
               <div class="booking-step">
                 <div class="step-index">3</div>
                 <div class="step-content">
-                  <div class="step-title">Review &amp; confirm</div>
-                  <div class="step-subtitle">Check summary and submit</div>
+                  <div class="step-title">Review &amp; pay</div>
+                  <div class="step-subtitle">Check your reservation details and partial downpayment</div>
                 </div>
               </div>
             </div>
@@ -615,13 +612,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
                 </div>
                 <div class="amenity-preview-meta" id="amenityPreviewDays"></div>
                 <div class="amenity-preview-meta" id="amenityPreviewPrice"></div>
+                <button type="button" id="amenityReturnBtn" class="btn-secondary amenity-return" style="display:none;"><i class="fa-solid fa-arrows-rotate"></i> Change Amenity</button>
               </div>
               <div class="reservation-left">
                 <div class="res-item" id="singleDayRow">
                   <label class="single-day"><input type="checkbox" id="singleDayToggle"> Single-day reservation</label>
-                  <div class="date-note">You can reserve up to 7 days (maximum 1 week per booking).</div>
                 </div>
-                <div class="date-note">Click on the calendar dates to set your Start and End dates.</div>
                 <div class="date-row" id="dateRow">
                   <div class="res-item date-item" id="startDateGroup">
                     <div class="res-label"><small>Start Date</small></div>
@@ -640,7 +636,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
                     <div class="res-label" id="hoursSectionLabel" style="margin-top:8px; display:none;"><small>How many hours</small></div>
                     <select id="hoursSelect" class="hours-select" style="display:none;"></select>
                     <div id="durationContainer" style="display:none;"></div>
-                    <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small><div class="label-help">Pick your starting time</div></div>
+                    <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small></div>
                     <div id="timeSlotContainer"></div>
                     <div id="selectedTimeRange" class="selected-time-range" style="display:none;"></div>
                     <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
@@ -668,7 +664,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
                 <div class="res-item">
                   <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
                   <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
-                  <small class="dp-info" style="display:block;color:#666;margin-top:6px;">Note: A partial 50% downpayment is required to reserve your slot. After paying the 50% downpayment online, the remaining balance must be settled onsite at the admin office.</small>
+                  <small class="dp-info" style="display:block;color:#666;margin-top:6px;">You will pay 50% of the total now. The remaining balance is paid onsite at the admin office.</small>
                   <small class="nonrefundable">Downpayment is non-refundable.</small>
                 </div>
                 <div id="submitWrap" class="res-item" style="margin-top:12px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -1082,9 +1078,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
   const amenityReturnBtn=document.getElementById('amenityReturnBtn');
   if(amenityReturnBtn){
     amenityReturnBtn.addEventListener('click',function(){
+      if(!confirm('Are you sure you want to change amenities? This will reset your current selection.')){ return; }
       document.querySelectorAll('.amenity-card').forEach(function(c){
         c.style.display='';
         c.classList.remove('selected');
+        c.removeAttribute('data-details-visible');
       });
       document.querySelectorAll('.schedule-panel').forEach(function(p){
         p.style.display='none';
@@ -1094,7 +1092,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         btn.style.display='';
       });
       document.querySelectorAll('button[data-action="book-now"]').forEach(function(btn){
-        btn.style.display='';
+        btn.classList.remove('visible');
       });
       const rc=document.getElementById('reservationCard');
       if(rc){ rc.style.display='none'; }
@@ -1642,7 +1640,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
   if(formEl){
     let submitting = false;
     formEl.addEventListener('submit', async function(e){
-      if (submitting) { e.preventDefault(); return false; }
+      if(submitting){ e.preventDefault(); return; }
+      e.preventDefault();
       persistForm();
       let verifyAllowed=true;
       const gateEl=document.getElementById('submitAllowed');
@@ -1656,7 +1655,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
       const persons=parseInt(document.getElementById('personsInput').value||'0');
       const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
       showIncompleteWarnings(true);
-      if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ e.preventDefault(); showDateError('Cannot book more than 1 week.'); return false; } }
+      if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return; } }
       if(s && eD && s===eD && st && et){
         const [sh,sm]=(st||'').split(':');
         const [eh,em]=(et||'').split(':');
@@ -1673,18 +1672,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         const sM=toMinutes(st), eM=toMinutes(et);
         const overlap=times.some(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return false; const ts=toMinutes(t.start), te=toMinutes(t.end); return !(eM<=ts || sM>=te); });
         if(overlap){
-          e.preventDefault();
           showTimeError('Selected time overlaps an existing booking. Please choose a different time.');
-          return false;
+          return;
         }
       }
       const amenVal=document.getElementById('amenityField').value;
       if(!amenVal || !s || !eD || !st || !et){ verifyAllowed=false; }
       if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
-      if(!verifyAllowed){ e.preventDefault(); showToast('Please complete all fields accurately before proceeding.','warning'); return false; }
-      // Only show modal if not confirmed yet
+      if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
-        e.preventDefault();
         const priceTxt = (priceEl && priceEl.textContent) ? priceEl.textContent : '₱0';
         const hoursRaw = document.getElementById('hoursInput').value||'';
         const hoursVal = hoursRaw ? parseInt(hoursRaw,10) : null;
@@ -1701,12 +1697,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         ].map(function(x){ return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>'; }).join('');
         const sumEl=document.getElementById('verifySummary'); if(sumEl){ sumEl.innerHTML = summary; }
         const vm=document.getElementById('verifyModal'); if(vm){ vm.style.display='flex'; }
-        return false;
+        return;
       } else {
-        // Reset confirmation for next submit
-        window.__verifyConfirmed = false;
-        submitting = true;
-        setTimeout(function(){ submitting = false; }, 3000);
+        window.__verifyConfirmed=false;
+        submitting=true;
+        formEl.submit();
       }
     });
     formEl.addEventListener('keydown',function(e){
