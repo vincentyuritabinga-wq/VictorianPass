@@ -696,10 +696,19 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       <div id="personsMaxNote" class="label-help"></div>
                       <input type="hidden" name="persons" id="personsInput" value="1">
                     </div>
-                    <div class="res-item">
-                      <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
-                      <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
-                      <small class="dp-info" style="display:block;color:#666;margin-top:6px;">You will pay 50% of the total now. The remaining balance is paid onsite at the admin office.</small>
+                    <div class="res-item price-row">
+                      <div class="price-box">
+                        <div class="price-label">Total Price</div>
+                        <div id="price" class="price-amount">₱0.00</div>
+                      </div>
+                    </div>
+                    <div class="res-item price-row">
+                      <div class="price-box">
+                        <div class="price-label">Downpayment (50% Online)</div>
+                        <div id="dpAmountText" class="price-amount">₱0</div>
+                      </div>
+                      <input type="hidden" name="downpayment" id="downpaymentInput" value="">
+                      <small class="dp-info" style="display:block;margin-top:8px;padding:10px 12px;border-radius:10px;background:#f0faf2;border:1.5px solid #cfe6d4;color:#23412e;font-weight:600;">This is a partial payment (50%) of the total price. The remaining balance is paid onsite at the admin office.</small>
                       <small class="nonrefundable">Downpayment is non-refundable.</small>
                     </div>
                     <div id="submitWrap" class="res-item" style="margin-top:12px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -1242,8 +1251,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
   function requireDateBeforeHours(){
     const s=document.getElementById('startDateInput')?.value||'';
-    if(!s){
-      setFieldWarning('hoursInput','You must pick a date first.');
+    const e=document.getElementById('endDateInput')?.value||'';
+    if(!s || !e){
+      setFieldWarning('hoursInput','Please select a start date and end date before choosing hours.');
       return false;
     }
     setFieldWarning('hoursInput','');
@@ -1336,6 +1346,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(startTimeInput){ startTimeInput.min=hrs.min; startTimeInput.max=hrs.max; }
     if(endTimeInput){ endTimeInput.min=hrs.min; endTimeInput.max=hrs.max; }
     const hn=document.getElementById('hoursNotice'); if(hn){ hn.style.display='none'; hn.textContent=''; }
+    const priceEl=document.getElementById('price');
     if(isHourBasedAmenity(amen)){
       if(personsWrap){ personsWrap.style.display='block'; }
       if(hoursLabel){ hoursLabel.style.display='none'; }
@@ -1346,7 +1357,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(hoursInput){ if(!hoursInput.value) hoursInput.value=''; }
       if(endTimeInput){ endTimeInput.readOnly=true; }
       if(startTimeInput && hoursInput){ computeEndTimeFromHours(); }
-      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
+      if(priceEl){ priceEl.style.display='block'; }
       const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
@@ -1361,7 +1372,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       document.getElementById('timeSectionLabel').style.display='block';
       if(hoursInput && !hoursInput.value) hoursInput.value='';
       if(endTimeInput){ endTimeInput.readOnly=true; }
-      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='inline'; }
+      if(priceEl){ priceEl.style.display='block'; }
       const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
@@ -1373,7 +1384,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(hoursCounter){ hoursCounter.style.display='none'; }
       const hs=document.getElementById('hoursSelect'); if(hs){ hs.style.display='none'; }
       if(endTimeInput){ endTimeInput.readOnly=false; }
-      const priceEl=document.getElementById('price'); if(priceEl){ priceEl.style.display='none'; }
+      if(priceEl){ priceEl.style.display='block'; }
       const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
@@ -2051,6 +2062,33 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
   document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); updateHoursSelectEnabled(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
+  document.addEventListener('DOMContentLoaded',function(){
+     const hs=document.getElementById('hoursSelect');
+     if(hs){
+       const check=function(e){
+         if(!requireDateBeforeHours()){
+           e.preventDefault();
+           e.stopPropagation();
+           this.blur();
+           return false;
+         }
+       };
+       hs.addEventListener('mousedown', check);
+       hs.addEventListener('click', check);
+     }
+     ['startDateInput','endDateInput'].forEach(function(id){
+       const el=document.getElementById(id);
+       if(el){
+         el.addEventListener('input', function(){
+            const s=document.getElementById('startDateInput').value;
+            const e=document.getElementById('endDateInput').value;
+            if(s && e){
+              setFieldWarning('hoursInput','');
+            }
+         });
+       }
+     });
+   });
   document.addEventListener('DOMContentLoaded',function(){
     var panel=document.querySelector('.booking-steps');
     var toggle=document.getElementById('bookingStepsToggle');
