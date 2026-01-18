@@ -21,7 +21,14 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 
 /* Booking shell + steps */
 .booking-shell{display:flex;flex-direction:column;gap:14px;margin-top:0}
-.booking-steps{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;background:#fff;color:#222;box-shadow:0 1px 6px rgba(0,0,0,0.08);border:1px solid #e5e7eb;max-width:260px}
+.booking-steps{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:#fff;color:#222;box-shadow:0 1px 6px rgba(0,0,0,0.08);border:1px solid #e5e7eb;max-width:260px}
+.booking-steps-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.booking-steps-label{font-size:.78rem;font-weight:600;color:#111827}
+.booking-steps-toggle{width:22px;height:22px;border-radius:50%;border:none;background:#23412e;color:#fff;font-size:.9rem;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;flex-shrink:0;box-shadow:0 1px 4px rgba(35,65,46,0.35)}
+.booking-steps-toggle:hover{background:#1a2f23}
+.booking-steps-body{display:flex;flex-direction:column;gap:8px}
+.booking-steps.is-collapsed .booking-steps-body{display:none}
+.booking-steps.is-collapsed .booking-steps-toggle{transform:rotate(0deg)}
 .booking-step{display:flex;align-items:flex-start;gap:8px}
 .step-index{width:22px;height:22px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;color:#fff;background:#23412e;flex-shrink:0;box-shadow:0 1px 4px rgba(35,65,46,0.25)}
 .booking-step.is-active .step-index{background:linear-gradient(135deg, #23412e 0%, #2d5a3a 100%);box-shadow:0 2px 6px rgba(35,65,46,0.35)}
@@ -80,17 +87,37 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .amenities-right { display: flex; flex-direction: column; gap: 0; }
 
 /* Amenities List */
-.amenities-list{display:flex; flex-direction:column; gap:14px; margin-bottom:0; align-items:center}
-.amenity-card{display:flex; gap:14px; align-items:center; background:#fff; color:#222; padding:20px; border-radius:16px; box-shadow:0 4px 16px rgba(0,0,0,0.08); border:1.5px solid #e5e7eb; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease; min-height:160px; position:relative; pointer-events:auto; max-width:720px; margin:0 auto}
+.amenities-list{display:flex; flex-direction:column; gap:16px; margin-bottom:0; align-items:center}
+.amenity-card{display:flex; gap:14px; align-items:flex-start; background:#fff; color:#222; padding:18px 22px; border-radius:18px; box-shadow:0 6px 18px rgba(15,23,42,0.08); border:1.5px solid #e5e7eb; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease, max-height .25s ease; min-height:160px; position:relative; pointer-events:auto; width:100%; max-width:760px}
 .amenity-card:hover{transform:translateY(-4px); box-shadow:0 8px 20px rgba(0,0,0,0.1); border-color:#23412e}
 .amenity-card.selected{border:1.5px solid #e5e7eb; background:#fff; box-shadow:0 4px 16px rgba(0,0,0,0.08)}
-.amenity-card img{width:130px; height:95px; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); flex-shrink:0}
+.amenity-card img{width:100%; height:190px; object-fit:cover; border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,0.1); flex-shrink:0; transition:height .25s ease}
 .amenity-card .info{flex:1; color:#222; display:flex; flex-direction:column; gap:8px; min-width:0}
 .amenity-card .title-block{display:flex;flex-direction:column;gap:4px}
 .amenity-card .price{color:#23412e;font-weight:700; font-size:0.95rem}
-.amenity-card .info .name{font-weight:700; font-size:1.05rem; margin:0; line-height:1.2; color:#111827; transition:display .2s ease}
+.amenity-card .info .name{font-weight:800; font-size:1.3rem; margin:4px 0 0; line-height:1.2; color:#111827; transition:display .2s ease}
+.amenity-card .amenity-short{font-size:0.9rem;color:#4b5563;margin-top:2px}
+.amenity-card[data-details-visible="true"] .amenity-short{display:none}
 .amenity-card[data-details-visible="true"] .info .name{display:none}
-.amenity-card .info .meta{color:#666; font-size:0.85rem; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; align-items:center}
+.amenity-card[data-details-visible="true"]{
+  background:#f9fafb;
+  box-shadow:0 10px 26px rgba(15,23,42,0.14);
+  border-color:#23412e;
+  transform:scale(1.03);
+}
+@media (min-width:769px){
+  .amenity-card{
+    max-height:260px;
+    overflow:hidden;
+  }
+  .amenity-card[data-details-visible="true"]{
+    max-height:500px;
+  }
+  .amenity-card[data-details-visible="true"] img{
+    height:120px;
+  }
+}
+.amenity-card .info .meta{color:#666; font-size:0.85rem; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; align-items:center; margin-top:4px; padding-right:140px}
 .amenity-card button[data-action="book-now"]{position:absolute; bottom:16px; right:16px; z-index:999 !important; margin:0 !important; padding:10px 14px !important; font-size:0.85rem !important; height:auto !important; min-width:auto !important; display:none; transition:display .2s ease, opacity .2s ease}
 .amenity-card button[data-action="book-now"].visible{display:inline-flex !important; opacity:1}
 .amenity-card .schedule-panel{margin-top:8px; background:#f9f9f9; border:1px solid #e5e7eb; border-radius:10px; padding:10px; display:none; box-sizing:border-box; width:100%}
@@ -98,10 +125,26 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .status-pill.available{background:#23412e;color:#fff}
 .status-pill.unavailable{background:#dc2626;color:#fff}
 .status-pill.neutral{background:#e5ddc6;color:#23412e}
-.btn-link{background:transparent; border:1.5px solid #d1d5db; color:#666; cursor:pointer; font-size:.85rem; padding:8px 16px; border-radius:8px; font-weight:600; transition:all .2s ease}
-.btn-link:hover{background:#f3f4f6;border-color:#23412e;color:#23412e}
+.btn-link{
+  background:#e5f7e8;
+  border:1.5px solid #23412e;
+  color:#23412e;
+  cursor:pointer;
+  font-size:.9rem;
+  padding:10px 20px;
+  border-radius:999px;
+  font-weight:600;
+  transition:all .2s ease;
+  box-shadow:0 2px 8px rgba(35,65,46,0.18);
+}
+.btn-link:hover{
+  background:#23412e;
+  border-color:#23412e;
+  color:#fff;
+  box-shadow:0 4px 12px rgba(35,65,46,0.28);
+}
 .btn-main.small{display:inline-flex; align-items:center; justify-content:center; height:36px; min-width:110px; padding:0 16px; border-radius:8px; font-size:.9rem; margin-left:0; box-shadow:0 2px 8px rgba(35,65,46,0.15); background:#23412e; color:#fff; border:none; font-weight:700; transition:all .2s ease}
-.amenity-card .info .meta button[data-action="view-desc"]{order:1}
+.amenity-card .info .meta button[data-action="view-desc"]{order:1; position:absolute; bottom:16px; right:16px}
 .amenity-card .info .meta button[data-action="book-now"]{order:2}
 .btn-main.small:hover{background:#1a2f23; transform:translateY(-2px); box-shadow:0 4px 12px rgba(35,65,46,0.25)}
 .schedule-panel{margin-top:8px; background:#f9f9f9; border:1px solid #e5e7eb; border-radius:10px; padding:10px; display:none; box-sizing:border-box; width:100%}
@@ -116,7 +159,27 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .amenity-preview-header{font-weight:800;font-size:1rem;color:#111827}
 .amenity-preview-title{margin:0}
 .amenity-preview-meta{font-size:0.85rem;color:#4b5563}
-.amenity-preview .amenity-return{margin-top:12px;align-self:flex-start}
+.amenity-preview .amenity-return{
+  margin-top:12px;
+  align-self:flex-start;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:#e5f7e8;
+  color:#065f46;
+  border:1px solid #34d399;
+  padding:9px 18px;
+  border-radius:999px;
+  font-weight:600;
+  font-size:.9rem;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(16,185,129,0.18);
+}
+.amenity-preview .amenity-return:hover{
+  background:#d1fae5;
+  box-shadow:0 3px 10px rgba(16,185,129,0.26);
+}
+.amenity-change-icon{width:18px;height:18px;object-fit:contain;display:block}
 .reservation-left{display:flex;flex-direction:column;gap:12px}
 .reservation-left #submitWrap{display:flex;justify-content:flex-end;margin-top:16px}
 .reservation-right{display:flex;flex-direction:column;gap:12px}
@@ -255,6 +318,15 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
   transform: translateY(-2px);
   opacity: 0.95;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary.back-account-btn{
+  background:#facc6b;
+  color:#4b2e12;
+  border-color:#fbbf24;
+}
+.btn-secondary.back-account-btn:hover{
+  background:#fbbf24;
 }
 .counter {
   display: flex;
@@ -679,6 +751,12 @@ input:focus-visible {
   box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
   outline: none;
 }
+
+.hours-select:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
 .clear-date {
   border: 1.5px solid #d1d5db;
   color: #666;
@@ -718,8 +796,8 @@ input:focus-visible {
   .reservation-grid{display:flex;flex-direction:column}
   .amenity-preview{order:2}
   .hero{padding:20px 4%}
-  .amenities-list{flex-direction:column}
-  .amenity-card {min-height:auto; flex-direction:column; align-items:flex-start}
+  .amenities-list{display:flex; flex-direction:column; align-items:center}
+  .amenity-card {min-height:auto; flex-direction:column; align-items:flex-start; max-width:720px; width:100%; flex:0 0 auto}
   .amenity-card img{width:100%;height:160px;border-radius:10px}
   .amenity-card .info{width:100%; flex-direction:column; align-items:flex-start; gap:8px}
   .amenity-card .info .meta{width:100%; justify-content:flex-start}
