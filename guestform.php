@@ -34,10 +34,23 @@ $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? ''
 $houseNumber = $user['house_number'] ?? '';
 $email = $user['email'] ?? '';
 $phone = $user['phone'] ?? '';
-// Normalize resident phone to 09 format if stored as +63
 $phoneNormalized = $phone;
 if (preg_match('/^\+63(9\d{9})$/', $phone)) {
-  $phoneNormalized = '0' . substr($phone, 3); // +63xxxxxxxxxx -> 0xxxxxxxxxx
+  $phoneNormalized = '0' . substr($phone, 3);
+}
+
+$guestRows = [];
+if ($con instanceof mysqli) {
+  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+  if ($stmtG) {
+    $stmtG->bind_param('i', $userId);
+    $stmtG->execute();
+    $resG = $stmtG->get_result();
+    while ($rowG = $resG->fetch_assoc()) {
+      $guestRows[] = $rowG;
+    }
+    $stmtG->close();
+  }
 }
 ?>
 <!DOCTYPE html>
@@ -45,7 +58,7 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guest Entry Pass - VictorianPass</title>
+<title>My Guests - VictorianPass</title>
 <link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -96,30 +109,30 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
   </div>
 </header>
 
-<section class="hero">
+<section class="hero" id="addGuestSection">
   <form class="entry-form" id="entryForm">
     <div class="form-header">
       <img src="images/mainpage/ticket.svg" alt="Entry Icon">
-      <span>Guest Form</span>
+      <span>Add Guest</span>
     </div>
 
-    <h4 style="margin:10px 0 5px;color:#23412e;">Resident Information</h4>
+    <h4 style="margin:10px 0 5px;color:#111827;">Resident Information</h4>
     <div class="form-row">
       <input type="text" id="resident_full_name" name="resident_full_name" placeholder="Resident Full Name*" value="<?php echo htmlspecialchars($fullName); ?>" required>
       <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required>
     </div>
     <div class="form-row">
       <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Phone Number" value="<?php echo htmlspecialchars($phoneNormalized); ?>">
+      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
     </div>
 
-    <h4 style="margin:20px 0 5px;color:#23412e;">Visitor Information</h4>
+    <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
     <div class="form-row">
       <input type="text" id="visitor_first_name" name="visitor_first_name" placeholder="Visitor First Name*" required>
       <input type="text" id="visitor_last_name" name="visitor_last_name" placeholder="Visitor Last Name*" required>
     </div>
     <div class="form-row">
-      <select name="visitor_sex" required>
+      <select id="visitor_sex" name="visitor_sex" required>
         <option value="" disabled selected>Sex*</option>
         <option>Male</option>
         <option>Female</option>
@@ -130,16 +143,16 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       </div>
     </div>
     <div class="input-wrap">
-      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor's Phone Number">
+      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
     </div>
     <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
 
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
       <img src="images/mainpage/upload.svg" alt="Upload">
-      <p>Upload Visitor’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
+      <p>Upload Guest’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
     </label>
-    <div class="privacy-note" style="background:#fff9e6;border:1px solid #e6d9a8;color:#4a3c1a;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
+    <div class="privacy-note" style="background:#f9fafb;border:1px solid #e5e7eb;color:#374151;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
       Data Privacy Notice: The visitor’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
     </div>
 
@@ -150,54 +163,77 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       </div>
     </div>
 
-    <h4 style="margin:20px 0 5px;color:#23412e;">Visit Details</h4>
-    <div class="form-row">
-      <input type="date" name="visit_date" placeholder="Date of Visit*" required min="<?php echo date('Y-m-d'); ?>">
-      <input type="time" name="visit_time" placeholder="Expected Time*" required>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <input type="number" id="visit_persons" name="visit_persons" placeholder=" " min="1" value="1">
-        <label for="visit_persons">How many persons?</label>
-      </div>
-    </div>
-    <textarea rows="3" name="visit_purpose" placeholder="Purpose of Visit*" required></textarea>
-
-    <div class="reserve-note">
-      <label for="reserveCheck">
-        <input type="checkbox" id="reserveCheck" name="wants_amenity" value="1">
-        Reserve an amenity instead of a regular visit
-      </label>
-      <div class="note-text">
-        Check this box to proceed to the Next page for amenity reservation; you may leave the Visit Details section empty.
-      </div>
-    </div>
-
     <div class="form-actions">
       <a href="profileresident.php" class="btn-back">Back</a>
-      <button type="submit" class="btn-next" id="submitBtn">Submit Request</button>
+      <button type="submit" class="btn-next" id="submitBtn">Save Guest</button>
     </div>
   </form>
+
+  <div id="guestListSection" style="margin-top:28px;background:#ffffff;border-radius:16px;padding:20px 22px;box-shadow:0 4px 16px rgba(15,23,42,0.08);border:1px solid #e5e7eb;max-width:860px;width:100%;">
+    <h4 style="margin:0 0 10px;color:#111827;">My Saved Guests</h4>
+    <?php if (empty($guestRows)): ?>
+      <p style="margin:4px 0 0;font-size:0.95rem;color:#555;">You have not added any guests yet. Use the form above to add a guest.</p>
+    <?php else: ?>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+          <thead>
+            <tr style="background:#f5f7f5;color:#333;">
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Name</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Contact</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Email</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Added</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($guestRows as $g): ?>
+              <?php
+                $nameParts = [];
+                if (!empty($g['visitor_first_name'])) { $nameParts[] = $g['visitor_first_name']; }
+                if (!empty($g['visitor_middle_name'])) { $nameParts[] = $g['visitor_middle_name']; }
+                if (!empty($g['visitor_last_name'])) { $nameParts[] = $g['visitor_last_name']; }
+                $guestName = trim(implode(' ', $nameParts));
+                if ($guestName === '') { $guestName = 'Guest'; }
+                $contact = $g['visitor_contact'] ?? '';
+                $emailG = $g['visitor_email'] ?? '';
+                $created = $g['created_at'] ?? '';
+                $createdLabel = $created ? date('M d, Y', strtotime($created)) : '';
+              ?>
+              <tr>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;font-weight:600;"><?php echo htmlspecialchars($guestName); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($contact); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($emailG); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;color:#777;"><?php echo htmlspecialchars($createdLabel); ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
 </section>
 
 <!-- Modal -->
 <div id="refModal" class="modal">
   <div class="modal-content">
     <h2>Request Submitted!</h2>
-    <p>Your guest request has been successfully submitted.</p>
-    <p><strong>Share this status code with your visitor:</strong></p>
-    <div id="refCode" class="ref-code"></div>
-    <p><small>Note: Your visitor will need this code to check the status of their Entry Pass,
-      since they don’t have their own VictorianPass account.</small></p>
-    <p><small><em>You can still view and manage the request in your resident dashboard.</em></small></p>
+    <p>Your guest has been successfully saved to your account.</p>
+    <p><small><em>You can view and manage all guests from your resident dashboard.</em></small></p>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
       <button type="button" class="close-btn" onclick="window.location.href='profileresident.php'">Go to Resident Profile</button>
-      <button type="button" class="close-btn" id="btnReserveProceed" style="display:none;">Proceed to Amenity Reservation</button>
+    </div>
+  </div>
+</div>
+<div id="verifyModal" class="modal">
+  <div class="modal-content">
+    <h2>Confirm Guest Request</h2>
+    <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
+    <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="btn-secondary" id="verifyConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
 <script>
-const reserveCheck = document.getElementById('reserveCheck');
 const submitBtn   = document.getElementById('submitBtn');
 const entryForm   = document.getElementById('entryForm');
 const birthdateEl = document.getElementById('birthdate');
@@ -205,21 +241,14 @@ const idInput = document.getElementById('visitor_valid_id');
 const idPreviewWrap = document.getElementById('idPreviewWrap');
 const idPreview = document.getElementById('idPreview');
 const btnClearId = document.getElementById('btnClearId');
-const visitDate = entryForm.querySelector('input[name="visit_date"]');
-const visitTime = entryForm.querySelector('input[name="visit_time"]');
-const visitPurpose = entryForm.querySelector('textarea[name="visit_purpose"]');
+const verifyModal = document.getElementById('verifyModal');
+const verifySummary = document.getElementById('verifySummary');
+const verifyCancelBtn = document.getElementById('verifyCancelBtn');
+const verifyConfirmBtn = document.getElementById('verifyConfirmBtn');
+let submitting = false;
 
-function openModal(refCode){
-  document.getElementById('refCode').textContent = refCode;
+function openModal(){
   var m = document.getElementById('refModal');
-  var btn = document.getElementById('btnReserveProceed');
-  if (reserveCheck && reserveCheck.checked && btn) {
-    btn.style.display = 'inline-block';
-    btn.onclick = function(){ window.location.href = 'reserve.php?ref_code=' + encodeURIComponent(refCode); };
-  } else if (btn) {
-    btn.style.display = 'none';
-    btn.onclick = null;
-  }
   m.style.display = 'flex';
 }
 function closeModal(){
@@ -271,6 +300,7 @@ function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.
 ['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockDigits); el.addEventListener('input',sanitizeNoDigits); });
 
 ['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
+['resident_contact','visitor_contact'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(){ if(!el.value.trim()){ setWarning(id,''); return; } setWarning(id, isValidPhone(el)? '' : 'Please enter a valid phone number starting with 09.'); }); });
 
 // Birthdate must be a past date (not today)
 if (birthdateEl) {
@@ -278,27 +308,83 @@ if (birthdateEl) {
   birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
 }
 
-// Toggle button behavior when reserving amenity
-function updateSubmitBehavior(){
-  if (reserveCheck.checked){
-    // Keep as submit so we can create the guest_form then redirect with ref_code
-    submitBtn.textContent = 'Next';
-    submitBtn.type = 'submit';
-    submitBtn.onclick = null;
-    if (visitDate) visitDate.required = false;
-    if (visitTime) visitTime.required = false;
-    if (visitPurpose) visitPurpose.required = false;
-  } else {
-    submitBtn.textContent = 'Submit Request';
-    submitBtn.type = 'submit';
-    submitBtn.onclick = null;
-    if (visitDate) visitDate.required = true;
-    if (visitTime) visitTime.required = true;
-    if (visitPurpose) visitPurpose.required = true;
+function validateForm(){
+  let valid = true;
+  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','birthdate','visitor_contact'];
+  reqIds.forEach(function(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(!String(el.value||'').trim()){
+      setWarning(id,'This field is required.');
+      valid = false;
+    } else {
+      setWarning(id,'');
+    }
+  });
+  const sexEl = document.getElementById('visitor_sex');
+  if (sexEl){
+    if(!sexEl.value){
+      setWarning('visitor_sex','Please select Sex.');
+      valid = false;
+    } else {
+      setWarning('visitor_sex','');
+    }
   }
+  if (birthdateEl && birthdateEl.value){
+    var todayStr = new Date().toISOString().split('T')[0];
+    if (birthdateEl.value >= todayStr){
+      setWarning('birthdate','Birthdate must be a past date.');
+      valid = false;
+    } else {
+      setWarning('birthdate','');
+    }
+  }
+  const rc=document.getElementById('resident_contact');
+  const vc=document.getElementById('visitor_contact');
+  const re=document.getElementById('resident_email');
+  const ve=document.getElementById('visitor_email');
+  if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
+  if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }
+  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number starting with 09.'); valid=false; }
+  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number starting with 09.'); valid=false; }
+  if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
+  return valid;
 }
-updateSubmitBehavior();
-reserveCheck.addEventListener('change', updateSubmitBehavior);
+
+function buildVerifySummary(){
+  if (!verifyModal || !verifySummary) return;
+  const resNameEl = document.getElementById('resident_full_name');
+  const resHouseEl = document.getElementById('resident_house');
+  const resContactEl = document.getElementById('resident_contact');
+  const visFirstEl = document.getElementById('visitor_first_name');
+  const visLastEl = document.getElementById('visitor_last_name');
+  const visContactEl = document.getElementById('visitor_contact');
+  const visEmailEl = document.getElementById('visitor_email');
+  const vSexEl = document.getElementById('visitor_sex');
+  const personsEl = document.getElementById('visit_persons');
+  const resName = resNameEl ? resNameEl.value.trim() : '';
+  const resHouse = resHouseEl ? resHouseEl.value.trim() : '';
+  const resContact = resContactEl ? resContactEl.value.trim() : '';
+  const visFirst = visFirstEl ? visFirstEl.value.trim() : '';
+  const visLast = visLastEl ? visLastEl.value.trim() : '';
+  const visContact = visContactEl ? visContactEl.value.trim() : '';
+  const visEmail = visEmailEl ? visEmailEl.value.trim() : '';
+  const vSex = vSexEl ? vSexEl.value : '';
+  const personsVal = personsEl && personsEl.value ? personsEl.value : '1';
+  const items = [
+    ['Resident', resName || '-'],
+    ['House/Unit', resHouse || '-'],
+    ['Resident Contact', resContact || '-'],
+    ['Visitor', (visFirst + ' ' + visLast).trim() || '-'],
+    ['Visitor Sex', vSex || '-'],
+    ['Visitor Contact', visContact || '-'],
+    ['Visitor Email', visEmail || '-']
+  ];
+  verifySummary.innerHTML = items.map(function(x){
+    return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>';
+  }).join('');
+  verifyModal.style.display = 'flex';
+}
 
 // Preview selected valid ID and allow clearing
 if (idInput) idInput.addEventListener('change', function(){
@@ -311,39 +397,54 @@ if (idInput) idInput.addEventListener('change', function(){
 });
 if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); });
 
-entryForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  let valid = true;
-  const reqIds = ['resident_full_name','resident_house','resident_email','visitor_first_name','visitor_last_name','visitor_email','birthdate'];
-  reqIds.forEach(function(id){ const el=document.getElementById(id); if(!el) return; if(!String(el.value||'').trim()){ setWarning(id,'This field is required.'); valid=false; }});
-  if (birthdateEl && birthdateEl.value){
-    var todayStr = new Date().toISOString().split('T')[0];
-    if (birthdateEl.value >= todayStr){ setWarning('birthdate','Birthdate must be a past date.'); valid=false; }
+if (verifyCancelBtn && verifyModal){
+  verifyCancelBtn.addEventListener('click', function(){
+    if (submitting) return;
+    verifyModal.style.display = 'none';
+  });
+}
+
+async function performSubmit(){
+  if (submitting) return;
+  submitting = true;
+  if (verifyConfirmBtn){
+    verifyConfirmBtn.disabled = true;
   }
-  const rc=document.getElementById('resident_contact'); const vc=document.getElementById('visitor_contact');
-  const re=document.getElementById('resident_email'); const ve=document.getElementById('visitor_email');
-  if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
-  if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }
-  if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
-  if(!valid) return;
   try {
     const fd = new FormData(entryForm);
     const res = await fetch('submit_guest.php', { method: 'POST', body: fd });
     const data = await res.json();
     if (data && data.success) {
-      const ref = String(data.ref_code || '');
-      if (reserveCheck.checked) {
-        const url = 'reserve.php?ref_code=' + encodeURIComponent(ref);
-        window.location.href = url;
-      } else {
-        openModal(ref);
-      }
+      openModal();
     } else {
-      setWarning('visitor_email', data.message || 'Failed to submit guest request.');
+      setWarning('visitor_email', data && data.message ? data.message : 'Failed to save guest.');
     }
   } catch (err) {
     setWarning('visitor_email', 'Error connecting to server.');
+  } finally {
+    submitting = false;
+    if (verifyConfirmBtn){
+      verifyConfirmBtn.disabled = false;
+    }
   }
+}
+
+if (verifyConfirmBtn){
+  verifyConfirmBtn.addEventListener('click', function(){
+    if (submitting) return;
+    if (!validateForm()) return;
+    if (verifyModal){
+      verifyModal.style.display = 'none';
+    }
+    performSubmit();
+  });
+}
+
+entryForm.addEventListener('submit', function(e){
+  e.preventDefault();
+  if (submitting) return;
+  if (!validateForm()) return;
+  buildVerifySummary();
 });
 </script>
 </body>

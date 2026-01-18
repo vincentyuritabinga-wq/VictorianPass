@@ -302,9 +302,11 @@ if (empty($error)) {
           }
         ?>
       </div>
+      <?php if (($data['status'] ?? '') === 'approved'): ?>
       <div class="qr-area">
         <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" crossorigin="anonymous" />
       </div>
+      <?php endif; ?>
       <div class="content">
         <div class="row">
           <div class="label">QR <?php echo !empty($data['is_guest']) ? "Resident's Guest" : ($data['is_resident'] ? 'Resident' : ($data['is_visitor'] ? 'Visitor' : 'Pass')); ?></div>
@@ -342,9 +344,11 @@ if (empty($error)) {
             <?php if (!empty($data['created'])): ?><div><strong>Date Created:</strong><br><?php echo htmlspecialchars($data['created']); ?></div><?php endif; ?>
           </div>
         </div>
-      </div>
-      
+        </div>
+        
+      <?php if (($data['status'] ?? '') === 'approved'): ?>
       <div class="verify"><a href="#" onclick="downloadQRImage();return false;">Download QR</a></div>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
   </div>

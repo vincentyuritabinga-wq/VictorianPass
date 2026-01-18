@@ -473,6 +473,21 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
 } else {
   $accountLink = 'mainpage.php';
 }
+
+$residentGuests = [];
+if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && isset($_SESSION['user_id']) && ($con instanceof mysqli)) {
+  $rid = intval($_SESSION['user_id']);
+  $stmtRG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+  if ($stmtRG) {
+    $stmtRG->bind_param('i', $rid);
+    $stmtRG->execute();
+    $resRG = $stmtRG->get_result();
+    while ($row = $resRG->fetch_assoc()) {
+      $residentGuests[] = $row;
+    }
+    $stmtRG->close();
+  }
+}
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -589,7 +604,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
           <input type="hidden" name="purpose" value="Amenity Reservation">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
           <input type="hidden" name="entry_pass_id" value="<?php echo (isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : ''; ?>">
-          <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
+          <input type="hidden" name="ref_code" id="refCodeField" value="<?php echo htmlspecialchars($_GET['ref_code'] ?? ''); ?>">
+          <input type="hidden" name="booking_for" id="bookingForField" value="">
+          <input type="hidden" name="guest_id" id="guestIdField" value="">
+          <input type="hidden" name="guest_ref_code" id="guestRefField" value="">
           <input type="hidden" id="submitAllowed" value="1">
             <div class="reservation-card" id="reservationCard" style="display:none;">
             <input type="hidden" name="amenity" id="amenityField" value="">
@@ -648,27 +666,27 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
                     <div id="dateError" class="time-error" style="display:none;"></div>
                     <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div id="timeError" class="time-error" style="display:none;"></div>
+                    <div class="res-item persons">
+                      <div class="res-label"><small>How Many Persons</small></div>
+                      <div class="counter" style="margin-top:6px;">
+                        <button type="button" onclick="changePersons(-1)">-</button>
+                        <span id="personCount">1</span>
+                        <button type="button" onclick="changePersons(1)">+</button>
+                      </div>
+                      <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
+                      <small id="price">$1</small>
+                      <input type="hidden" name="persons" id="personsInput" value="1">
+                    </div>
+                    <div class="res-item">
+                      <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
+                      <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
+                      <small class="dp-info" style="display:block;color:#666;margin-top:6px;">You will pay 50% of the total now. The remaining balance is paid onsite at the admin office.</small>
+                      <small class="nonrefundable">Downpayment is non-refundable.</small>
+                    </div>
+                    <div id="submitWrap" class="res-item" style="margin-top:12px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
+                      <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
+                    </div>
                   </div>
-                </div>
-                <div class="res-item persons">
-                  <div class="res-label"><small>How Many Persons</small></div>
-                  <div class="counter" style="margin-top:6px;">
-                    <button type="button" onclick="changePersons(-1)">-</button>
-                    <span id="personCount">1</span>
-                    <button type="button" onclick="changePersons(1)">+</button>
-                  </div>
-                  <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
-                  <small id="price">$1</small>
-                  <input type="hidden" name="persons" id="personsInput" value="1">
-                </div>
-                <div class="res-item">
-                  <div class="res-label"><small>Downpayment</small> <span id="dpAmountText" style="font-weight:700; color:#222; margin-left:8px;">₱0</span></div>
-                  <input type="number" step="0.01" min="0" name="downpayment" id="downpaymentInput" readonly aria-readonly="true" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:8px; background:#f7f7f7; color:#333;" placeholder="Auto-calculated">
-                  <small class="dp-info" style="display:block;color:#666;margin-top:6px;">You will pay 50% of the total now. The remaining balance is paid onsite at the admin office.</small>
-                  <small class="nonrefundable">Downpayment is non-refundable.</small>
-                </div>
-                <div id="submitWrap" class="res-item" style="margin-top:12px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
-                  <button id="submitBtn" class="btn-submit disabled" type="submit" disabled>Next</button>
                 </div>
               </div>
             </div>
@@ -690,6 +708,54 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
   <div class="modal-content">
     <h2>Confirm Details</h2>
     <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
+    <?php if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'): ?>
+    <div id="bookingForSection" style="margin-top:16px;text-align:left;">
+      <h3 style="margin:0 0 8px;font-size:1rem;">Who is this booking for?</h3>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="radio" name="booking_for_choice" id="bookingForResident" value="resident" checked>
+          <span>Resident (myself)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;">
+          <input type="radio" name="booking_for_choice" id="bookingForGuest" value="guest">
+          <span>Guest / Visitor</span>
+        </label>
+      </div>
+      <div id="guestListWrap" style="margin-top:10px; max-height:180px; overflow:auto; border:1px solid #e0e3e0; border-radius:8px; padding:8px; display:none;">
+        <?php if (!empty($residentGuests)): ?>
+          <?php foreach ($residentGuests as $g): ?>
+            <?php
+              $parts = [];
+              if (!empty($g['visitor_first_name'])) { $parts[] = $g['visitor_first_name']; }
+              if (!empty($g['visitor_middle_name'])) { $parts[] = $g['visitor_middle_name']; }
+              if (!empty($g['visitor_last_name'])) { $parts[] = $g['visitor_last_name']; }
+              $gName = trim(implode(' ', $parts));
+              if ($gName === '') { $gName = 'Guest'; }
+            ?>
+            <label style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;">
+              <input type="radio" name="guest_choice" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>">
+              <div style="flex:1;">
+                <div style="font-weight:600;"><?php echo htmlspecialchars($gName); ?></div>
+                <?php if (!empty($g['visitor_email']) || !empty($g['visitor_contact'])): ?>
+                  <div style="font-size:0.85rem;color:#555;">
+                    <?php if (!empty($g['visitor_email'])): ?>
+                      <?php echo htmlspecialchars($g['visitor_email']); ?>
+                    <?php endif; ?>
+                    <?php if (!empty($g['visitor_contact'])): ?>
+                      <?php echo htmlspecialchars(($g['visitor_email'] ? ' • ' : '') . $g['visitor_contact']); ?>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </label>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <div style="font-size:0.9rem;color:#555;">No saved guests yet. You can add guests from your My Guests page.</div>
+        <?php endif; ?>
+      </div>
+      <div id="bookingForWarning" style="display:none;margin-top:6px;color:#8a2a2a;font-size:0.85rem;"></div>
+    </div>
+    <?php endif; ?>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
       <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
       <button type="button" class="btn-secondary" id="verifyConfirmBtn">Proceed</button>
@@ -1685,12 +1751,34 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         const hoursRaw = document.getElementById('hoursInput').value||'';
         const hoursVal = hoursRaw ? parseInt(hoursRaw,10) : null;
         const personsVal = parseInt(document.getElementById('personsInput').value||'1', 10);
+        function formatTimeLabel(t){
+          if(!t) return '';
+          const parts=String(t).split(':');
+          let h=parseInt(parts[0]||'0',10);
+          const m=(parts[1]||'00').padStart(2,'0');
+          const ampm=h>=12?'PM':'AM';
+          if(h===0){ h=12; }
+          else if(h>12){ h=h-12; }
+          return h+':'+m+' '+ampm;
+        }
+        const startTimeLabel=formatTimeLabel(st);
+        const endTimeLabel=formatTimeLabel(et);
+        let timeDisplay='';
+        if(startTimeLabel){
+          timeDisplay=startTimeLabel;
+          if(endTimeLabel){
+            timeDisplay+=' to '+endTimeLabel;
+          }
+        }
+        if(hoursVal){
+          const hoursText=hoursVal+' hour'+(hoursVal>1?'s':'');
+          timeDisplay=hoursText+(timeDisplay ? ' — '+timeDisplay : '');
+        }
         const summary = [
           ['Amenity', amenVal||'-'],
           ['Start', s||'-'],
           ['End', eD||'-'],
-          ['Time', (st||'') + (et?(' → '+et):'')],
-          ['Hours', hoursVal ? String(hoursVal) : '—'],
+          ['Time', timeDisplay || '-'],
           ['Persons', String(personsVal)],
           ['Total Price', priceTxt],
           ['Downpayment', (dpVal!==''?('₱'+Number(dpVal).toFixed(2)):'—')]
@@ -1728,6 +1816,51 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         if(!formIsComplete()){
           showToast('Please fix the highlighted fields before proceeding.','warning');
           return;
+        }
+        var userType = "<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
+        if (userType === 'resident') {
+          var bookingForField = document.getElementById('bookingForField');
+          var guestIdField = document.getElementById('guestIdField');
+          var guestRefField = document.getElementById('guestRefField');
+          var refInput = document.getElementById('refCodeField');
+          var bookingForResident = document.getElementById('bookingForResident');
+          var bookingForGuest = document.getElementById('bookingForGuest');
+          var warningEl = document.getElementById('bookingForWarning');
+          if (warningEl) {
+            warningEl.style.display = 'none';
+            warningEl.textContent = '';
+          }
+          if (bookingForGuest && bookingForGuest.checked) {
+            var guestWrap = document.getElementById('guestListWrap');
+            var radios = guestWrap ? guestWrap.querySelectorAll('input[name="guest_choice"]') : null;
+            var selectedId = null;
+            var selectedRef = null;
+            if (radios) {
+              radios.forEach(function(r){
+                if (r.checked) {
+                  selectedId = r.value;
+                  selectedRef = r.getAttribute('data-ref') || '';
+                }
+              });
+            }
+            if (!selectedId) {
+              if (warningEl) {
+                warningEl.style.display = 'block';
+                warningEl.textContent = 'Please select a guest for this booking.';
+              }
+              return;
+            }
+            if (bookingForField) bookingForField.value = 'guest';
+            if (guestIdField) guestIdField.value = String(selectedId);
+            if (guestRefField) guestRefField.value = selectedRef || '';
+            if (refInput && selectedRef) {
+              refInput.value = selectedRef;
+            }
+          } else {
+            if (bookingForField) bookingForField.value = 'resident';
+            if (guestIdField) guestIdField.value = '';
+            if (guestRefField) guestRefField.value = '';
+          }
         }
         window.__verifyConfirmed=true;
         try{ document.getElementById('clientConfirmed').value='1'; }catch(_){}
@@ -1820,6 +1953,25 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
   document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
+  document.addEventListener('DOMContentLoaded',function(){
+    var userType = "<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
+    if (userType === 'resident') {
+      var rRadio = document.getElementById('bookingForResident');
+      var gRadio = document.getElementById('bookingForGuest');
+      var guestWrap = document.getElementById('guestListWrap');
+      function updateGuestWrap(){
+        if (!guestWrap) return;
+        if (gRadio && gRadio.checked) {
+          guestWrap.style.display = 'block';
+        } else {
+          guestWrap.style.display = 'none';
+        }
+      }
+      if (rRadio) rRadio.addEventListener('change', updateGuestWrap);
+      if (gRadio) gRadio.addEventListener('change', updateGuestWrap);
+      updateGuestWrap();
+    }
+  });
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}

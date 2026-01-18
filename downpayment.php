@@ -251,32 +251,46 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body{margin:0;font-family:'Poppins',sans-serif;background:#111;color:#fff}
-    .wrap{max-width:680px;margin:40px auto;padding:20px}
-    .card{background:#1b1816;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px}
-    .title{font-weight:700;margin:0 0 8px}
-    .meta{color:#bbb}
-    .qr{display:flex;justify-content:center;margin:14px 0}
-    .btn{background:#23412e;color:#fff;border:none;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600;transition:opacity .2s ease,transform .15s ease}
-    .btn:hover{transform:translateY(-1px)}
-    .btn[disabled]{opacity:.6;cursor:not-allowed}
-    .btn-outline{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3)}
-    .code{background:#2b2623;border-radius:10px;padding:8px 12px;display:inline-block;margin-top:8px}
-    .break{margin-top:12px;padding:12px;border-top:1px solid rgba(255,255,255,.08)}
-    .row{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
-    .row .label{color:#ddd;font-weight:600}
-    .row .amount{font-weight:700}
-    .pay-callout{display:flex;justify-content:center;align-items:center;background:#213825;border:1px solid rgba(255,255,255,.12);color:#e7fff1;border-radius:10px;padding:12px;margin:10px 0;font-weight:700}
-    .pay-callout .num{font-size:1.6rem;margin-left:8px}
+    *{font-family:'Poppins',sans-serif}
+    body{margin:0;background:#fafbfc;color:#111827;padding-top:76px}
+    .wrap{max-width:720px;margin:60px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;box-shadow:0 4px 16px rgba(15,23,42,0.08)}
+    .title{font-weight:700;font-size:1.5rem;margin:0 0 6px;color:#111827}
+    .meta{color:#4b5563;font-size:.95rem;margin-bottom:8px}
+    .qr{display:flex;justify-content:center;margin:18px 0}
+    .btn{background:#23412e;color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease;font-size:.95rem}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,0.4);opacity:.95}
+    .btn[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none;transform:none}
+    .btn-outline{background:#fff;color:#23412e;border:1px solid #d1d5db}
+    .code{background:#f3f4f6;border-radius:10px;padding:8px 12px;display:inline-block;margin-top:8px;color:#111827;font-weight:600}
+    .break{margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb;font-size:.9rem}
+    .row:last-child{border-bottom:none}
+    .row .label{color:#6b7280;font-weight:500}
+    .row .amount{font-weight:600;color:#111827}
+    .pay-callout{display:flex;justify-content:center;align-items:center;background:#f0faf2;border:1.5px solid #cfe6d4;color:#23412e;border-radius:12px;padding:12px 14px;margin:14px 0;font-weight:700;font-size:.95rem}
+    .pay-callout .num{font-size:1.4rem;margin-left:8px}
     .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000}
-    .upload-area{border:2px dashed #9bd08f;background:#1f2b20;padding:20px;border-radius:12px;margin-top:14px;display:flex;flex-direction:column;gap:12px}
-    .upload-area .label{color:#e7fff1;font-weight:700;font-size:1.1rem}
-    #receiptInput{padding:14px;border:2px solid #9bd08f;border-radius:10px;background:#fff;color:#222;font-size:1rem}
-    #confirmBtn{padding:12px 18px;font-size:1rem}
-    .upload-preview{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:#162216;border:1px solid #325a37;border-radius:10px;padding:12px}
+    .upload-area{border:1.5px dashed #d1d5db;background:#f9fafb;padding:18px;border-radius:12px;margin-top:16px;display:flex;flex-direction:column;gap:10px}
+    .upload-area .label{color:#111827;font-weight:600;font-size:.95rem}
+    #receiptInput{padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#111827;font-size:.95rem;font-family:'Poppins',sans-serif}
+    #receiptInput:focus{border-color:#23412e;box-shadow:0 0 0 3px rgba(35,65,46,0.1);outline:none}
+    #confirmBtn{padding:12px 20px;font-size:1rem;margin-top:4px;align-self:flex-end}
+    .upload-preview{display:flex;flex-direction:column;gap:8px;align-items:flex-start;justify-content:flex-start;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px}
     .upload-preview img{max-width:100%;height:auto;border-radius:8px}
-    .upload-preview .file-name{color:#e7fff1;font-weight:600}
-    .nonrefundable{background:#ffe6e6;color:#b30000;border:1px solid #e5a3a3;border-radius:10px;padding:8px 10px;font-weight:700;margin-top:8px}
+    .upload-preview .file-name{color:#111827;font-weight:600;font-size:.9rem}
+    .nonrefundable{background:#fee2e2;color:#b30000;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-weight:700;margin-top:10px;display:block;font-size:.9rem;border-left:4px solid #dc2626}
+    .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,0.95);backdrop-filter:blur(10px);position:fixed;top:0;left:0;right:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+    .logo{display:flex;align-items:center;gap:12px}
+    .logo img{width:42px;height:42px}
+    .brand-text h1{margin:0;font-size:1.3rem;font-weight:700;color:#f4f4f4}
+    .brand-text p{margin:0;font-size:.85rem;color:#aaa}
+    @media (max-width:640px){
+      .wrap{margin:40px auto}
+      .card{padding:18px}
+      .pay-callout{flex-direction:column;align-items:flex-start}
+      .pay-callout .num{margin-left:0;margin-top:4px}
+    }
   </style>
   </head>
 <body>
@@ -293,6 +307,15 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $qrUrl = 'images/downpayment.jpg';
     if ($ref_code === '' && $continue !== 'reserve_resident') { $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
   ?>
+  <header class="navbar">
+    <div class="logo">
+      <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
+      <div class="brand-text">
+        <h1>VictorianPass</h1>
+        <p>Victorian Heights Subdivision</p>
+      </div>
+    </div>
+  </header>
   <div class="wrap">
     <div class="card">
       <h2 class="title">Downpayment</h2>

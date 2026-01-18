@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
     </div>
     <div class="nav-actions">
-      <a href="profileresident.php"><img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
+      <a href="profileresident.php"><img src="images/mainpage/profile.jpg" alt="Profile" class="profile-icon"></a>
     </div>
   </header>
 

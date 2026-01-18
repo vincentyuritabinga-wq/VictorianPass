@@ -23,36 +23,17 @@ $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
 $visitor_email      = trim($_POST['visitor_email'] ?? '');
 
 
-$visit_date    = trim($_POST['visit_date'] ?? '');
-$visit_time    = trim($_POST['visit_time'] ?? '');
-$visit_purpose = trim($_POST['visit_purpose'] ?? '');
-// Persons count (optional on form; default to 1)
-$visit_persons = isset($_POST['visit_persons']) ? max(1, intval($_POST['visit_persons'])) : 1;
+$visit_date    = null;
+$visit_time    = null;
+$visit_purpose = null;
+$visit_persons = 1;
+$wants_amenity = 0;
 
-// Determine amenity intent early
-$wants_amenity = isset($_POST['wants_amenity']) ? 1 : 0;
-
-// Validate required inputs
-// If reserving an amenity, allow Visit Details (date/time/purpose) to be blank; otherwise require them.
 if ($resident_full_name === '' || $resident_house === '' || $resident_email === '' || $resident_contact === '' ||
     $visitor_first_name === '' || $visitor_last_name === '' || $visitor_sex === '' || $visitor_birthdate === '' ||
     $visitor_contact === '') {
   echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
   exit;
-}
-// Only require visit details if not reserving an amenity
-if (!$wants_amenity && ($visit_date === '' || $visit_time === '' || $visit_purpose === '')) {
-  echo json_encode(['success' => false, 'message' => 'Please fill in all visit details.']);
-  exit;
-}
-
-// Reject past visit dates
-if (!$wants_amenity && $visit_date !== '') {
-  $today = date('Y-m-d');
-  if (strtotime($visit_date) < strtotime($today)) {
-    echo json_encode(['success' => false, 'message' => 'Visit date cannot be in the past.']);
-    exit;
-  }
 }
 
 // Additional validation: names letters-only, contacts numbers-only with +63
@@ -162,9 +143,6 @@ if ($resident_user_id === null) {
   }
 }
 
-// Insert into guest_forms
-
-// Insert into guest_forms (visitor_email is not required anymore)
 $stmtGF = $con->prepare("INSERT INTO guest_forms (
   resident_user_id, resident_house, resident_email,
   visitor_first_name, visitor_middle_name, visitor_last_name,
@@ -199,12 +177,5 @@ if (!$stmtGF->execute()) {
 }
 $stmtGF->close();
 
-if (!$wants_amenity) {
-  $_SESSION['flash_notice'] = 'Resident\'s Guest request submitted — Status Code: ' . $ref_code . '. Give this Status Code to your guest so they can also check the status of their entry.';
-}
-
 echo json_encode(['success' => true, 'ref_code' => $ref_code]);
 exit;
-?>
-// Normalize purpose when reserving an amenity via guest form
-if ($wants_amenity) { $visit_purpose = 'Amenity Booking'; }
