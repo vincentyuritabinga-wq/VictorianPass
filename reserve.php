@@ -527,7 +527,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 <img src="images/pool.svg" alt="Pool">
               </div>
               <div class="info">
-                <div class="title-block"><div class="name">Community Pool</div></div>
+                <div class="title-block">
+                  <div class="name">Community Pool</div>
+                  <div class="amenity-short">Relax and enjoy the pool with convenient reservation options.</div>
+                </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
                 </div>
@@ -540,7 +543,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 <img src="images/clubhouse.svg" alt="Clubhouse">
               </div>
               <div class="info">
-                <div class="title-block"><div class="name">Clubhouse</div></div>
+                <div class="title-block">
+                  <div class="name">Clubhouse</div>
+                  <div class="amenity-short">Host gatherings and events in the subdivision clubhouse.</div>
+                </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
                 </div>
@@ -553,7 +559,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 <img src="images/basketball.svg" alt="Basketball">
               </div>
               <div class="info">
-                <div class="title-block"><div class="name">Basketball Court</div></div>
+                <div class="title-block">
+                  <div class="name">Basketball Court</div>
+                  <div class="amenity-short">Play and practice on our outdoor basketball court.</div>
+                </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
                 </div>
@@ -563,10 +572,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             </div>
             <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150">
               <div class="amenity-media">
-                <img src="images/tennis.jpg" alt="Tennis">
+                <img src="images/tennis.svg" alt="Tennis Court">
               </div>
               <div class="info">
-                <div class="title-block"><div class="name">Tennis Court</div></div>
+                <div class="title-block">
+                  <div class="name">Tennis Court</div>
+                  <div class="amenity-short">Reserve time to enjoy a game at the tennis court.</div>
+                </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
                 </div>
@@ -577,25 +589,31 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           </div>
             <div class="booking-shell">
             <div class="booking-steps" aria-label="Booking steps">
-              <div class="booking-step is-active">
-                <div class="step-index">1</div>
-                <div class="step-content">
-                  <div class="step-title">Select amenity</div>
-                  <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
-                </div>
+              <div class="booking-steps-header">
+                <div class="booking-steps-label">Reservation steps</div>
+                <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
               </div>
-              <div class="booking-step">
-                <div class="step-index">2</div>
-                <div class="step-content">
-                  <div class="step-title">Set schedule</div>
-                  <div class="step-subtitle">Pick an available date and time from the calendar</div>
+              <div class="booking-steps-body">
+                <div class="booking-step is-active">
+                  <div class="step-index">1</div>
+                  <div class="step-content">
+                    <div class="step-title">Select amenity</div>
+                    <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
+                  </div>
                 </div>
-              </div>
-              <div class="booking-step">
-                <div class="step-index">3</div>
-                <div class="step-content">
-                  <div class="step-title">Review &amp; pay</div>
-                  <div class="step-subtitle">Check your reservation details and partial downpayment</div>
+                <div class="booking-step">
+                  <div class="step-index">2</div>
+                  <div class="step-content">
+                    <div class="step-title">Set schedule</div>
+                    <div class="step-subtitle">Pick an available date and time from the calendar</div>
+                  </div>
+                </div>
+                <div class="booking-step">
+                  <div class="step-index">3</div>
+                  <div class="step-content">
+                    <div class="step-title">Review &amp; pay</div>
+                    <div class="step-subtitle">Check your reservation details and partial downpayment</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -630,7 +648,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 </div>
                 <div class="amenity-preview-meta" id="amenityPreviewDays"></div>
                 <div class="amenity-preview-meta" id="amenityPreviewPrice"></div>
-                <button type="button" id="amenityReturnBtn" class="btn-secondary amenity-return" style="display:none;"><i class="fa-solid fa-arrows-rotate"></i> Change Amenity</button>
+                <button type="button" id="amenityReturnBtn" class="btn-secondary amenity-return" style="display:none;">
+                  <img src="images/change.png" alt="" class="amenity-change-icon"> Change Amenity
+                </button>
               </div>
               <div class="reservation-left">
                 <div class="res-item" id="singleDayRow">
@@ -652,14 +672,14 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <input type="hidden" name="hours" id="hoursInput">
                     <input type="hidden" id="hoursChosen" value="0">
                     <div class="res-label" id="hoursSectionLabel" style="margin-top:8px; display:none;"><small>How many hours</small></div>
-                    <select id="hoursSelect" class="hours-select" style="display:none;"></select>
+                    <select id="hoursSelect" class="hours-select" style="display:none;" disabled></select>
                     <div id="durationContainer" style="display:none;"></div>
                     <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small></div>
                     <div id="timeSlotContainer"></div>
                     <div id="selectedTimeRange" class="selected-time-range" style="display:none;"></div>
                     <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
                   </div>
-                  <div class="res-item date-item" id="endDateGroup">
+                    <div class="res-item date-item" id="endDateGroup">
                     <div class="res-label"><small>End Date</small></div>
                     <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
                     <input type="hidden" name="endDate" id="endDateInput">
@@ -668,13 +688,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div id="timeError" class="time-error" style="display:none;"></div>
                     <div class="res-item persons">
                       <div class="res-label"><small>How Many Persons</small></div>
-                      <div class="counter" style="margin-top:6px;">
+                      <div class="counter">
                         <button type="button" onclick="changePersons(-1)">-</button>
                         <span id="personCount">1</span>
                         <button type="button" onclick="changePersons(1)">+</button>
                       </div>
-                      <div id="personsMaxNote" class="label-help" style="margin-top:6px;color:#666;"></div>
-                      <small id="price">$1</small>
+                      <div id="personsMaxNote" class="label-help"></div>
                       <input type="hidden" name="persons" id="personsInput" value="1">
                     </div>
                     <div class="res-item">
@@ -762,6 +781,17 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     </div>
   </div>
   </div>
+
+<div id="changeAmenityModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Change amenity?</h2>
+    <p style="margin:8px 0 16px;color:#4b5563;">Are you sure you want to change amenities? This will reset your current selection.</p>
+    <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" class="close-btn" id="changeAmenityCancelBtn">Cancel</button>
+      <button type="button" class="btn-secondary" id="changeAmenityConfirmBtn">Yes, change</button>
+    </div>
+  </div>
+</div>
 
 <!--
 <div id="hintModal" class="modal" style="display:none;">
@@ -865,6 +895,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       document.getElementById('startDate').textContent=selectedStart;
       document.getElementById('startDateInput').value=selectedStart;
       showStartDateError('');
+      updateHoursSelectEnabled();
       return true;
     }
     function setEnd(ds){
@@ -917,6 +948,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateActionStates();
     updateSelectedTimeRange();
     updateBookingSummary();
+    updateHoursSelectEnabled();
   }
   function clearEndDate(){
     selectedEnd=null;
@@ -929,6 +961,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateActionStates();
     updateSelectedTimeRange();
     updateBookingSummary();
+  }
+
+  function updateHoursSelectEnabled(){
+    const hs=document.getElementById('hoursSelect');
+    if(!hs) return;
+    const s=document.getElementById('startDateInput')?.value||'';
+    hs.disabled = !s;
   }
 
   function initSingleDayToggle(){
@@ -1043,9 +1082,16 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   function showInlineAmenityDetails(key){
     const info=amenityData[key]||amenityData.pool;
+    document.querySelectorAll('.schedule-panel').forEach(function(p){
+      p.style.display='none';
+      p.innerHTML='';
+    });
+    document.querySelectorAll('.amenity-card').forEach(function(c){
+      c.removeAttribute('data-details-visible');
+    });
     const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
     if(!card) return;
-    card.setAttribute('data-details-visible', 'true');
+    card.setAttribute('data-details-visible','true');
     const panel=card.querySelector('[data-schedule-panel]');
     if(!panel) return;
     panel.innerHTML='';
@@ -1141,38 +1187,43 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   const amenitiesList=document.getElementById('amenitiesList');
 
+  function resetAmenitySelection(){
+    document.querySelectorAll('.amenity-card').forEach(function(c){
+      c.style.display='';
+      c.classList.remove('selected');
+      c.removeAttribute('data-details-visible');
+    });
+    document.querySelectorAll('.schedule-panel').forEach(function(p){
+      p.style.display='none';
+      p.innerHTML='';
+    });
+    document.querySelectorAll('button[data-action="view-desc"]').forEach(function(btn){
+      btn.style.display='';
+    });
+    document.querySelectorAll('button[data-action="book-now"]').forEach(function(btn){
+      btn.classList.remove('visible');
+    });
+    const rc=document.getElementById('reservationCard');
+    if(rc){ rc.style.display='none'; }
+    const descBox=document.getElementById('amenityDescBox');
+    if(descBox){ descBox.style.display='flex'; }
+    const amenitiesHeader=document.getElementById('amenitiesHeader');
+    if(amenitiesHeader){ amenitiesHeader.style.display=''; }
+    const t=document.getElementById('reservationTitle');
+    if(t){ t.textContent='Reserve an Amenity'; }
+    const h=document.getElementById('reservationHint');
+    if(h){ h.textContent='Select an amenity to continue'; }
+    const prev=document.getElementById('amenityPreview');
+    if(prev){ prev.style.display='none'; }
+    const btn=document.getElementById('amenityReturnBtn');
+    if(btn){ btn.style.display='none'; }
+  }
+
   const amenityReturnBtn=document.getElementById('amenityReturnBtn');
   if(amenityReturnBtn){
     amenityReturnBtn.addEventListener('click',function(){
-      if(!confirm('Are you sure you want to change amenities? This will reset your current selection.')){ return; }
-      document.querySelectorAll('.amenity-card').forEach(function(c){
-        c.style.display='';
-        c.classList.remove('selected');
-        c.removeAttribute('data-details-visible');
-      });
-      document.querySelectorAll('.schedule-panel').forEach(function(p){
-        p.style.display='none';
-        p.innerHTML='';
-      });
-      document.querySelectorAll('button[data-action="view-desc"]').forEach(function(btn){
-        btn.style.display='';
-      });
-      document.querySelectorAll('button[data-action="book-now"]').forEach(function(btn){
-        btn.classList.remove('visible');
-      });
-      const rc=document.getElementById('reservationCard');
-      if(rc){ rc.style.display='none'; }
-      const descBox=document.getElementById('amenityDescBox');
-      if(descBox){ descBox.style.display='flex'; }
-      const amenitiesHeader=document.getElementById('amenitiesHeader');
-      if(amenitiesHeader){ amenitiesHeader.style.display=''; }
-      const t=document.getElementById('reservationTitle');
-      if(t){ t.textContent='Reserve an Amenity'; }
-      const h=document.getElementById('reservationHint');
-      if(h){ h.textContent='Select an amenity to continue'; }
-      const prev=document.getElementById('amenityPreview');
-      if(prev){ prev.style.display='none'; }
-      amenityReturnBtn.style.display='none';
+      const modal=document.getElementById('changeAmenityModal');
+      if(modal){ modal.style.display='flex'; }
     });
   }
 
@@ -1192,7 +1243,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function requireDateBeforeHours(){
     const s=document.getElementById('startDateInput')?.value||'';
     if(!s){
-      showStartDateError('Please select a date before choosing number of hours.');
       setFieldWarning('hoursInput','Select a date first before choosing hours.');
       return false;
     }
@@ -1331,6 +1381,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       document.getElementById('timeSectionLabel').style.display='block';
       renderTimeSlotButtons();
     }
+    updateHoursSelectEnabled();
   }
 
   function getAmenityMaxPersons(amen){
@@ -1883,6 +1934,24 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       });
     }
   })();
+
+  (function(){
+    const modal=document.getElementById('changeAmenityModal');
+    if(!modal) return;
+    const cancelBtn=document.getElementById('changeAmenityCancelBtn');
+    const confirmBtn=document.getElementById('changeAmenityConfirmBtn');
+    if(cancelBtn){
+      cancelBtn.addEventListener('click',function(){
+        modal.style.display='none';
+      });
+    }
+    if(confirmBtn){
+      confirmBtn.addEventListener('click',function(){
+        modal.style.display='none';
+        resetAmenitySelection();
+      });
+    }
+  })();
   function showToast(message,type){
     const nl=document.getElementById('notifyLayer'); if(!nl) return;
     nl.innerHTML = '<span class="msg">'+message+'</span><button type="button" class="toast-close" aria-label="Close">\u00d7</button>';
@@ -1951,8 +2020,19 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
-  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
+  document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); updateHoursSelectEnabled(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
+  document.addEventListener('DOMContentLoaded',function(){
+    var panel=document.querySelector('.booking-steps');
+    var toggle=document.getElementById('bookingStepsToggle');
+    if(panel&&toggle){
+      toggle.addEventListener('click',function(){
+        var collapsed=panel.classList.toggle('is-collapsed');
+        toggle.textContent=collapsed?'+':'−';
+        toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+      });
+    }
+  });
   document.addEventListener('DOMContentLoaded',function(){
     var userType = "<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
     if (userType === 'resident') {
