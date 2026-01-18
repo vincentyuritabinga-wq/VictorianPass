@@ -631,6 +631,29 @@ input:focus-visible {
   font-size: 0.9rem;
   border-left: 4px solid #dc2626;
 }
+.price-row{
+  margin-top:8px;
+}
+.price-box{
+  background:#f9f9f9;
+  border:1.5px solid #e5e7eb;
+  border-radius:12px;
+  padding:12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.price-label{
+  font-size:0.9rem;
+  color:#4b5563;
+  font-weight:600;
+}
+.price-amount{
+  font-size:1.05rem;
+  font-weight:700;
+  color:#111827;
+}
 .slot-btn {
   display: inline-flex;
   align-items: center;
