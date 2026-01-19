@@ -128,7 +128,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     /* LEFT SIDE */
     .login-left {
       flex: 1;
-      background: url("images/loginpage/bglogin.jpg") center/cover no-repeat;
+      background: url("images/signuppage/login&singup.png") center/cover no-repeat;
       display: flex;
       align-items: center;
       padding: 60px;
@@ -295,10 +295,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <div class="login-wrapper">
     <!-- Left Side -->
     <div class="login-left">
-      <div class="branding">
-        <h1>VictorianPass</h1>
-        <p>Begin your story in a home where memories are made and every moment matters.</p>
-      </div>
     </div>
 
     <!-- Right Side -->
