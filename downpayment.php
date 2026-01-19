@@ -169,7 +169,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             $_SESSION['flash_notice'] = 'Your reservation has been submitted. Please wait for confirmation.';
           }
         } else {
-          $_SESSION['flash_notice'] = 'Please wait for confirmation. The status code will be sent to your email within 12 hours.';
+          $_SESSION['flash_notice'] = 'Please wait for confirmation. You can view the status of your request on your dashboard.';
           $_SESSION['flash_ref_code'] = $ref_code;
         }
       }
