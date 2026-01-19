@@ -28,6 +28,16 @@ function ensureVisitorSchema($con){
   if ($res && $res->num_rows === 0) {
     $con->query("ALTER TABLE users ADD COLUMN valid_id_path VARCHAR(255) NULL");
   }
+  
+  // Ensure status column includes 'pending'
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'status'");
+  if ($res && $res->num_rows === 0) {
+    $con->query("ALTER TABLE users ADD COLUMN status ENUM('pending','active','denied','disabled') NOT NULL DEFAULT 'pending'");
+  } else if ($res && ($row = $res->fetch_assoc())) {
+    if (stripos($row['Type'], 'pending') === false) {
+      $con->query("ALTER TABLE users MODIFY COLUMN status ENUM('pending','active','denied','disabled') NOT NULL DEFAULT 'pending'");
+    }
+  }
 }
 ensureVisitorSchema($con);
 
@@ -69,23 +79,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $house_number = isset($_POST['house_number']) ? trim($_POST['house_number']) : '';
   $address = isset($_POST['address']) ? trim($_POST['address']) : '';
   $terms_agreed = isset($_POST['terms_agreed']) ? $_POST['terms_agreed'] : '0';
+  
   $is_visitor = isset($_POST['is_visitor']) && $_POST['is_visitor'] === '1';
   $serverErrors = [];
 
   // File Upload Logic
   $valid_id_path = null;
-  if ($is_visitor && isset($_FILES['valid_id']) && $_FILES['valid_id']['error'] === UPLOAD_ERR_OK) {
-      $uploadDir = 'uploads/ids/';
-      if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-      $fileName = time() . '_' . basename($_FILES['valid_id']['name']);
-      $targetPath = $uploadDir . $fileName;
-      if (move_uploaded_file($_FILES['valid_id']['tmp_name'], $targetPath)) {
-          $valid_id_path = $targetPath;
-      } else {
-          $serverErrors['valid_id'] = 'Failed to upload Valid ID.';
+  if ($is_visitor) {
+      if (isset($_FILES['valid_id']) && $_FILES['valid_id']['error'] === UPLOAD_ERR_OK) {
+          $uploadDir = 'uploads/ids/';
+          if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+          $fileName = time() . '_' . basename($_FILES['valid_id']['name']);
+          $targetPath = $uploadDir . $fileName;
+          if (move_uploaded_file($_FILES['valid_id']['tmp_name'], $targetPath)) {
+              $valid_id_path = $targetPath;
+          } else {
+              $serverErrors['valid_id'] = 'Failed to upload Valid ID.';
+          }
+      } elseif (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK) {
+          $serverErrors['valid_id'] = 'Valid ID is required for visitors.';
       }
-  } elseif ($is_visitor && (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK)) {
-      $serverErrors['valid_id'] = 'Valid ID is required for visitors.';
   }
 
   if ($password !== $confirm_password) {
@@ -159,10 +172,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   if (empty($serverErrors)) {
     $hashed = password_hash($password, PASSWORD_DEFAULT);
     $user_type = $is_visitor ? 'visitor' : 'resident';
+    $status = ($user_type === 'visitor') ? 'active' : 'pending';
     $stmt = $con->prepare("INSERT INTO users 
-      (first_name, middle_name, last_name, phone, email, password, sex, birthdate, house_number, address, user_type, valid_id_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssssssss", $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address, $user_type, $valid_id_path);
+      (first_name, middle_name, last_name, phone, email, password, sex, birthdate, house_number, address, user_type, valid_id_path, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssssssssssss", $first_name, $middle_name, $last_name, $phone, $email, $hashed, $sex, $birthdate, $house_number, $address, $user_type, $valid_id_path, $status);
 
     if ($stmt->execute()) {
       $newUserId = $stmt->insert_id;
@@ -414,17 +428,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="email" name="email" id="email" placeholder="Email*" required>
         </div>
 
-        <div class="input-wrap" id="visitorToggleWrap" style="margin-bottom: 15px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="isVisitor" name="is_visitor" value="1" style="width:auto; margin:0;">
-            <label for="isVisitor" style="margin:0; font-weight:600; color:#23412e;">I am a Visitor</label>
-          </div>
-          <p style="font-size: 0.75rem; color: #777; margin: 4px 0 0 24px; line-height: 1.3;">
-             Reminders: For Visitors, No House Verification Required.
-          </p>
+        <div style="margin-bottom: 15px; display: flex; align-items: center;">
+            <input type="checkbox" id="isVisitor" name="is_visitor" value="1" style="width:auto; transform: scale(1.2); margin-right: 8px; cursor: pointer;">
+            <label for="isVisitor" style="font-weight: 600; color: #23412e; font-size: 1rem; cursor: pointer; position: static; margin: 0;">I am a Visitor</label>
         </div>
 
-        <div class="input-wrap" id="visitorIdWrap" style="display:none; margin-bottom: 15px;">
+        <!-- House verification section -->
+        <div class="form-row homeowner" style="align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid #eee; padding: 10px; border-radius: 8px; background: #fafafa;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <img src="images/signuppage/location.svg" alt="Location" style="width: 20px;">
+              <span style="font-weight: 600; color: #23412e; font-size: 1.1rem;">House Number</span>
+            </div>
+          </div>
+          
+          <input type="text" id="houseHidden" name="house_number" placeholder="VH-0000" value="<?php echo htmlspecialchars($verified_house); ?>" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #333; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
+        </div>
+
+        <div class="input-wrap" id="visitorIdWrap" style="margin-bottom: 15px;">
           <label for="valid_id" style="display:block; margin-bottom:5px; font-weight:600; color:#23412e;">Upload Valid ID (Required for Visitors)</label>
           
           <div id="fileUploadContainer">
@@ -450,20 +471,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <?php endif; ?>
         </div>
 
-        <!-- House verification section -->
-        <div class="form-row homeowner" style="align-items: flex-start; justify-content: space-between; gap: 1rem; border: 1px solid #eee; padding: 10px; border-radius: 8px; background: #fafafa;">
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-              <img src="images/signuppage/location.svg" alt="Location" style="width: 20px;">
-              <span style="font-weight: 600; color: #23412e; font-size: 1.1rem;">Your House Number <span style="font-weight: 400; color: #999; font-size: 0.9em;">(Residents Only)</span></span>
-            </div>
-            <p style="font-size: 0.75rem; color: #777; margin: 0 0 0 28px; line-height: 1.3;">
-              Reminders: For Residents, Please Use Your Designated House number Above.
-            </p>
-          </div>
-          
-          <input type="text" id="houseHidden" name="house_number" placeholder="VH-0000" value="<?php echo htmlspecialchars($verified_house); ?>" style="flex: 0 0 140px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #333; font-weight: 500; font-family: inherit; font-size: 0.9rem;">
-        </div>
+        <!-- House verification section (Duplicate removed) -->
 
         <div class="input-wrap">
           <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
@@ -915,24 +923,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
       */
 
-      function applyVisitorMode(){
-        if (!isVisitor) return;
+      function updateFormMode() {
+        const isVisitorCheckbox = document.getElementById('isVisitor');
+        const isVis = isVisitorCheckbox && isVisitorCheckbox.checked;
         const idWrap = document.getElementById('visitorIdWrap');
-        if (isVisitor.checked) {
-          if (homeownerRow) homeownerRow.style.display = 'none';
-          if (addressField) { addressField.required = false; addressField.style.display = 'none'; addressField.value = ''; }
-          if (houseHidden) { houseHidden.value = ''; }
-          if (idWrap) idWrap.style.display = 'block';
-          setWarning('houseHidden', '');
+        
+        if (isVis) {
+            // Visitor Mode
+            if (homeownerRow) homeownerRow.style.display = 'none';
+            if (addressField && addressField.closest('.input-wrap')) addressField.closest('.input-wrap').style.display = 'none';
+            if (idWrap) idWrap.style.display = 'block';
+
+            if (houseHidden) houseHidden.value = ''; // Clear house number
+            if (addressField) addressField.required = false;
         } else {
-          if (homeownerRow) homeownerRow.style.display = 'flex';
-          if (addressField) { addressField.required = true; addressField.style.display = 'block'; }
-          if (idWrap) idWrap.style.display = 'none';
+            // Resident Mode
+            if (homeownerRow) homeownerRow.style.display = 'flex'; // Restore flex layout
+            if (addressField && addressField.closest('.input-wrap')) addressField.closest('.input-wrap').style.display = 'block';
+            if (idWrap) idWrap.style.display = 'none';
+
+            if (addressField) addressField.required = true;
         }
       }
-      if (isVisitor) {
-        isVisitor.addEventListener('change', applyVisitorMode);
-        applyVisitorMode();
+
+      const isVisitorCheckbox = document.getElementById('isVisitor');
+      if (isVisitorCheckbox) {
+        isVisitorCheckbox.addEventListener('change', updateFormMode);
+        updateFormMode();
       }
 
       // ID Upload Preview Logic
