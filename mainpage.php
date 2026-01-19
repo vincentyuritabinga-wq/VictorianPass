@@ -61,6 +61,11 @@ $error = '';
 $userName = '';
 $userHouse = '';
 $userType = '';
+$userEmail = '';
+$userPhone = '';
+$userAddress = '';
+$userSex = '';
+$userBirthdate = '';
 $isLoggedIn = false;
 $isResident = false;
 $isVisitor = false;
@@ -72,26 +77,36 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
   
   if ($userType === 'resident') {
     $isResident = true;
-    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number FROM users WHERE id = ? LIMIT 1")) {
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
       $stmt->bind_param("i", $uid);
       if ($stmt->execute()) {
-        $stmt->bind_result($first, $middle, $last, $house);
+        $stmt->bind_result($first, $middle, $last, $house, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
           $userHouse = $house ?? '';
+          $userEmail = $email ?? '';
+          $userPhone = $phone ?? '';
+          $userAddress = $address ?? '';
+          $userSex = $sex ?? '';
+          $userBirthdate = $birthdate ?? '';
         }
       }
       $stmt->close();
     }
   } elseif ($userType === 'visitor') {
     $isVisitor = true;
-    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name FROM users WHERE id = ? LIMIT 1")) {
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
       $stmt->bind_param("i", $uid);
       if ($stmt->execute()) {
-        $stmt->bind_result($first, $middle, $last);
+        $stmt->bind_result($first, $middle, $last, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
           $userHouse = 'Visitor';
+          $userEmail = $email ?? '';
+          $userPhone = $phone ?? '';
+          $userAddress = $address ?? '';
+          $userSex = $sex ?? '';
+          $userBirthdate = $birthdate ?? '';
         }
       }
       $stmt->close();
@@ -215,24 +230,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php if ($isLoggedIn): ?>
           <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
              <span>Hi, <?php echo htmlspecialchars($userName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
-             <div id="profileIcon" class="profile-icon-wrap">
-                <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon" onclick="toggleProfileDropdown()">
-                <div id="profileDropdown" class="profile-dropdown">
-                  <div class="mini-profile">
-                    <img src="images/mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
-                    <div class="mini-text">
-                      <span class="mini-name"><?php echo htmlspecialchars($userName ?: 'User'); ?></span>
-                      <?php if($userHouse): ?>
-                      <span class="mini-house"><?php echo ($isResident ? 'House No.: ' : '') . htmlspecialchars($userHouse); ?></span>
-                      <?php endif; ?>
-                    </div>
-                  </div>
-                  <div class="actions">
-                    <a href="<?php echo $isResident ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="btn btn-view">Dashboard</a>
-                    <a href="logout.php" class="btn btn-logout">Log Out</a>
-                  </div>
-                </div>
-             </div>
+             <button id="profileAccountTrigger" type="button" class="profile-account-btn">
+               <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon">
+             </button>
           </div>
         <?php else: ?>
           <div class="nav-links" style="display:flex;">
@@ -249,7 +249,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- HERO SECTION -->
   <section class="hero" id="home">
     <?php if ($error !== '') { echo '<div class="error">' . htmlspecialchars($error) . '</div>'; } ?>
-    <div class="hero-content">
+    <div class="hero-content reveal-on-scroll is-visible">
       
       <h2>WELCOME TO</h2>
       <div class="hero-brand">
@@ -291,27 +291,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
 
       <script>
-         // Close modal when clicking outside
          document.getElementById('loginModal').addEventListener('click', function(e) {
              if (e.target === this) this.style.display = 'none';
          });
       </script>
-
-      <div class="scroll-down" style="margin-top: 60px;">
-         <img src="images/arrow.svg" alt="Scroll Down" style="width: 30px; animation: bounce 2s infinite;">
-      </div>
     </div>
   </section>
 
-  <style>
-    @keyframes bounce {
-      0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
-      40% {transform: translateY(-10px);}
-      60% {transform: translateY(-5px);}
-    }
-  </style>
-
-  <section id="about-us" class="section">
+  <section id="about-us" class="section reveal-on-scroll">
     <h2 class="section-title">About Us</h2>
     <div class="section-divider"></div>
     <div class="section-body">
@@ -320,7 +307,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </section>
 
-  <section id="facilities" class="section">
+  <section id="facilities" class="section reveal-on-scroll">
     <h2 class="section-title">Amenities</h2>
     <div class="section-divider"></div>
     <div class="amenities-grid">
@@ -346,7 +333,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
     </div>
   </section>
-  <section id="about-system" class="section">
+  <section id="about-system" class="section reveal-on-scroll">
     <h2 class="section-title">About the System</h2>
     <div class="section-divider"></div>
     <div class="section-body">
@@ -372,54 +359,138 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </section>
 
-  <!-- Visitor-friendly instructions box fixed at the bottom-left -->
-   <br>
-   <br>
-  <!-- REMOVED OLD INSTRUCTIONS -->
+  <?php if ($isLoggedIn): ?>
+  <div id="profileSideOverlay" class="profile-side-overlay">
+    <div class="profile-side-panel">
+      <button type="button" class="profile-side-close" aria-label="Close profile">&times;</button>
+      <div class="profile-side-header">
+        <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-side-avatar">
+        <div class="profile-side-title">
+          <h3><?php echo htmlspecialchars($userName ?: 'My Account'); ?></h3>
+          <span><?php echo ucfirst($userType); ?></span>
+        </div>
+      </div>
+      <div class="profile-side-body">
+        <div class="profile-side-row">
+          <span class="label">Name</span>
+          <span class="value"><?php echo htmlspecialchars($userName ?: '-'); ?></span>
+        </div>
+        <?php if ($userEmail !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label">Email</span>
+          <span class="value"><?php echo htmlspecialchars($userEmail); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($userPhone !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label">Contact</span>
+          <span class="value"><?php echo htmlspecialchars($userPhone); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($userHouse !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label"><?php echo $isResident ? 'Unit / House No.' : 'Account Type'; ?></span>
+          <span class="value"><?php echo htmlspecialchars($userHouse); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($userAddress !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label">Address</span>
+          <span class="value"><?php echo htmlspecialchars($userAddress); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($userSex !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label">Sex</span>
+          <span class="value"><?php echo htmlspecialchars(ucfirst($userSex)); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($userBirthdate !== ''): ?>
+        <div class="profile-side-row">
+          <span class="label">Birthdate</span>
+          <span class="value"><?php echo htmlspecialchars($userBirthdate); ?></span>
+        </div>
+        <?php endif; ?>
+      </div>
+      <div class="profile-side-footer">
+        <a href="<?php echo $isResident ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="profile-side-btn primary">Open Dashboard</a>
+        <a href="logout.php" class="profile-side-btn">Log Out</a>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
-  <script>
-    const isResidentLoggedIn = <?php echo (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') ? 'true' : 'false'; ?>;
-    
-    function toggleProfileDropdown() {
-      const dropdown = document.getElementById('profileDropdown');
-      if(dropdown) {
-         dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
-      }
-    }
-
-    // Close dropdown when clicking outside
-    window.addEventListener('click', function(event) {
-      const iconWrap = document.getElementById('profileIcon');
-      const dropdown = document.getElementById('profileDropdown');
-      if (iconWrap && dropdown && !iconWrap.contains(event.target)) {
-        dropdown.style.display = 'none';
-      }
-    });
-  </script>
   <script src="js/logout-modal.js"></script>
   <script>
     (function(){var t=document.getElementById('navToggle');var c=document.getElementById('navCollapse');if(!t||!c)return;t.addEventListener('click',function(){var o=c.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');});window.addEventListener('click',function(e){if(!c.contains(e.target)&&!t.contains(e.target)){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});window.addEventListener('resize',function(){if(window.innerWidth>900){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});})();
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
-      const iconWrap = document.getElementById('profileIcon');
-      const dd = document.getElementById('profileDropdown');
-      if (!iconWrap || !dd) return;
+      var items = document.querySelectorAll('.reveal-on-scroll');
+      if (!items.length) return;
+      if (!('IntersectionObserver' in window)) {
+        for (var i = 0; i < items.length; i++) {
+          items[i].classList.add('is-visible');
+        }
+        return;
+      }
+      var observer = new IntersectionObserver(function(entries, obs){
+        for (var i = 0; i < entries.length; i++) {
+          var entry = entries[i];
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            obs.unobserve(entry.target);
+          }
+        }
+      }, { threshold: 0.15 });
+      for (var j = 0; j < items.length; j++) {
+        observer.observe(items[j]);
+      }
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      var overlay = document.getElementById('profileSideOverlay');
+      var closeBtn = overlay ? overlay.querySelector('.profile-side-close') : null;
+      var triggers = [];
+      var trigger = document.getElementById('profileAccountTrigger');
+      if (trigger) { triggers.push(trigger); }
 
-      const openDD = () => { dd.style.display = 'block'; };
-      const closeDD = () => { dd.style.display = 'none'; };
-      const toggleDD = () => { dd.style.display = (dd.style.display === 'block') ? 'none' : 'block'; };
+      function openProfilePanel(e){
+        if (e) e.preventDefault();
+        if (!overlay) return;
+        overlay.classList.add('open');
+      }
 
-      // Toggle when clicking the icon itself; allow clicks inside dropdown to navigate
-      iconWrap.addEventListener('click', function(e){
-        if (dd.contains(e.target)) return; // let dropdown links work normally
-        e.stopPropagation();
-        toggleDD();
+      function closeProfilePanel(){
+        if (!overlay) return;
+        overlay.classList.remove('open');
+      }
+
+      for (var i = 0; i < triggers.length; i++) {
+        triggers[i].addEventListener('click', openProfilePanel);
+      }
+
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          closeProfilePanel();
+        });
+      }
+
+      if (overlay) {
+        overlay.addEventListener('click', function(e){
+          if (e.target === overlay) {
+            closeProfilePanel();
+          }
+        });
+      }
+
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('open')) {
+          closeProfilePanel();
+        }
       });
-      iconWrap.addEventListener('mouseenter', function(){ openDD(); });
-      iconWrap.addEventListener('mouseleave', function(){ setTimeout(function(){ if (!dd.matches(':hover')) closeDD(); }, 160); });
-      dd.addEventListener('mouseleave', function(){ closeDD(); });
-      window.addEventListener('click', function(e){ if (!iconWrap.contains(e.target) && !dd.contains(e.target)) closeDD(); });
     });
   </script>
 
