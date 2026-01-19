@@ -397,15 +397,62 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     notifPanel.innerHTML=html;
   }
-  document.querySelectorAll('.item-list .list-item').forEach(function(li){
+  // Modal handling
+  var activityModal = document.getElementById('activityModal');
+  var activityModalBody = document.getElementById('activityModalBody');
+  var activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
+
+  function openActivityModal(refCode) {
+    if (!activityModal || !activityModalBody) return;
+    activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+    activityModal.style.display = 'block';
+
+    fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
+      .then(r => r.text())
+      .then(html => {
+        activityModalBody.innerHTML = html;
+      })
+      .catch(e => {
+        activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
+      });
+  }
+
+  if (activityModalClose) {
+    activityModalClose.onclick = function() {
+      activityModal.style.display = "none";
+    }
+  }
+
+  window.addEventListener('click', function(event) {
+     if (event.target == activityModal) {
+       activityModal.style.display = "none";
+     }
+   });
+
+   window.downloadQRImage = function(code) {
+      var img = document.querySelector('#activityModalBody img[alt="QR Code"]');
+      if (!img) { alert('QR Code not found'); return; }
+      fetch(img.src)
+        .then(resp => resp.blob())
+        .then(blob => {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'QR_' + code + '.png';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(() => alert('Could not download image.'));
+   };
+ 
+   document.querySelectorAll('.item-list .list-item').forEach(function(li){
     li.addEventListener('click',function(e){
-      if(e.target.closest('a')) return;
-      li.classList.toggle('expanded');
-      var extra=li.querySelector('.item-extra');
-      if(!extra) return;
-      if(extra.getAttribute('data-loaded')!=='1'&&li.classList.contains('expanded')){
-        buildExtraContent(li,extra);
-        extra.setAttribute('data-loaded','1');
+      if(e.target.closest('a') || e.target.closest('button')) return;
+      var refCode = li.getAttribute('data-ref-code');
+      if (refCode) {
+        openActivityModal(refCode);
       }
     });
   });

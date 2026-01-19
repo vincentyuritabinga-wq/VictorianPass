@@ -128,7 +128,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     /* LEFT SIDE */
     .login-left {
       flex: 1;
-      background: url("images/signuppage/login&singup.png") center/cover no-repeat;
+      background: url("images/signuppage/loginsingup.png") center/cover no-repeat;
       display: flex;
       align-items: center;
       padding: 60px;
