@@ -375,8 +375,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body>
   <div class="page-wrapper">
     <div class="image-side">
-      <img src="images/signuppage/sign up pic.jpg" alt="Victorian Heights Subdivision">
-      <p class="branding">VictorianPass</p>
     </div>
 
     <div class="form-side">
@@ -384,11 +382,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <img src="images/signuppage/back.svg" alt="Back">
       </a>
 
+      <img src="images/loginpage/biglogo.svg" alt="Logo" class="biglogo">
+
       <?php if ($registration_success): ?>
         <div class="success-banner">✅ You have successfully registered! Redirecting to login…</div>
       <?php endif; ?>
       <h1>Sign Up</h1>
-      <p class="subtitle">Create your Account</p>
+      <p class="subtitle">Create your VictorianPass account to get started.</p>
 
       <form class="signup-form" id="signupForm" method="POST" action="signup.php" enctype="multipart/form-data" novalidate <?php if ($registration_success) echo 'style="display:none"'; ?>>
         <input type="hidden" id="terms_agreed" name="terms_agreed" value="0">
