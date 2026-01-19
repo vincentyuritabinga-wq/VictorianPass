@@ -43,19 +43,23 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(35, 65, 46, 0.55), rgba(0,0,0,0.35));
+  background: rgba(0, 0, 0, 0.45);
   z-index: 0;
 }
 .image-side .branding {
   position: relative;
   z-index: 1;
   color: #fff;
-  font-size: 2rem;
+  max-width: 400px;
+}
+.image-side .branding h1 {
+  font-size: 2.4rem;
   font-weight: 700;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(35, 65, 46, 0.45);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  margin-bottom: 15px;
+}
+.image-side .branding p {
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 /* Right Side (Form) */
@@ -68,6 +72,12 @@ body {
   justify-content: center;
   position: relative;
   box-shadow: -4px 0 12px rgba(0,0,0,0.05);
+}
+
+.biglogo {
+  width: 80px;
+  display: block;
+  margin: 0 auto 2px;
 }
 
 /* Back Arrow */
@@ -85,15 +95,18 @@ body {
 /* Titles */
 h1 {
   text-align: center;
-  margin-top: 1rem;
+  margin-top: 0;
+  margin-bottom: 2px;
   font-weight: 600;
+  font-size: 1.8rem;
 }
 
 .subtitle {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
   color: #666;
   font-weight: 400;
+  font-size: 0.9rem;
 }
 
 /* Form */
