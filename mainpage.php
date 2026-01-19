@@ -59,6 +59,7 @@ $error = '';
 
 // Load user profile data (resident or visitor)
 $userName = '';
+$userFirstName = '';
 $userHouse = '';
 $userType = '';
 $userEmail = '';
@@ -101,6 +102,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
         $stmt->bind_result($first, $middle, $last, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userFirstName = $first;
           $userHouse = 'Visitor';
           $userEmail = $email ?? '';
           $userPhone = $phone ?? '';
@@ -240,7 +242,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="nav-actions">
         <?php if ($isLoggedIn): ?>
           <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
-             <span>Hi, <?php echo htmlspecialchars($userName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
+             <span>Hi, <?php echo htmlspecialchars($userFirstName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
              <div class="profile-icon-wrap" id="profileWrap">
                <button id="profileAccountTrigger" type="button" class="profile-account-btn" style="background:none;border:none;padding:0;cursor:pointer;">
                  <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="profile-icon">
