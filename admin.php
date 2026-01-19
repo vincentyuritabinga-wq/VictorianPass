@@ -281,8 +281,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
     if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-    $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 8");
-    if($rr){ while($row=$rr->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 8");
+    if($rr){ while($row=$rr->fetch_assoc()){ 
+        $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
+        $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
+        $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
+        $requests[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+    } }
     $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 8");
     if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     // Include escalated incident reports for admin notifications
@@ -429,7 +434,7 @@ if (isset($_GET['logout'])) {
 
 // Functions to get dashboard statistics
 function getResidentCount($con) {
-    $query = "SELECT COUNT(*) as count FROM users";
+    $query = "SELECT COUNT(*) as count FROM users WHERE user_type = 'resident'";
     $result = $con->query($query);
     if ($result && $row = $result->fetch_assoc()) {
         return $row['count'];
@@ -461,6 +466,55 @@ function getPendingRequestsCount($con) {
     if ($r3 = $con->query($q3)) { if ($row = $r3->fetch_assoc()) { $total += intval($row['c']); } }
 
     return $total;
+}
+
+function getPendingResidentRequestsCountNew($con) {
+    $total = 0;
+    // 1. Reservations by residents
+    $q1 = "SELECT COUNT(r.id) AS c FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.approval_status = 'pending' AND (u.user_type IS NULL OR u.user_type = 'resident')"; 
+    // Note: Assuming NULL user_type might be resident legacy, but safer to stick to explicit. 
+    // Actually, visitors MUST have user_type='visitor'. Residents usually 'resident'.
+    // Let's be precise:
+    $q1 = "SELECT COUNT(r.id) AS c FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.approval_status = 'pending' AND (u.user_type = 'resident' OR u.user_type IS NULL)";
+    if ($r1 = $con->query($q1)) { if ($row = $r1->fetch_assoc()) { $total += intval($row['c']); } }
+
+    // 2. Legacy resident_reservations
+    $q2 = "SELECT COUNT(*) AS c FROM resident_reservations WHERE approval_status = 'pending'";
+    if ($r2 = $con->query($q2)) { if ($row = $r2->fetch_assoc()) { $total += intval($row['c']); } }
+
+    // 3. Guest forms (Resident's Guest)
+    $q3 = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status = 'pending'";
+    if ($r3 = $con->query($q3)) { if ($row = $r3->fetch_assoc()) { $total += intval($row['c']); } }
+
+    return $total;
+}
+
+function getPendingVisitorRequestsCountNew($con) {
+    $total = 0;
+    // Reservations by visitors
+    $q1 = "SELECT COUNT(r.id) AS c FROM reservations r JOIN users u ON r.user_id = u.id WHERE r.approval_status = 'pending' AND u.user_type = 'visitor'";
+    if ($r1 = $con->query($q1)) { if ($row = $r1->fetch_assoc()) { $total += intval($row['c']); } }
+    return $total;
+}
+
+function getVisitorAccountsCount($con) {
+    $q = "SELECT COUNT(*) AS c FROM users WHERE user_type = 'visitor'";
+    if ($r = $con->query($q)) {
+        if ($row = $r->fetch_assoc()) {
+            return intval($row['c']);
+        }
+    }
+    return 0;
+}
+
+function getPendingResidentAccountsCount($con) {
+    $q = "SELECT COUNT(*) AS c FROM users WHERE user_type = 'resident' AND status = 'pending'";
+    if ($r = $con->query($q)) {
+        if ($row = $r->fetch_assoc()) {
+            return intval($row['c']);
+        }
+    }
+    return 0;
 }
 
 function getPaymentReceiptsCount($con) {
@@ -523,8 +577,13 @@ function getRecentNotifications($con){
   if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 5");
   if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $rr = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 5");
-  if($rr){ while($row=$rr->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'resident','title'=>'New resident amenity request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 5");
+  if($rr){ while($row=$rr->fetch_assoc()){ 
+      $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
+      $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
+      $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
+      $items[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+  } }
   $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
@@ -539,8 +598,20 @@ function getRecentNotifications($con){
 }
 
 // Functions to get data for different sections
+function getPendingResidents($con) {
+    $query = "SELECT * FROM users WHERE user_type = 'resident' AND status = 'pending' ORDER BY created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
+function getVisitors($con) {
+    $query = "SELECT * FROM users WHERE user_type = 'visitor' ORDER BY created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
 function getResidents($con) {
-    $query = "SELECT * FROM users ORDER BY created_at DESC";
+    $query = "SELECT * FROM users WHERE user_type = 'resident' ORDER BY created_at DESC";
     $result = $con->query($query);
     if ($result) {
         return $result;
@@ -562,10 +633,30 @@ function getReservations($con) {
 
 // Resident amenity reservations (resident_reservations table)
 function getResidentReservations($con) {
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL
+              ORDER BY r.created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
+function getResidentOnlyReservations($con) {
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type
+              FROM reservations r
+              LEFT JOIN users u ON r.user_id = u.id
+              WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
+              ORDER BY r.created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
+function getVisitorAccountReservations($con) {
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type
+              FROM reservations r
+              LEFT JOIN users u ON r.user_id = u.id
+              WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -755,11 +846,17 @@ function ensureResidentApprovalColumns($con) {
 ensureResidentApprovalColumns($con);
 ensureResidentReservationQrColumn($con);
 
-// Ensure users table has a status column to support deactivation
+// Ensure users table has a status column to support deactivation and pending approval
 function ensureUsersStatusColumn($con) {
     $check = $con->query("SHOW COLUMNS FROM users LIKE 'status'");
     if ($check && $check->num_rows === 0) {
-        $con->query("ALTER TABLE users ADD COLUMN status ENUM('active','disabled') NOT NULL DEFAULT 'active'");
+        $con->query("ALTER TABLE users ADD COLUMN status ENUM('pending','active','denied','disabled') NOT NULL DEFAULT 'pending'");
+    } else {
+        // Check if enum has pending
+        $row = $check->fetch_assoc();
+        if (stripos($row['Type'], 'pending') === false) {
+             $con->query("ALTER TABLE users MODIFY COLUMN status ENUM('pending','active','denied','disabled') NOT NULL DEFAULT 'pending'");
+        }
     }
 }
 ensureUsersStatusColumn($con);
@@ -1149,6 +1246,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             exit;
         }
 
+        // Handle user account approval/denial
+        if ($action == 'approve_user' || $action == 'deny_user') {
+            $user_id = intval($_POST['user_id'] ?? 0);
+            $new_status = ($action == 'approve_user') ? 'active' : 'denied';
+            
+            if ($user_id > 0) {
+                $stmt = $con->prepare("UPDATE users SET status = ? WHERE id = ?");
+                $stmt->bind_param('si', $new_status, $user_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+            // Redirect back to the same page
+            $redirect_page = $_POST['redirect_page'] ?? 'dashboard';
+            header("Location: admin.php?page=" . $redirect_page);
+            exit;
+        }
+
         // Handle resident reservation approval/denial (unified reservations)
         if ($action == 'approve_resident_reservation' || $action == 'deny_resident_reservation') {
             $rr_id = intval($_POST['rr_id'] ?? 0);
@@ -1171,7 +1285,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     generateQrForReservation($con, $rr_id);
                 }
             }
-            header("Location: admin.php?page=reservations");
+            $redirect_page = $_POST['redirect_page'] ?? 'requests';
+            header("Location: admin.php?page=" . $redirect_page);
             exit;
         }
 
@@ -1196,7 +1311,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
                 $stmt->close();
             }
-            header("Location: admin.php?page=reservations");
+            $redirect_page = $_POST['redirect_page'] ?? 'requests';
+            header("Location: admin.php?page=" . $redirect_page);
             exit;
         }
 
@@ -1254,244 +1370,7 @@ $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-<style>
-:root{
-  --bg-dark:#2b2623;
-  --nav-cream:#f4efe6;
-  --nav-cream-active:#e8dfca;
-  --accent:#23412e;
-  --header-beige:#f7efe3;
-  --card:#ffffff;
-  --muted:#8b918d;
-  --status-active:#2f80ed;
-  --status-approved:#27ae60;
-  --status-pending:#6c5ce7;
-  --status-expired:#95a5a6;
-  --status-rejected:#e74c3c;
-  --shadow:0 8px 18px rgba(0,0,0,0.08);
-  --brand-gold:#d4af37;
-}
-*{box-sizing:border-box;font-family:'Poppins',sans-serif;}
-body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
-.app{display:flex;min-height:100vh;max-width:100vw;overflow-x:hidden;}
-
-/* Sidebar */
-.sidebar{width:220px;background:var(--bg-dark);color:#fff;display:flex;flex-direction:column;}
-.brand{padding:20px;border-bottom:3px solid rgba(255,255,255,0.07);display:flex;gap:12px;align-items:center;}
-.brand img{height:52px;}
-.brand .title{display:flex;flex-direction:column;color:var(--nav-cream);}
-.brand .title h1{margin:0;font-size:1.05rem;font-weight:700;}
-.brand .title p{margin:0;font-size:0.78rem;color:#d6cfc2;}
-.nav-list{margin:20px 12px;display:flex;flex-direction:column;gap:12px;}
-.nav-item{
-  background:var(--nav-cream);color:var(--accent);padding:12px 14px;border-radius:0 20px 20px 0;
-  font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:12px;cursor:pointer;
-  transition:transform .12s ease,background-color .12s ease;
-}
-.nav-item img{width:20px;height:20px;}
-.nav-item:hover{transform:translateX(4px);background:#efe7d6;}
-.nav-item.active{background:var(--nav-cream-active);box-shadow:0 6px 14px rgba(0,0,0,0.06) ; }
-.nav-item {text-decoration: none;}
-.sidebar-footer{margin-top:auto;padding:18px;color:#bfb7aa;font-size:0.84rem;}
-
-/* Main */
-.main{flex:1;padding:20px 28px;display:flex;flex-direction:column;gap:18px;max-width:100%;
-  background:linear-gradient(180deg,#f7f3ec 0%,#f3efe9 100%);overflow-x:hidden;
-}
-.header{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--header-beige);
-  padding:14px 18px;border-radius:10px;box-shadow:var(--shadow);position:sticky;top:0;z-index:9;} 
-.header h2{margin:0;font-weight:700;}
-.search{flex:1;margin:0 18px;display:flex;align-items:center;background:#fff;padding:10px;border-radius:999px;
-  box-shadow:0 3px 8px rgba(0,0,0,0.04);} 
-.search input{border:0;background:transparent;outline:none;font-size:0.95rem;width:100%;}
-.avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:3px solid #fff;}
-.header-actions{display:flex;align-items:center;gap:12px}
-
-.notifications{position:relative;display:flex;align-items:center;gap:10px;margin-right:8px}
-.notif-btn{position:relative;background:#23412e;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;box-shadow:var(--shadow)}
-.notif-btn img{display:block;width:22px;height:22px}
-.notif-badge{position:absolute;top:-6px;right:-6px;background:#e74c3c;color:#fff;border-radius:999px;padding:2px 6px;font-size:0.75rem;font-weight:700}
-.notif-badge.pulse{animation:notifPulse 0.8s ease}
-@keyframes notifPulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(231,76,60,0.7)}70%{transform:scale(1.15);box-shadow:0 0 0 12px rgba(231,76,60,0)}100%{transform:scale(1)}}
-.notif-panel{position:absolute;top:48px;right:0;background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,0.15);min-width:320px;max-width:min(380px,calc(100vw - 24px));z-index:1000;display:none}
-.notif-item{padding:10px 12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start;gap:10px}
-.notif-item:last-child{border-bottom:0}
-.notif-item-link{display:flex;align-items:flex-start;gap:10px;color:inherit;text-decoration:none;width:100%}
-.notif-item-link:hover{background:#f7f7f7;border-radius:8px}
-.notif-type{font-size:0.75rem;font-weight:700;color:#23412e;background:#f0f4f2;border-radius:6px;padding:2px 6px}
-.tabs{display:flex;gap:8px;border-bottom:1px solid #eee;margin:8px 0 12px}
-.tab-btn{background:#f0f4f2;color:#23412e;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer}
-.tab-btn.active{background:var(--brand-gold);color:#2b2623}
-.tab-body .notif-item{padding:8px 0;border-bottom:1px solid #f0f0f0}
-.toast-container{position:fixed;top:80px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:10px}
-.toast{background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,0.08);padding:12px 14px;width:320px;color:#222}
-#notifModal{background-color:transparent}
-#notifModal .modal-content{position:fixed;top:70px;right:16px;width:360px;max-width:90vw;border:1px solid #e0e0e0;box-shadow:0 10px 24px rgba(0,0,0,0.15);max-height:70vh;overflow:auto}
-.notif-meta{font-size:0.85rem;color:#555}
-.notif-actions{display:flex;gap:8px;padding:10px;border-top:1px solid #f0f0f0}
- .notif-dismiss{margin-left:auto;background:transparent;border:0;color:#888;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px}
- .notif-dismiss:hover{color:#a83b3b;background:#f6f6f6}
-
-.panel{background:var(--card);border-radius:12px;padding:16px;box-shadow:var(--shadow);max-width:100%;overflow-x:auto}
-.panel h3{margin:0 0 12px 0;font-size:1.05rem;font-weight:600;}
-.table{width:100%;border-collapse:collapse;table-layout:auto;font-size:0.9rem;line-height:1.3;border:1px solid #e0e0e0;border-radius:10px}
-  .table thead th{padding:8px 10px;background:#fbfbfb;color:#6b6b6b;text-align:left;font-weight:600;border-bottom:1px solid #eee;word-break:break-word;white-space:normal;vertical-align:middle}
-  .table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;word-break:break-word;white-space:normal}
-.table thead th,.table td{overflow-wrap:anywhere}
-.table tbody tr:hover{background:#f9fafb}
-.table thead th,.table td{border-right:1px solid #f0f0f0}
-.table thead th:last-child,.table td:last-child{border-right:0}
-.row-highlight{background:#fff7da;outline:2px solid var(--brand-gold)}
-.table img.avatar-xs{width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:10px;vertical-align:middle}
-
-/* Verify Receipts specific column widths (7 columns) */
-.table-verify thead th:nth-child(1),.table-verify td:nth-child(1){width:12%;text-align:center}
-.table-verify thead th:nth-child(2),.table-verify td:nth-child(2){width:18%;text-align:left}
-.table-verify thead th:nth-child(3),.table-verify td:nth-child(3){width:16%;text-align:center}
-.table-verify thead th:nth-child(4),.table-verify td:nth-child(4){width:16%;text-align:center}
-.table-verify thead th:nth-child(5),.table-verify td:nth-child(5){width:12%;text-align:center}
-.table-verify thead th:nth-child(6),.table-verify td:nth-child(6){width:10%;text-align:center}
-.table-verify thead th:nth-child(7),.table-verify td:nth-child(7){width:16%;text-align:center}
-.table-verify td:nth-child(3) .receipt-thumbnail{display:block;margin:0 auto}
-.table-verify td:nth-child(3) .receipt-link{display:inline-block}
-
-.badge{display:inline-block;padding:6px 12px;border-radius:999px;font-weight:600;font-size:0.82rem;color:#fff;white-space:nowrap}
-.modal{position:fixed;left:0;top:0;width:100%;height:100%;background-color:rgba(0,0,0,0.5);z-index:1000;display:none}
-.modal .modal-content{background:#fff;margin:5% auto;padding:16px;border:1px solid #ddd;width:min(90vw,800px);max-height:85vh;overflow:auto;border-radius:10px}
-.modal .close{color:#888;float:right;font-size:26px;font-weight:700;cursor:pointer}
-.modal .modal-content h3{margin-top:0;color:#23412e}
-.modal .modal-content img{width:100%;height:auto;border-radius:8px}
-.badge-active{background:var(--status-active)}
-.badge-approved{background:var(--status-approved)}
-.badge-pending{background:var(--status-pending)}
-.badge-expired{background:var(--status-expired)}
-.badge-rejected{background:var(--status-rejected)}
-.badge-warning{background:#f39c12;color:#fff}
-
-.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.actions > *{display:inline-flex}
-.actions .btn{flex:0 0 auto;min-width:100px;margin-bottom:0;white-space:nowrap}
-.table td.actions{min-width:240px;overflow:visible}
-.btn{min-height:30px;padding:8px 12px;border-radius:6px;border:0;font-weight:600;cursor:pointer;font-size:0.8rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-align:center;box-sizing:border-box;max-width:100%}
-.btn-view{background:#23412e;color:#fff}
-.btn-approve{background:var(--status-approved);color:#fff}
-.btn-reject{background:var(--status-rejected);color:#fff}
-.btn-edit{background:#2f80ed;color:#fff}
-.table-verify a.btn-view-details{background:var(--brand-gold);color:#2b2623}
-.table-verify a.btn-view-details:hover{filter:brightness(1.05)}
-.table-verify button.btn.btn-view{background:#1e7e34;color:#fff}
-.table-verify td.actions .btn{width:140px}
-.btn-remove{background:#a83b3b;color:#fff}
-/* Neutral delete button for incident actions */
-.btn-delete{background:#6b7280;color:#fff}
-.btn-payverify{background:#23412e;color:#fff}
-.btn-disabled{background:#ccc;color:#666;cursor:not-allowed}
-
-.receipt-thumbnail{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #ddd;cursor:pointer;transition:transform 0.2s;}
-.receipt-thumbnail:hover{transform:scale(1.1);}
-.receipt-link{text-decoration:none;}
-
-.muted{color:var(--muted);font-size:0.9rem}
-
-.content-row{display:flex;flex-direction:column;gap:20px;align-items:stretch;max-width:1100px;margin:0 auto}
-.card-box{background:#fff;border:1px solid #e0e0e0;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);padding:16px;width:100%}
-.card-box h3{margin-top:0;color:#23412e}
-.notice{background:#fff7f3;border:1px solid #f2d3c7;color:#8a2a2a;padding:10px 12px;border-radius:8px;font-size:0.9rem;margin:8px 0 14px}
-.nav-item span{flex:1}
-.nav-item img{flex-shrink:0}
-
-@media(max-width:1000px){
-  .sidebar{width:68px}
-  .nav-item{padding:12px 8px;font-size:0.78rem}
-  .nav-item span{display:none}
-  .brand .title{display:none}
-  .main{padding:12px}
-}
-@media(max-width:768px){
-  .table thead th,.table td{padding:10px}
-  .actions .btn{flex:1 1 120px;min-width:120px}
-}
-/* Verify Payment Receipts responsive layout */
-#verify-panel .table{table-layout:auto}
-#verify-panel td:nth-child(3),
-#verify-panel td:nth-child(4),
-#verify-panel td:nth-child(5),
-#verify-panel td:nth-child(6),
-#verify-panel td:nth-child(7){text-align:center}
-  #verify-panel .actions{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
-  #verify-panel .actions > *{width:100%}
-  #verify-panel .actions .btn{min-width:0;width:100%}
-  
-  @media(max-width:900px){
-    #resident-guest-forms-panel .table{table-layout:auto}
-    .table-resident-guest thead th,.table-resident-guest td{padding:8px}
-    .table-resident-guest .actions{gap:5px}
-    .table-resident-guest .actions .btn{flex:1 1 110px}
-  }
-  
-  /* Section-specific table layouts */
-  .table-resident-guest thead th:nth-child(1),.table-resident-guest td:nth-child(1){width:22%;text-align:left}
-  .table-resident-guest thead th:nth-child(2),.table-resident-guest td:nth-child(2){width:14%;text-align:left}
-  .table-resident-guest thead th:nth-child(3),.table-resident-guest td:nth-child(3){width:18%;text-align:left}
-  .table-resident-guest thead th:nth-child(4),.table-resident-guest td:nth-child(4){width:12%;text-align:center}
-  .table-resident-guest thead th:nth-child(5),.table-resident-guest td:nth-child(5){width:8%;text-align:center}
-  .table-resident-guest thead th:nth-child(6),.table-resident-guest td:nth-child(6){width:26%;text-align:center}
-  .table-resident-guest td.actions{min-width:300px;overflow:visible}
-  .table-resident-guest .actions{display:grid;grid-template-columns:minmax(180px,1fr) 160px;align-items:center;gap:8px;justify-content:flex-start;max-width:100%}
-  .table-resident-guest .actions > *{display:block;width:100%}
-  .table-resident-guest .actions .btn{min-width:0;width:100%;word-break:normal;padding:8px 12px;min-height:32px;font-size:0.8rem}
-  .table-resident-guest .actions .btn-view{grid-column:1}
-  .table-resident-guest .actions .action-approve{grid-column:2}
-  .table-resident-guest .actions .action-deny{grid-column:1}
-  .table-resident-guest .actions form.action-form{display:block !important;width:100%}
-
-  .table-reservations thead th:nth-child(1),.table-reservations td:nth-child(1){width:22%;text-align:left}
-  .table-reservations thead th:nth-child(2),.table-reservations td:nth-child(2){width:12%;text-align:center}
-  .table-reservations thead th:nth-child(3),.table-reservations td:nth-child(3){width:14%;text-align:left}
-  .table-reservations thead th:nth-child(4),.table-reservations td:nth-child(4){width:18%;text-align:left}
-  .table-reservations thead th:nth-child(5),.table-reservations td:nth-child(5){width:10%;text-align:center}
-  .table-reservations thead th:nth-child(6),.table-reservations td:nth-child(6){width:24%;text-align:center}
-
-  .table-requests thead th:nth-child(1),.table-requests td:nth-child(1){width:22%;text-align:left}
-  .table-requests thead th:nth-child(2),.table-requests td:nth-child(2){width:12%;text-align:center}
-  .table-requests thead th:nth-child(3),.table-requests td:nth-child(3){width:14%;text-align:left}
-  .table-requests thead th:nth-child(4),.table-requests td:nth-child(4){width:18%;text-align:left}
-  .table-requests thead th:nth-child(5),.table-requests td:nth-child(5){width:10%;text-align:center}
-  .table-requests thead th:nth-child(6),.table-requests td:nth-child(6){width:24%;text-align:center}
-
-  .table-residents thead th:nth-child(1),.table-residents td:nth-child(1){width:20%;text-align:left}
-  .table-residents thead th:nth-child(2),.table-residents td:nth-child(2){width:14%;text-align:center}
-  .table-residents thead th:nth-child(3),.table-residents td:nth-child(3){width:22%;text-align:left}
-  .table-residents thead th:nth-child(4),.table-residents td:nth-child(4){width:12%;text-align:center}
-  .table-residents thead th:nth-child(5),.table-residents td:nth-child(5){width:12%;text-align:center}
-  .table-residents thead th:nth-child(6),.table-residents td:nth-child(6){width:20%;text-align:center}
-
-  .table-security thead th:nth-child(1),.table-security td:nth-child(1){width:10%;text-align:center}
-  .table-security thead th:nth-child(2),.table-security td:nth-child(2){width:40%;text-align:left}
-  .table-security thead th:nth-child(3),.table-security td:nth-child(3){width:20%;text-align:center}
-  .table-security thead th:nth-child(4),.table-security td:nth-child(4){width:20%;text-align:center}
-
-  /* Reported Incidents table: fixed layout, equal-width columns, centered headers */
-  .table-report{table-layout:fixed}
-  .table-report thead th{white-space:nowrap;vertical-align:middle}
-  .table-report thead th,.table-report td{overflow:hidden;text-overflow:ellipsis}
-  .table-report thead th:nth-child(1),.table-report td:nth-child(1){width:10%;text-align:left}
-  .table-report thead th:nth-child(2),.table-report td:nth-child(2){width:10%;text-align:left}
-  .table-report thead th:nth-child(3),.table-report td:nth-child(3){width:10%;text-align:left}
-  .table-report thead th:nth-child(4),.table-report td:nth-child(4){width:10%;text-align:left}
-  .table-report thead th:nth-child(5),.table-report td:nth-child(5){width:10%;text-align:center}
-  .table-report thead th:nth-child(6),.table-report td:nth-child(6){width:10%;text-align:center}
-  .table-report thead th:nth-child(7),.table-report td:nth-child(7){width:10%;text-align:center}
-  .table-report thead th:nth-child(8),.table-report td:nth-child(8){width:10%;text-align:center}
-  .table-report thead th:nth-child(9),.table-report td:nth-child(9){width:10%;text-align:center}
-  .table-report thead th:nth-child(10),.table-report td:nth-child(10){width:10%;text-align:center}
-
-  .table-visitor thead th:nth-child(1),.table-visitor td:nth-child(1){width:24%;text-align:left}
-  .table-visitor thead th:nth-child(2),.table-visitor td:nth-child(2){width:18%;text-align:left}
-  .table-visitor thead th:nth-child(3),.table-visitor td:nth-child(3){width:16%;text-align:center}
-  .table-visitor thead th:nth-child(4),.table-visitor td:nth-child(4){width:12%;text-align:center}
-  .table-visitor thead th:nth-child(5),.table-visitor td:nth-child(5){width:30%;text-align:center}
-</style>
+<link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
 <div class="app">
@@ -1504,6 +1383,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
+
     <nav class="nav-list">
        <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
        <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
@@ -1515,7 +1395,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
        <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
      </nav>
     <div class="sidebar-footer">
-      <a href="?logout=1" style="color:#bfb7aa;text-decoration:none;">Log Out</a>
+      <a href="?logout=1" class="text-muted-link">Log Out</a>
     </div>
   </aside>
 
@@ -1708,30 +1588,40 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 <?php if ($currentPage == 'dashboard'): ?>
 <section class="panel" id="dashboard-panel">
   <h3>Community Overview</h3>
-  <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:12px">
-    <div style="flex:1;min-width:180px;background:#ffffff;border-radius:12px;padding:18px;
-                box-shadow:0 8px 18px rgba(0,0,0,0.08);">
-      <div style="font-size:1.9rem;font-weight:800;margin:0;"><?php echo getResidentCount($con); ?></div>
-      <div style="font-size:0.92rem;color:#8b918d;margin-top:6px">Residents</div>
+  <div class="dashboard-grid">
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getResidentCount($con); ?></div>
+      <div class="dashboard-widget-label">Residents</div>
     </div>
-    <div style="flex:1;min-width:180px;background:#ffffff;border-radius:12px;padding:18px;
-                box-shadow:0 8px 18px rgba(0,0,0,0.08);">
-      <div style="font-size:1.9rem;font-weight:800;margin:0;"><?php echo getActivePassesCount($con); ?></div>
-      <div style="font-size:0.92rem;color:#8b918d;margin-top:6px">Active Passes</div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getActivePassesCount($con); ?></div>
+      <div class="dashboard-widget-label">Active Passes</div>
     </div>
-    <div style="flex:1;min-width:180px;background:#ffffff;border-radius:12px;padding:18px;
-                box-shadow:0 8px 18px rgba(0,0,0,0.08);">
-      <div style="font-size:1.9rem;font-weight:800;margin:0;"><?php echo getPendingRequestsCount($con); ?></div>
-      <div style="font-size:0.92rem;color:#8b918d;margin-top:6px">Pending Requests</div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getPendingResidentRequestsCountNew($con); ?></div>
+      <div class="dashboard-widget-label">Pending Resident Requests</div>
     </div>
-    <div style="flex:1;min-width:180px;background:#ffffff;border-radius:12px;padding:18px;
-                box-shadow:0 8px 18px rgba(0,0,0,0.08);">
-      <div style="font-size:1.9rem;font-weight:800;margin:0;"><?php echo getPaymentReceiptsCount($con); ?></div>
-      <div style="font-size:0.92rem;color:#8b918d;margin-top:6px">Verified Payment Receipts</div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getPendingVisitorRequestsCountNew($con); ?></div>
+      <div class="dashboard-widget-label">Pending Visitor Requests</div>
+    </div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getPaymentReceiptsCount($con); ?></div>
+      <div class="dashboard-widget-label">Verified Payment Receipts</div>
+    </div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getPendingResidentAccountsCount($con); ?></div>
+      <div class="dashboard-widget-label">Pending Resident Accounts</div>
+    </div>
+    <div class="dashboard-widget">
+      <div class="dashboard-widget-value"><?php echo getVisitorAccountsCount($con); ?></div>
+      <div class="dashboard-widget-label">Total Visitor Accounts</div>
     </div>
   </div>
 </section>
 <?php endif; ?>
+
+
 
 <!-- RESIDENT GUEST FORMS -->
 <?php if ($currentPage == 'resident_guest_forms'): ?>
@@ -1827,11 +1717,12 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
 <section class="panel" id="reservations-panel">
   <div class="content-row">
     <div class="card-box">
-      <h3>Resident Reservations</h3>
+      <h3>Reservations</h3>
       <table class="table table-reservations">
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>House #</th>
             <th>Amenity</th>
             <th>Dates</th>
@@ -1849,6 +1740,11 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                   echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                   $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                  
+                  $uType = ucfirst($rr['user_type'] ?? 'Resident');
+                  $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
+                  echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
+
                   echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
                   echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
                   $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
@@ -1863,18 +1759,21 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='reservations'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='reservations'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                 } elseif ($approval_status == 'denied') {
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
+                    echo "<input type='hidden' name='redirect_page' value='reservations'>";
                     echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                     echo "</form>";
                   } else {
@@ -1890,7 +1789,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
               }
           }
           if (!$hasRR) {
-              echo "<tr><td colspan='6' style='text-align:center;'>No resident reservations found</td></tr>";
+              echo "<tr><td colspan='7' style='text-align:center;'>No reservations found</td></tr>";
           }
           ?>
         </tbody>
@@ -1977,7 +1876,7 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
                                        r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
                                        ep.full_name, ep.middle_name, ep.last_name,
-                                       u.first_name AS res_first_name, u.last_name AS res_last_name,
+                                       u.first_name AS res_first_name, u.last_name AS res_last_name, u.user_type,
                                        gf.id AS gf_id
                                   FROM reservations r
                                   LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
@@ -1988,7 +1887,15 @@ body{margin:0;background:#f3efe9;color:#222;overflow-x:hidden;}
         if ($resList && $resList->num_rows > 0) {
           while ($row = $resList->fetch_assoc()) {
             echo '<tr>';
-            $userType = !empty($row['entry_pass_id']) ? 'Visitor' : (!empty($row['gf_id']) ? "Resident's Guest" : 'Resident');
+            $userType = 'Resident';
+            if (!empty($row['user_type'])) {
+                $userType = ucfirst($row['user_type']);
+            } elseif (!empty($row['entry_pass_id'])) {
+                $userType = 'Visitor';
+            }
+            if (!empty($row['gf_id'])) {
+                $userType = "Resident's Guest";
+            }
             echo '<td>' . $userType . '</td>';
             $fullName = !empty($row['entry_pass_id'])
               ? trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))
@@ -2136,6 +2043,61 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <?php if ($currentPage == 'requests'): ?>
 <section class="panel" id="requests-panel">
   <div class="content-row">
+  
+  <!-- Pending Resident Accounts -->
+  <div class="card-box mb-20">
+    <h3>Pending Resident Accounts</h3>
+    <table class="table table-pending-residents">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>House Number</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Registered On</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php
+        $pendingRes = getPendingResidents($con);
+        if ($pendingRes && $pendingRes->num_rows > 0) {
+            while ($pr = $pendingRes->fetch_assoc()) {
+                echo "<tr>";
+                echo "<td>" . $pr['first_name'] . " " . $pr['last_name'] . "</td>";
+                echo "<td>" . htmlspecialchars($pr['house_number']) . "</td>";
+                echo "<td>" . htmlspecialchars($pr['email']) . "</td>";
+                echo "<td>" . htmlspecialchars($pr['phone']) . "</td>";
+                echo "<td>" . date('M d, Y', strtotime($pr['created_at'])) . "</td>";
+                echo "<td class='actions'>";
+                
+                // Approve button
+                echo "<form method='post' style='display:inline;'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($pr['id']) . "'>";
+                echo "<input type='hidden' name='action' value='approve_user'>";
+                echo "<input type='hidden' name='redirect_page' value='requests'>";
+                echo "<button type='submit' class='btn btn-approve' style='margin-right:5px;'>Approve</button>";
+                echo "</form>";
+
+                // Deny button
+                echo "<form method='post' style='display:inline;'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($pr['id']) . "'>";
+                echo "<input type='hidden' name='action' value='deny_user'>";
+                echo "<input type='hidden' name='redirect_page' value='requests'>";
+                echo "<button type='submit' class='btn btn-reject'>Deny</button>";
+                echo "</form>";
+                
+                echo "</td>";
+                echo "</tr>";
+            }
+        } else {
+            echo "<tr><td colspan='6' style='text-align:center;'>No pending resident accounts</td></tr>";
+        }
+        ?>
+      </tbody>
+    </table>
+  </div>
+
   <!-- Resident Amenity Requests (from resident_reservations) -->
   <div class="card-box">
     <h3>Resident Amenity Requests</h3>
@@ -2143,6 +2105,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
       <thead>
         <tr>
           <th>Name</th>
+          <th>Type</th>
           <th>House #</th>
           <th>Amenity</th>
           <th>Dates</th>
@@ -2152,7 +2115,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
       </thead>
       <tbody>
         <?php
-        $residentRes = getResidentReservations($con);
+        $residentRes = getResidentOnlyReservations($con);
         $hasRR = false;
         if ($residentRes && $residentRes->num_rows > 0) {
             while ($rr = $residentRes->fetch_assoc()) {
@@ -2160,6 +2123,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                 $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                 echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                
+                $uType = ucfirst($rr['user_type'] ?? 'Resident');
+                $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved'; // Reuse badges for color distinction
+                echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
+
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
                 echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
                 $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
@@ -2174,18 +2142,21 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
+                    echo "<input type='hidden' name='redirect_page' value='requests'>";
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                     echo "</form>";
 
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
+                    echo "<input type='hidden' name='redirect_page' value='requests'>";
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
                 } elseif ($approval_status == 'denied') {
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
+                    echo "<input type='hidden' name='redirect_page' value='requests'>";
                     echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                     echo "</form>";
                 } else {
@@ -2198,7 +2169,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             }
         }
         if (!$hasRR) {
-            echo "<tr><td colspan='6' style='text-align:center;'>No resident amenity requests found</td></tr>";
+            echo "<tr><td colspan='7' style='text-align:center;'>No amenity requests found</td></tr>";
         }
         ?>
       </tbody>
@@ -2301,85 +2272,88 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <?php if ($currentPage == 'visitor_requests'): ?>
 <section class="panel" id="visitor-requests-panel">
   <div class="content-row">
-    <h3>Visitor Requests</h3>
-    <div class="notice">Visitor forms without linked resident account</div>
-    <table class="table table-visitor">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Amenity</th>
-          <th>Status Code</th>
-          <th>Request Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php
-        $visitorOnly = getVisitorOnlyRequests($con);
-        $hasVisitorOnly = false;
-        if ($visitorOnly && $visitorOnly->num_rows > 0) {
-            while ($request = $visitorOnly->fetch_assoc()) {
-                $hasVisitorOnly = true;
-                echo "<tr data-ref='" . htmlspecialchars($request['ref_code'] ?? '') . "' data-id='" . intval($request['id']) . "' data-source='reservation'>";
-                // Visitor name
-                $fullName = trim(($request['full_name'] ?? '') . ' ' . ($request['middle_name'] ?? '') . ' ' . ($request['last_name'] ?? ''));
-                echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+  
 
-                // Amenity (often Guest Entry)
-                echo "<td>" . (!empty($request['amenity']) ? htmlspecialchars($request['amenity']) : '<span class=\'muted\'>No amenity</span>') . "</td>";
 
-                
+    <!-- Visitor Account Amenity Requests -->
+    <div class="card-box" style="margin-bottom: 20px;">
+      <h3>Visitor Amenity Request</h3>
+      <table class="table table-requests">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>House #</th>
+            <th>Amenity</th>
+            <th>Dates</th>
+            <th>Request Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $visitorRes = getVisitorAccountReservations($con);
+          $hasVR = false;
+          if ($visitorRes && $visitorRes->num_rows > 0) {
+              while ($rr = $visitorRes->fetch_assoc()) {
+                  $hasVR = true;
+                  echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='visitor'>";
+                  $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
+                  echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                  
+                  $uType = ucfirst($rr['user_type'] ?? 'Visitor');
+                  $uTypeClass = 'badge-pending'; 
+                  echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
-                // Status Code + Status badge
-                $approval_status = $request['approval_status'] ?? 'pending';
-                $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
-                $ref = $request['ref_code'] ?? '';
-                echo "<td>" . htmlspecialchars($ref) . "</td>";
-                echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
+                  echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
+                  $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
+                  echo "<td>" . $dateRange . "</td>";
+                  $approval_status = $rr['approval_status'] ?? 'pending';
+                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  echo "<td class='actions'>";
+                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  if ($approval_status == 'pending') {
+                      $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "</form>";
 
-                // Actions
-                echo "<td class='actions'>";
-                $isAmenityLegacy = !empty($request['amenity']);
-                $payStatusLegacy = null; if (!empty($request['ref_code'])) { $stmtPayL = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1"); $stmtPayL->bind_param('s', $request['ref_code']); $stmtPayL->execute(); $resPL = $stmtPayL->get_result(); if($resPL && ($rwPL=$resPL->fetch_assoc())){ $payStatusLegacy = $rwPL['payment_status'] ?? null; } $stmtPayL->close(); }
-                echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . $request['id'] . ", 'reservation')\" style='margin-bottom: 5px;'>View More Details</button><br>";
-                if ($approval_status == 'pending') {
-                    $disabled = ($isAmenityLegacy && $payStatusLegacy !== 'verified');
-                    echo "<form method='post' style='display:inline;'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . $request['id'] . "'>";
-                    echo "<input type='hidden' name='action' value='approve_request'>";
-                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
-                    echo "</form>";
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
+                      echo "</form>";
+                  } elseif ($approval_status == 'denied') {
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "</form>";
+                  } else {
+                      $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
+                      $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                  }
+                  echo "</td>";
+                  echo "</tr>";
+              }
+          }
+          if (!$hasVR) {
+              echo "<tr><td colspan='7' style='text-align:center;'>No visitor account amenity requests found</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
+    </div>
 
-                    echo "<form method='post' style='display:inline;'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . $request['id'] . "'>";
-                    echo "<input type='hidden' name='action' value='deny_request'>";
-                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                    echo "</form>";
-                } elseif ($approval_status == 'denied') {
-                    echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied request? This cannot be undone.\")'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . $request['id'] . "'>";
-                    echo "<input type='hidden' name='action' value='delete_reservation'>";
-                    echo "<button type='submit' class='btn btn-remove'>Delete</button>";
-                    echo "</form>";
-                } else {
-                    $approvedBy = !empty($request['approved_by']) ? "by Staff ID " . $request['approved_by'] : "";
-                    $approvalDate = !empty($request['approval_date']) ? date('M d, Y', strtotime($request['approval_date'])) : "";
-                    if ($approval_status === 'approved' && !empty($ref)) {
-                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($ref) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
-                    }
-                    echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
-                }
-                echo "</td>";
-                echo "</tr>";
-            }
-        }
-        if (!$hasVisitorOnly) {
-            echo "<tr><td colspan='5' style='text-align:center;'>No visitor requests found</td></tr>";
-        }
-        ?>
-      </tbody>
-    </table>
-</div>
+
 </section>
 <?php endif; ?>
 
