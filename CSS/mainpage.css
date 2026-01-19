@@ -106,15 +106,99 @@ html { scroll-behavior: smooth; }
 }
 
 .profile-icon-wrap{position:relative;display:inline-flex;align-items:center}
+.profile-account-btn{background:transparent;border:none;padding:0;margin:0;display:inline-flex;align-items:center;cursor:pointer}
+.profile-account-btn:focus{outline:2px solid #f2c24f;outline-offset:2px}
 .profile-icon:hover{transform:scale(1.03);box-shadow:0 0 0 3px rgba(255,255,255,0.2)}
-.profile-dropdown{position:absolute;right:0;top:44px;background:#fff;color:#222;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,0.18);border:1px solid #e9ecef;padding:12px;min-width:240px;display:none;z-index:1100}
-.profile-dropdown .mini-profile{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.profile-dropdown .mini-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover}
-.profile-dropdown .mini-text .mini-name{font-weight:700}
-.profile-dropdown .actions{display:flex;gap:8px;justify-content:flex-end}
-.profile-dropdown .btn{padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:600;cursor:pointer}
-.profile-dropdown .btn-view{background:#23412e;color:#fff}
-.profile-dropdown .btn-logout{background:#a83b3b;color:#fff}
+
+.profile-dropdown {
+    position: absolute;
+    right: 0;
+    top: 55px; /* Moved down slightly for animation space */
+    background: #ffffff;
+    color: #333;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 16px;
+    min-width: 260px;
+    display: none;
+    z-index: 1100;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.profile-dropdown.show {
+    opacity: 1;
+    transform: translateY(0);
+    display: block; /* Overridden by inline style but kept for specificity */
+}
+
+/* Triangle indicator */
+.profile-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 14px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    transform: rotate(45deg);
+    border-left: 1px solid rgba(0,0,0,0.08);
+    border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.profile-dropdown .mini-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.profile-dropdown .mini-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e5ddc6;
+}
+
+.profile-dropdown .mini-text .mini-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #111;
+}
+
+.profile-dropdown-actions {
+    display: flex;
+    flex-direction: column;
+}
+
+.btn-dashboard-view {
+    display: block;
+    background: #23412e;
+    color: #fff;
+    text-align: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-dashboard-view:hover {
+    background: #1a3022;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(35, 65, 46, 0.25);
+}
+
+.btn-dashboard-view:active {
+    transform: translateY(0);
+}
+
 
 /* Instructions box anchored to bottom-left of navbar */
 .nav-instructions {
@@ -509,21 +593,8 @@ html { scroll-behavior: smooth; }
 .dropdown-content a{color:#222;padding:12px 16px;text-decoration:none;display:block;transition:background-color .2s ease}
 .dropdown-content a:hover{background-color:#f1f1f1}
 
-/* Profile Dropdown */
-.profile-icon-wrap{position:relative;display:inline-block}
-.profile-dropdown{position:absolute;right:0;top:125%;width:260px;background:#fff;color:#222;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,0.15);border:1px solid #eee;z-index:1100;display:none;overflow:hidden}
-.profile-dropdown .mini-profile{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid #f0f0f0}
-.profile-dropdown .mini-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #23412e}
-.profile-dropdown .mini-text{display:flex;flex-direction:column}
-.profile-dropdown .actions{display:flex;gap:8px;padding:10px 12px}
-.profile-dropdown .btn{flex:1;text-align:center;padding:8px 10px;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem}
-.profile-dropdown .btn-view{background:#23412e;color:#fff}
-.profile-dropdown .btn-view:hover{background:#1a2f21}
-.profile-dropdown .btn-logout{background:#e5ddc6;color:#222}
-.profile-dropdown .btn-logout:hover{opacity:.9}
 
-.profile-account-btn{background:transparent;border:none;padding:0;margin:0;display:inline-flex;align-items:center;cursor:pointer}
-.profile-account-btn:focus{outline:2px solid #f2c24f;outline-offset:2px}
+/* Profile Dropdown (Removed duplicate/obsolete styles) */
 
 .profile-side-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:none;justify-content:flex-end;align-items:stretch;z-index:1200}
 .profile-side-overlay.open{display:flex}

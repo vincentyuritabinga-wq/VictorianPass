@@ -13,7 +13,7 @@ $user = null;
 
 // Fetch resident details
 if ($con) {
-  $stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, status FROM users WHERE id = ?");
+  $stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, status, sex FROM users WHERE id = ?");
   if ($stmt) {
     mysqli_stmt_bind_param($stmt, 'i', $userId);
     mysqli_stmt_execute($stmt);
@@ -41,6 +41,17 @@ if (preg_match('/^\+63(9\d{9})$/', $phoneNormalized)) {
   $phoneNormalized = '0' . substr($phoneNormalized, 3);
 }
 $displayPhone = $phoneNormalized ?: $phoneRaw;
+
+// Profile Picture Logic
+$profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
+if (file_exists('uploads/profiles/user_' . $userId . '.jpg')) {
+    $profilePicPath = 'uploads/profiles/user_' . $userId . '.jpg';
+} elseif (file_exists('uploads/profiles/user_' . $userId . '.png')) {
+    $profilePicPath = 'uploads/profiles/user_' . $userId . '.png';
+} elseif (file_exists('uploads/profiles/user_' . $userId . '.jpeg')) {
+    $profilePicPath = 'uploads/profiles/user_' . $userId . '.jpeg';
+}
+$profilePicUrl = $profilePicPath . '?t=' . time();
 
 // Fetch saved guests for resident
 $guestRows = [];
@@ -202,6 +213,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 .field-warning .close-warn:hover {
   color: #555;
 }
+
+/* Profile Modal styles moved to dashboard.css */
 </style>
 </head>
 <body>
@@ -287,9 +300,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <div class="header-actions">
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
-        <a href="profileresident.php" class="user-profile">
+        <a href="#" class="user-profile" id="profileTrigger">
           <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
-          <img src="images/mainpage/profile'.jpg" alt="Profile" class="user-avatar">
+          <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
         </a>
       </div>
     </header>
@@ -490,7 +503,121 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       </div>
     </div>
   </div>
+  
+  <!-- Profile Modal -->
+  <div id="profileModal" class="profile-modal">
+    <div class="profile-modal-content">
+      <button class="close-profile-modal">&times;</button>
+      <div class="profile-header">
+        <div class="profile-icon-large">
+          <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
+          <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
+             <i class="fa-solid fa-camera"></i>
+          </label>
+          <input type="file" id="profileUpload" accept="image/*" style="display:none">
+        </div>
+        <div class="profile-title">
+          <h3><?php echo htmlspecialchars($fullName); ?></h3>
+          <span class="profile-role">Resident</span>
+        </div>
+      </div>
+      <div class="profile-details">
+        <div class="detail-row">
+          <span class="detail-label">Name</span>
+          <span class="detail-value"><?php echo htmlspecialchars($fullName); ?></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Email</span>
+          <span class="detail-value"><?php echo htmlspecialchars($email); ?></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Contact</span>
+          <span class="detail-value"><?php echo htmlspecialchars($displayPhone); ?></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Account Type</span>
+          <span class="detail-value">Resident</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Sex</span>
+          <span class="detail-value"><?php echo htmlspecialchars($user['sex'] ?? 'N/A'); ?></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Birthdate</span>
+          <span class="detail-value"><?php echo htmlspecialchars($user['birthdate']); ?></span>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <a href="mainpage.php" class="btn-open-dashboard">Open Dashboard</a>
+        <a href="logout.php" class="btn-logout-modal">Log Out</a>
+      </div>
+    </div>
+  </div>
 </div>
+<script>
+  // Profile Modal Logic
+  document.addEventListener('DOMContentLoaded', function() {
+      var profileModal = document.getElementById("profileModal");
+      var profileTrigger = document.getElementById("profileTrigger");
+      var profileClose = document.getElementsByClassName("close-profile-modal")[0];
+
+      if(profileTrigger) {
+          profileTrigger.onclick = function(e) {
+              e.preventDefault();
+              profileModal.style.display = "block";
+          }
+      }
+
+      if(profileClose) {
+          profileClose.onclick = function() {
+              profileModal.style.display = "none";
+          }
+      }
+
+      window.onclick = function(event) {
+          if (event.target == profileModal) {
+              profileModal.style.display = "none";
+          }
+      }
+
+      // Profile Picture Upload
+      var profileUpload = document.getElementById('profileUpload');
+      if(profileUpload) {
+          profileUpload.addEventListener('change', function() {
+              if (this.files && this.files[0]) {
+                  var formData = new FormData();
+                  formData.append('profile_pic', this.files[0]);
+
+                  // Show loading or opacity change
+                  var img = document.getElementById('profileModalImg');
+                  img.style.opacity = '0.5';
+
+                  fetch('upload_profile_pic.php', {
+                      method: 'POST',
+                      body: formData
+                  })
+                  .then(response => response.json())
+                  .then(data => {
+                      img.style.opacity = '1';
+                      if (data.success) {
+                          // Update images with new URL (append time to force reload)
+                          if(img) img.src = data.new_url;
+                          var headerImg = document.getElementById('headerProfileImg');
+                          if(headerImg) headerImg.src = data.new_url;
+                      } else {
+                          alert(data.message || 'Upload failed');
+                      }
+                  })
+                  .catch(error => {
+                      img.style.opacity = '1';
+                      console.error('Error:', error);
+                      alert('An error occurred during upload.');
+                  });
+              }
+          });
+      }
+  });
+</script>
 <script>
 (function(){
   var searchInput=document.getElementById('requestSearch');

@@ -13,7 +13,7 @@ $user_data = [];
 
 // Fetch visitor data
 if ($con) {
-    $stmt = $con->prepare("SELECT first_name, last_name, email, phone FROM users WHERE id = ?");
+    $stmt = $con->prepare("SELECT first_name, last_name, email, phone, sex, birthdate FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -23,6 +23,17 @@ if ($con) {
     $stmt->close();
 }
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
+
+// Profile Picture Logic
+$profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
+if (file_exists('uploads/profiles/user_' . $user_id . '.jpg')) {
+    $profilePicPath = 'uploads/profiles/user_' . $user_id . '.jpg';
+} elseif (file_exists('uploads/profiles/user_' . $user_id . '.png')) {
+    $profilePicPath = 'uploads/profiles/user_' . $user_id . '.png';
+} elseif (file_exists('uploads/profiles/user_' . $user_id . '.jpeg')) {
+    $profilePicPath = 'uploads/profiles/user_' . $user_id . '.jpeg';
+}
+$profilePicUrl = $profilePicPath . '?t=' . time();
 
 // Fetch Activities
 $activities = [];
@@ -111,9 +122,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <div class="header-actions">
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
-        <a href="dashboardvisitor.php" class="user-profile">
+        <a href="#" class="user-profile" id="profileTrigger">
           <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
-          <img src="images/mainpage/profile'.jpg" alt="Profile" class="user-avatar">
+          <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
         </a>
       </div>
     </header>
@@ -476,6 +487,111 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   setInterval(refreshStatuses,10000);
 })();
+</script>
+<div id="profileModal" class="profile-modal">
+  <div class="profile-modal-content">
+    <button class="close-profile-modal">&times;</button>
+    <div class="profile-header">
+      <div class="profile-icon-large">
+        <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
+        <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
+           <i class="fa-solid fa-camera"></i>
+        </label>
+        <input type="file" id="profileUpload" accept="image/*" style="display:none">
+      </div>
+      <div class="profile-title">
+        <h3><?php echo htmlspecialchars($fullName); ?></h3>
+        <span class="profile-role">Visitor</span>
+      </div>
+    </div>
+    <div class="profile-details">
+      <div class="detail-row">
+        <div class="detail-label">Name</div>
+        <div class="detail-value"><?php echo htmlspecialchars($fullName); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Email</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['email'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Contact Number</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['phone'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Sex</div>
+        <div class="detail-value"><?php echo htmlspecialchars(ucfirst($user_data['sex'] ?? '')); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Birthdate</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['birthdate'] ?? ''); ?></div>
+      </div>
+    </div>
+    <div class="profile-actions">
+       <a href="logout.php" class="btn-logout-modal">Log Out</a>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var profileModal = document.getElementById("profileModal");
+    var profileTrigger = document.getElementById("profileTrigger");
+    var profileClose = document.getElementsByClassName("close-profile-modal")[0];
+
+    if(profileTrigger) {
+        profileTrigger.onclick = function(e) {
+            e.preventDefault();
+            profileModal.style.display = "block";
+        }
+    }
+
+    if(profileClose) {
+        profileClose.onclick = function() {
+            profileModal.style.display = "none";
+        }
+    }
+
+    window.onclick = function(event) {
+        if (event.target == profileModal) {
+            profileModal.style.display = "none";
+        }
+    }
+
+    // Profile Picture Upload
+    var profileUpload = document.getElementById('profileUpload');
+    if(profileUpload) {
+        profileUpload.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                var formData = new FormData();
+                formData.append('profile_pic', this.files[0]);
+
+                var img = document.getElementById('profileModalImg');
+                img.style.opacity = '0.5';
+
+                fetch('upload_profile_pic.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    img.style.opacity = '1';
+                    if (data.success) {
+                        if(img) img.src = data.new_url;
+                        var headerImg = document.getElementById('headerProfileImg');
+                        if(headerImg) headerImg.src = data.new_url;
+                    } else {
+                        alert(data.message || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    img.style.opacity = '1';
+                    console.error('Error:', error);
+                    alert('An error occurred during upload.');
+                });
+            }
+        });
+    }
+});
 </script>
 </body>
 </html>

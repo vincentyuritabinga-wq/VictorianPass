@@ -112,6 +112,17 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
       $stmt->close();
     }
   }
+
+  // Profile Picture Logic
+  $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
+  if (file_exists('uploads/profiles/user_' . $uid . '.jpg')) {
+      $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpg';
+  } elseif (file_exists('uploads/profiles/user_' . $uid . '.png')) {
+      $profilePicPath = 'uploads/profiles/user_' . $uid . '.png';
+  } elseif (file_exists('uploads/profiles/user_' . $uid . '.jpeg')) {
+      $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpeg';
+  }
+  $profilePicUrl = $profilePicPath . '?t=' . time();
 }
 
 // No longer storing downpayment on entry_passes; we link it to reservations via ref_code
@@ -230,9 +241,25 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php if ($isLoggedIn): ?>
           <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
              <span>Hi, <?php echo htmlspecialchars($userName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
-             <button id="profileAccountTrigger" type="button" class="profile-account-btn">
-               <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon">
-             </button>
+             <div class="profile-icon-wrap" id="profileWrap">
+               <button id="profileAccountTrigger" type="button" class="profile-account-btn" style="background:none;border:none;padding:0;cursor:pointer;">
+                 <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="profile-icon">
+               </button>
+               <div class="profile-dropdown" id="profileDropdown">
+                 <div class="mini-profile">
+                    <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="mini-avatar">
+                    <div class="mini-text" style="text-align:left;">
+                      <div class="mini-name" style="color:#222;"><?php echo htmlspecialchars($userName); ?></div>
+                      <div style="font-size:0.8rem; color:#666;"><?php echo ucfirst($userType); ?></div>
+                    </div>
+                 </div>
+                 <div class="profile-dropdown-actions">
+                    <a href="<?php echo $userType === 'resident' ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="btn-dashboard-view">
+                      Open Full View of Profile Dashboard
+                    </a>
+                 </div>
+               </div>
+             </div>
           </div>
         <?php else: ?>
           <div class="nav-links" style="display:flex;">
@@ -359,66 +386,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </section>
 
-  <?php if ($isLoggedIn): ?>
-  <div id="profileSideOverlay" class="profile-side-overlay">
-    <div class="profile-side-panel">
-      <button type="button" class="profile-side-close" aria-label="Close profile">&times;</button>
-      <div class="profile-side-header">
-        <img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-side-avatar">
-        <div class="profile-side-title">
-          <h3><?php echo htmlspecialchars($userName ?: 'My Account'); ?></h3>
-          <span><?php echo ucfirst($userType); ?></span>
-        </div>
-      </div>
-      <div class="profile-side-body">
-        <div class="profile-side-row">
-          <span class="label">Name</span>
-          <span class="value"><?php echo htmlspecialchars($userName ?: '-'); ?></span>
-        </div>
-        <?php if ($userEmail !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label">Email</span>
-          <span class="value"><?php echo htmlspecialchars($userEmail); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($userPhone !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label">Contact</span>
-          <span class="value"><?php echo htmlspecialchars($userPhone); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($userHouse !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label"><?php echo $isResident ? 'Unit / House No.' : 'Account Type'; ?></span>
-          <span class="value"><?php echo htmlspecialchars($userHouse); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($userAddress !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label">Address</span>
-          <span class="value"><?php echo htmlspecialchars($userAddress); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($userSex !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label">Sex</span>
-          <span class="value"><?php echo htmlspecialchars(ucfirst($userSex)); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($userBirthdate !== ''): ?>
-        <div class="profile-side-row">
-          <span class="label">Birthdate</span>
-          <span class="value"><?php echo htmlspecialchars($userBirthdate); ?></span>
-        </div>
-        <?php endif; ?>
-      </div>
-      <div class="profile-side-footer">
-        <a href="<?php echo $isResident ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="profile-side-btn primary">Open Dashboard</a>
-        <a href="logout.php" class="profile-side-btn">Log Out</a>
-      </div>
-    </div>
-  </div>
-  <?php endif; ?>
+
 
   <script src="js/logout-modal.js"></script>
   <script>
@@ -450,47 +418,59 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
-      var overlay = document.getElementById('profileSideOverlay');
-      var closeBtn = overlay ? overlay.querySelector('.profile-side-close') : null;
-      var triggers = [];
+      // Profile Dropdown Logic
+      var wrap = document.getElementById('profileWrap');
       var trigger = document.getElementById('profileAccountTrigger');
-      if (trigger) { triggers.push(trigger); }
+      var dropdown = document.getElementById('profileDropdown');
+      
+      if(wrap && dropdown && trigger) {
+          var closeTimeout;
 
-      function openProfilePanel(e){
-        if (e) e.preventDefault();
-        if (!overlay) return;
-        overlay.classList.add('open');
-      }
-
-      function closeProfilePanel(){
-        if (!overlay) return;
-        overlay.classList.remove('open');
-      }
-
-      for (var i = 0; i < triggers.length; i++) {
-        triggers[i].addEventListener('click', openProfilePanel);
-      }
-
-      if (closeBtn) {
-        closeBtn.addEventListener('click', function(e){
-          e.preventDefault();
-          closeProfilePanel();
-        });
-      }
-
-      if (overlay) {
-        overlay.addEventListener('click', function(e){
-          if (e.target === overlay) {
-            closeProfilePanel();
+          function openDropdown() {
+              clearTimeout(closeTimeout);
+              dropdown.style.display = 'block';
+              requestAnimationFrame(function() {
+                  dropdown.classList.add('show');
+              });
           }
-        });
-      }
 
-      document.addEventListener('keydown', function(e){
-        if (e.key === 'Escape' && overlay && overlay.classList.contains('open')) {
-          closeProfilePanel();
-        }
-      });
+          function closeDropdown() {
+              closeTimeout = setTimeout(function() {
+                  dropdown.classList.remove('show');
+                  setTimeout(function() {
+                      if (!dropdown.classList.contains('show')) {
+                          dropdown.style.display = 'none';
+                      }
+                  }, 300); // Match CSS transition duration
+              }, 200); // Small delay before closing to allow moving mouse
+          }
+
+          // Hover Events
+          wrap.addEventListener('mouseenter', openDropdown);
+          wrap.addEventListener('mouseleave', closeDropdown);
+
+          // Click Toggle
+          trigger.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (dropdown.classList.contains('show')) {
+                  dropdown.classList.remove('show');
+                  setTimeout(function() { dropdown.style.display = 'none'; }, 300);
+              } else {
+                  openDropdown();
+              }
+          });
+
+          // Close when clicking outside
+          window.addEventListener('click', function(e) {
+              if (!wrap.contains(e.target)) {
+                  if (dropdown.classList.contains('show')) {
+                      dropdown.classList.remove('show');
+                      setTimeout(function() { dropdown.style.display = 'none'; }, 300);
+                  }
+              }
+          });
+      }
     });
   </script>
 
