@@ -287,11 +287,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <div class="header-actions">
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
-        <button class="icon-btn"><i class="fa-solid fa-bars"></i></button>
-        <div class="user-profile">
+        <a href="profileresident.php" class="user-profile">
           <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
           <img src="images/mainpage/profile'.jpg" alt="Profile" class="user-avatar">
-        </div>
+        </a>
       </div>
     </header>
 
