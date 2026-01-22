@@ -40,7 +40,7 @@ $profilePicUrl = $profilePicPath . '?t=' . time();
 $activities = [];
 
 // Reservations
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -56,11 +56,17 @@ if ($stmt) {
         } else {
             $dateStr = 'Date not set';
         }
+        
+        $statusVal = $row['status'] ?? 'pending';
+        if (!empty($row['approval_status'])) {
+            $statusVal = $row['approval_status'];
+        }
+
         $activities[] = [
             'type' => 'reservation',
             'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
             'details' => $dateStr,
-            'status' => $row['status'] ?? 'pending',
+            'status' => $statusVal,
             'date' => $row['created_at'],
             'ref_code' => $row['ref_code'] ?? 'RES'
         ];
@@ -86,6 +92,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 <title>Visitor Dashboard - Victorian Heights</title>
 <link rel="icon" type="image/png" href="images/logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <link rel="stylesheet" href="css/dashboard.css">
 <!-- FontAwesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -177,7 +184,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       </div>
     </div>
   </main>
-  <div id="cancelModal" class="cancel-modal" style="display:none;">
+  </div>
+</div>
+
+<div id="activityModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div id="activityModalBody"></div>
+  </div>
+</div>
+
+<div id="cancelModal" class="cancel-modal" style="display:none;">
     <div class="cancel-modal-content">
       <div class="cancel-modal-header">
         <h3>Cancel Reservation</h3>
@@ -194,8 +211,49 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     </div>
   </div>
 </div>
+
+<!-- Hidden Pass Template for Generation -->
+<div id="hiddenPassCard" style="position:fixed; left:-9999px; top:0; width:400px; background:#1e1e1e; color:#fff; font-family:'Poppins',sans-serif; border-radius:16px; overflow:hidden; padding-bottom:20px;">
+    <div class="header" style="background:#000; padding:15px; text-align:center; border-bottom:1px solid #333;">
+        <img src="images/logo.svg" style="height:32px; vertical-align:middle;">
+        <span style="margin-left:10px; font-weight:600; font-size:1.1rem; color:#e5ddc6; vertical-align:middle;">Victorian Heights</span>
+    </div>
+    <div class="status-banner" style="padding:30px 20px; text-align:center; background-color:#22c55e; color:#000;">
+        <div style="font-size:1.8rem; font-weight:800; text-transform:uppercase; margin-bottom:8px;">VALID ENTRY PASS</div>
+        <div style="font-size:1rem; font-weight:500;">Access Granted</div>
+    </div>
+    <div class="qr-section" style="background:#fff; padding:20px; text-align:center;">
+        <img id="passQR" src="" style="width:180px; height:180px; display:block; margin:0 auto;">
+        <div style="color:#333; margin-top:10px; font-size:0.85rem; font-weight:500;">Present this QR code to the guard</div>
+    </div>
+    <div class="details" style="padding:24px;">
+        <div style="margin-bottom:12px; font-size:0.85rem; color:#9bd08f; font-weight:700; text-transform:uppercase;">Pass Details</div>
+        
+        <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
+            <span style="color:#aaa; font-size:0.9rem;">Pass Type</span>
+            <span style="font-weight:600; font-size:1rem; color:#eee;">Visitor</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
+            <span style="color:#aaa; font-size:0.9rem;">Name</span>
+            <span id="passName" style="font-weight:600; font-size:1rem; color:#eee;"></span>
+        </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
+            <span style="color:#aaa; font-size:0.9rem;">Ref Code</span>
+            <span id="passRef" style="font-weight:600; font-size:1rem; color:#eee; font-family:monospace;"></span>
+        </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:0; padding-bottom:8px;">
+            <span style="color:#aaa; font-size:0.9rem;">Validity</span>
+            <span id="passDate" style="font-weight:600; font-size:1rem; color:#eee;"></span>
+        </div>
+    </div>
+    <div style="text-align:center; color:#666; font-size:0.8rem; margin-top:20px;">
+        VictorianPass Validation System &copy; <?php echo date('Y'); ?>
+    </div>
+</div>
+
 <script>
 (function(){
+  var visitorName = "<?php echo htmlspecialchars($fullName); ?>";
   var searchInput=document.getElementById('requestSearch');
   function filterList(){
     var q=(searchInput.value||'').toLowerCase();
@@ -347,11 +405,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
       if(isApproved && ref){
-        var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
-        var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         html+='<div class="item-extra-title">Entry QR Pass</div>';
         html+='<div class="item-extra-body">';
-        html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
+        html+='<div class="item-extra-action">';
+        html+='<button class="btn-download-pass" onclick="generateAndDownloadPass(\''+esc(ref)+'\', \''+esc(visitorName)+'\', \''+esc(detailsEl.textContent.replace(/^\s*-\s*/,'').trim())+'\', \'Visitor\')"><i class="fa-solid fa-download"></i> Download Entry Pass</button>';
+        html+='</div>';
         html+='<div class="item-extra-info">';
       }else{
         html+='<div class="item-extra-title">Entry Request Status</div>';
@@ -363,10 +421,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       if(canCancel && ref){
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel reservation</button>';
-      }
-      if(isApproved && ref){
-        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
-        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
       }
       if(isApproved && ref){
         html+='</div></div></div>';
@@ -471,6 +525,43 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       notifPanel.style.display='none';
     });
   }
+
+  // Make function global so inline onclick can access it
+  window.generateAndDownloadPass = function(ref, name, details, typeLabel) {
+    var card = document.getElementById('hiddenPassCard');
+    var qrImg = document.getElementById('passQR');
+    var nameEl = document.getElementById('passName');
+    var refEl = document.getElementById('passRef');
+    var dateEl = document.getElementById('passDate');
+    
+    // Populate
+    nameEl.textContent = name;
+    refEl.textContent = ref;
+    dateEl.textContent = details; 
+    
+    // Generate QR URL
+    var basePath = window.location.pathname.replace(/\/[^\/]*$/,'');
+    var verifyLink = window.location.origin + basePath + '/qr_view.php?code=' + encodeURIComponent(ref);
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(verifyLink);
+    
+    // Set QR and wait for load
+    qrImg.onload = function() {
+        html2canvas(card, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: null 
+        }).then(function(canvas) {
+            var link = document.createElement('a');
+            link.download = 'EntryPass_' + ref + '.png';
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    };
+    qrImg.src = qrUrl;
+  };
+
   function refreshStatuses(){
     fetch('dashboardvisitor.php?ajax=1',{credentials:'same-origin'})
       .then(function(r){return r.json();})
@@ -600,13 +691,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <div class="profile-actions">
        <a href="logout.php" class="btn-logout-modal">Log Out</a>
     </div>
-  </div>
-</div>
-
-<div id="activityModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <div id="activityModalBody"></div>
   </div>
 </div>
 

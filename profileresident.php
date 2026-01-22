@@ -70,134 +70,26 @@ if ($con instanceof mysqli) {
 
 
 // Prepare resident QR link and local image path
-$scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
-$qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
-$qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
-$qrAbsPath = __DIR__ . '/' . $qrRelPath;
-// Always ensure the cached QR encodes the current resident ID link
-$qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
-$img = @file_get_contents($qrUrl);
-if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath = $qrUrl; }
+$userStatus = $user['status'] ?? 'pending';
+$qrLink = '';
+$qrRelPath = '';
+$qrAbsPath = '';
+$qrImg = '';
+
+if ($userStatus === 'active') {
+    $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
+    $qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
+    $qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
+    $qrAbsPath = __DIR__ . '/' . $qrRelPath;
+    // Always ensure the cached QR encodes the current resident ID link
+    $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
+    $img = @file_get_contents($qrUrl);
+    if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath = $qrUrl; }
+}
 
 $activeSection = 'panel-requests';
-
-// Handle Incident Report Submission
-$reportSuccess = false;
-$reportSuccessMessage = '';
-$reportErrors = [];
-$reportValues = []; // To keep values on error
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'submit_report') {
-    $activeSection = 'panel-report-incident';
-    
-    $complainant = trim($_POST['complainant'] ?? '');
-    $subject = trim($_POST['subject'] ?? '');
-    $report_date = trim($_POST['report_date'] ?? '');
-    $addr = trim($_POST['address'] ?? '');
-    $other = trim($_POST['other'] ?? '');
-    $natureArr = isset($_POST['nature']) && is_array($_POST['nature']) ? $_POST['nature'] : [];
-
-    $reportValues = [
-        'subject' => $subject,
-        'report_date' => $report_date,
-        'address' => $addr,
-        'other' => $other,
-        'nature' => $natureArr
-    ];
-
-    if ($subject === '') { $reportErrors[] = 'Complainee is required.'; }
-    if ($addr === '') { $reportErrors[] = 'Address is required.'; }
-    if ($report_date === '') { $reportErrors[] = 'Date is required.'; }
-    if ($report_date !== '') {
-        $dt = DateTime::createFromFormat('Y-m-d', $report_date);
-        if (!($dt && $dt->format('Y-m-d') === $report_date)) { $reportErrors[] = 'Date format is invalid.'; }
-    }
-    if (count($natureArr) === 0) { $reportErrors[] = 'Please select at least one nature of concern.'; }
-
-    $uploadDir = 'resident_reports_uploads/';
-    $allowed_exts = ['jpg','jpeg','png','pdf','docx'];
-    $saved_files = [];
-    $upload_errors = [];
-    if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0755, true); }
-    
-    if (!empty($_FILES['proof']) && is_array($_FILES['proof']['name'])) {
-        $names = $_FILES['proof']['name'];
-        $tmps  = $_FILES['proof']['tmp_name'];
-        $errs  = $_FILES['proof']['error'];
-        $sizes = $_FILES['proof']['size'];
-        for ($i = 0; $i < count($names); $i++) {
-            if ($errs[$i] !== UPLOAD_ERR_OK) { continue; }
-            $ext = strtolower(pathinfo($names[$i], PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowed_exts, true)) { $upload_errors[] = 'File type is not allowed: ' . $names[$i]; continue; }
-            if ($sizes[$i] > 10 * 1024 * 1024) { $upload_errors[] = 'File size exceeds 10 MB: ' . $names[$i]; continue; }
-            $safeName = preg_replace('/[^A-Za-z0-9_\-.]/', '_', $names[$i]);
-            $newName = 'report_' . time() . '_' . $safeName;
-            $dest = $uploadDir . $newName;
-            if (move_uploaded_file($tmps[$i], $dest)) { $saved_files[] = $dest; }
-        }
-    }
-    if (!empty($upload_errors)) { $reportErrors = array_merge($reportErrors, $upload_errors); }
-
-    if (empty($reportErrors)) {
-        // Ensure tables exist
-        $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          complainant VARCHAR(150) NOT NULL,
-          subject VARCHAR(150) NULL,
-          address VARCHAR(255) NOT NULL,
-          nature VARCHAR(255) NULL,
-          other_concern VARCHAR(255) NULL,
-          user_id INT NULL,
-          report_date DATE NULL,
-          status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL,
-          INDEX idx_status (status),
-          INDEX idx_user_id (user_id)
-        ) ENGINE=InnoDB");
-        
-        // Column checks
-        $chk1 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'subject'");
-        if ($chk1 && $chk1->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN subject VARCHAR(150) NULL"); }
-        $chk2 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'report_date'");
-        if ($chk2 && $chk2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN report_date DATE NULL"); }
-
-        $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          report_id INT NOT NULL,
-          file_path VARCHAR(255) NOT NULL,
-          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_report_id (report_id)
-        ) ENGINE=InnoDB");
-
-        $natureStr = implode(', ', array_map('strval', $natureArr));
-        $uID = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
-        $stmtR = $con->prepare("INSERT INTO incident_reports (complainant, subject, address, nature, other_concern, user_id, report_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        if ($stmtR) {
-            $stmtR->bind_param('sssssis', $complainant, $subject, $addr, $natureStr, $other, $uID, $report_date);
-            if ($stmtR->execute()) {
-                $report_id = $stmtR->insert_id;
-                $stmtR->close();
-                if (!empty($saved_files)) {
-                    foreach ($saved_files as $p) {
-                        $stmtP = $con->prepare("INSERT INTO incident_proofs (report_id, file_path) VALUES (?, ?)");
-                        if ($stmtP) { $stmtP->bind_param('is', $report_id, $p); $stmtP->execute(); $stmtP->close(); }
-                    }
-                }
-                $reportSuccess = true;
-                $reportSuccessMessage = 'Your report has been successfully submitted. The Guard will review it shortly.';
-                // Clear values on success
-                $reportValues = [];
-            } else {
-                $reportErrors[] = 'Failed to save report database entry.';
-            }
-        } else {
-            $reportErrors[] = 'Failed to prepare report statement.';
-        }
-    }
-}
 
 // Fetch Activities (Reservations, Reports, Guest Forms)
 $activities = [];
@@ -415,10 +307,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
       <a href="#" class="nav-item" data-section="panel-guest-form"><i class="fa-solid fa-user-plus"></i> <span>Guest Form</span></a>
       <a href="#" class="nav-item" data-section="panel-my-guests"><i class="fa-solid fa-user-group"></i> <span>My Guests</span></a>
-      <a href="#" class="nav-item <?php echo $activeSection === 'panel-report-incident' ? 'active' : ''; ?>" data-section="panel-report-incident"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
+      <a href="report_incident.php" class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
     </nav>
 
     <div class="sidebar-footer">
+      <?php if ($userStatus === 'active'): ?>
       <div class="qr-section">
         <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:#555;">My Personal QR Code</div>
         
@@ -427,10 +320,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             You may show this QR code to the guard for verification.
         </div>
       </div>
+      <?php endif; ?>
       <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
     </div>
 
     <!-- Hidden ID Card for Download Generation -->
+    <?php if ($userStatus === 'active'): ?>
     <div style="position:fixed; left:-9999px; top:0;">
         <div class="resident-id-card" id="residentCard" style="width:360px;">
           <div class="card-header">
@@ -452,6 +347,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           <div class="foot">Scan to verify • Resident Access</div>
         </div>
     </div>
+    <?php endif; ?>
 
     <script>
     function downloadPersonalQR(){
@@ -655,101 +551,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           </div>
         </div>
 
-        <!-- RESIDENT REPORT INCIDENT SECTION -->
-        <div class="panel-section" id="panel-report-incident" style="display:none;">
-          <div class="activity-list-header">
-            <div>Report Incident</div>
-          </div>
-          
-          <div class="report-card" style="margin-top:10px;">
-            <!-- Explanation / Intro -->
-            <div class="explanation-panel">
-                <h3>Resident Incident Report</h3>
-                <p>Reporting complaints ensures that every resident’s voice is heard and that community standards are properly maintained. Please be responsible when filing a complaint.</p>
-                <div class="explanation-links">
-                    <a href="#" onclick="openModal('termsModal'); return false;">Terms and Conditions</a>
-                    <a href="#" onclick="openModal('rulesModal'); return false;">Rules and Regulations</a>
-                </div>
-            </div>
 
-            <?php if (!empty($reportErrors)): ?>
-                <div class="error-box">
-                    <?php foreach ($reportErrors as $e): ?><div><i class="fa-solid fa-circle-exclamation"></i> <?php echo htmlspecialchars($e); ?></div><?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-            
-            <?php if ($reportSuccess): ?>
-                <div style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:15px; border-radius:8px; margin-bottom:20px; text-align:center;">
-                    <i class="fa-solid fa-check-circle" style="font-size:1.2rem; margin-bottom:8px; display:block;"></i>
-                    <strong><?php echo htmlspecialchars($reportSuccessMessage); ?></strong>
-                </div>
-            <?php endif; ?>
-
-            <form id="reportForm" method="POST" enctype="multipart/form-data">
-              <input type="hidden" name="action" value="submit_report">
-              <div class="report-header">
-                <h2>Victorian Heights Subdivision</h2>
-                <div class="report-sub">Dahlia Fairview, BRGY. Sauyo, Quezon City</div>
-                <div class="report-title">CASE REPORT FORM</div>
-              </div>
-
-              <input type="hidden" id="complainant" name="complainant" value="<?php echo htmlspecialchars($fullName); ?>">
-
-              <div class="form-row">
-                <div class="form-group">
-                    <label for="subject" class="form-label">Complainee / Subject Name*</label>
-                    <input type="text" id="subject" name="subject" placeholder="Enter name" value="<?php echo htmlspecialchars($reportValues['subject'] ?? ''); ?>" required>
-                </div>
-                <div class="form-group">
-                    <label for="reportDate" class="form-label">Date of Incident*</label>
-                    <input type="date" id="reportDate" name="report_date" value="<?php echo htmlspecialchars($reportValues['report_date'] ?? ''); ?>" required>
-                </div>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                    <label for="address" class="form-label">Address / Location of Incident*</label>
-                    <input type="text" id="address" name="address" placeholder="Enter address or location" value="<?php echo htmlspecialchars($reportValues['address'] ?? ''); ?>" required>
-                </div>
-              </div>
-
-              <div style="margin-bottom: 20px;">
-                <label class="form-label">Nature of Complaint (Check all that apply)</label>
-                <div class="checkbox-group">
-                    <?php 
-                    $natures = ['Noise Disturbance', 'Pet Violation', 'Parking Violation', 'Trash/Garbage', 'Vandalism', 'Security Concern', 'Harassment', 'Other'];
-                    $selectedNatures = $reportValues['nature'] ?? [];
-                    foreach ($natures as $n): 
-                        $chk = in_array($n, $selectedNatures) ? 'checked' : '';
-                    ?>
-                    <label><input type="checkbox" name="nature[]" value="<?php echo $n; ?>" <?php echo $chk; ?>> <?php echo $n; ?></label>
-                    <?php endforeach; ?>
-                </div>
-              </div>
-
-              <div class="form-row">
-                  <div class="form-group">
-                    <label for="other" class="form-label">Details of Incident*</label>
-                    <textarea id="other" name="other" rows="5" placeholder="Please describe what happened..." required><?php echo htmlspecialchars($reportValues['other'] ?? ''); ?></textarea>
-                  </div>
-              </div>
-
-              <div style="margin-bottom: 20px;">
-                <label class="form-label">Evidence / Attachments</label>
-                <label class="upload-box">
-                    <input type="file" id="proof" name="proof[]" multiple hidden onchange="handleFileSelect(this)">
-                    <img src="images/mainpage/upload.svg" alt="Upload">
-                    <p>Click to upload photos or documents<br><small>(Max 10MB per file)</small></p>
-                </label>
-                <div id="fileList" class="file-list"></div>
-              </div>
-
-              <div class="form-actions" style="margin-top:30px;">
-                <button type="submit" class="submit-btn">Submit Report</button>
-              </div>
-            </form>
-          </div>
-        </div>
 
       </div>
     </div>

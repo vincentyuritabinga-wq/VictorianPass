@@ -232,7 +232,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
 // Handle AJAX request for standard amenity reservation details
 if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && isset($_GET['id'])) {
     $reservation_id = intval($_GET['id']);
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE r.id = ? AND (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)";
@@ -251,7 +251,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && is
 // Handle AJAX request for resident amenity reservation details
 if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_details' && isset($_GET['id'])) {
     $rr_id = intval($_GET['id']);
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE r.id = ? AND (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)";
@@ -1856,8 +1856,8 @@ tr:hover { background-color: #f8fafc; }
 }
 
 .notif-meta { flex: 1; }
-.notif-item-title { font-weight: 600; font-size: 0.9rem; color: var(--text-main); margin-bottom: 4px; }
-.notif-item-sub { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; }
+.notif-item-title { font-weight: 600; font-size: 0.9rem; color: var(--text-main); margin-bottom: 4px; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
+.notif-item-sub { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
 .notif-item-time { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
 
 .notif-dismiss {
@@ -1892,15 +1892,44 @@ tr:hover { background-color: #f8fafc; }
 .modal-content {
     background-color: var(--bg-surface);
     margin: 5% auto;
-    padding: 30px;
+    padding: 20px;
     border-radius: 16px;
-    width: 90%;
-    max-width: 600px;
+    width: min(92vw, 640px);
+    max-height: 85vh;
     box-shadow: var(--shadow-lg);
     position: relative;
     animation: slideIn 0.3s ease-out;
     border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
+
+.modal-content h3{
+    margin: 0;
+    padding: 8px 8px 12px 4px;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    z-index: 1;
+}
+.modal-content > div{
+    overflow-y: auto;
+    max-height: calc(85vh - 64px);
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    hyphens: auto;
+}
+.modal-content p{ margin: 6px 0; line-height: 1.5; }
+.modal-content img{ max-width: 100%; height: auto; display: block; }
+.modal-content table{ width: 100%; border-collapse: collapse; }
+.modal-content td{ padding: 6px 0; }
 
 .close {
     position: absolute;
@@ -1939,23 +1968,42 @@ tr:hover { background-color: #f8fafc; }
 /* Toast */
 .toast {
     position: fixed;
-    bottom: 30px;
-    right: 30px;
+    bottom: 20px;
+    right: 20px;
     background: var(--bg-surface);
     border-left: 5px solid var(--primary);
     box-shadow: var(--shadow-lg);
-    border-radius: 4px;
-    padding: 20px;
-    width: 350px;
+    border-radius: 8px;
+    padding: 16px;
+    width: min(96vw, 380px);
     z-index: 2000;
     animation: slideInLeft 0.3s;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    max-height: 40vh;
+    overflow-y: auto;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    hyphens: auto;
 }
 @keyframes slideInLeft { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .toast h4 { color: var(--primary); margin-bottom: 5px; font-size: 0.95rem; }
 .toast p { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+
+.toast-container{
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: min(96vw, 380px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 2000;
+    pointer-events: none;
+}
+.toast-container .toast{ pointer-events: auto; }
 
 /* Notifications */
 .notif-btn {
@@ -1999,32 +2047,39 @@ tr:hover { background-color: #f8fafc; }
 .modal-content {
     background-color: var(--bg-surface);
     margin: 5% auto;
-    padding: 0;
+    padding: 20px;
     border: 1px solid var(--border);
-    width: 90%;
-    max-width: 500px;
+    width: min(92vw, 640px);
+    max-height: 85vh;
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
     position: relative;
-    max-height: 85vh;
     display: flex;
     flex-direction: column;
+    gap: 12px;
     animation: slideIn 0.3s ease-out;
 }
 
 .modal-content h3 {
-    padding: 20px;
+    padding: 8px 8px 12px 4px;
     border-bottom: 1px solid var(--border-light);
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     background: var(--bg-surface);
     border-radius: var(--radius) var(--radius) 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 
 .tab-body {
     padding: 0;
     overflow-y: auto;
     flex: 1;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    hyphens: auto;
 }
 
 .notif-item {
@@ -2568,7 +2623,7 @@ tr:hover { background-color: #f8fafc; }
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -3220,6 +3275,14 @@ function closeIncidentProofModal(){ var m=document.getElementById('incidentProof
 
 // Function to show visitor details modal
 function showVisitorDetails(id, source) {
+  // Reset modal
+  const contentEl = document.getElementById('visitorDetailsContent');
+  if(contentEl) contentEl.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+  const modal = document.getElementById('visitorModal');
+  const modalTitleEl = document.querySelector('#visitorModal h3');
+  if(modalTitleEl) modalTitleEl.textContent = 'Request Details';
+  if(modal) modal.style.display = 'block';
+
   // Make AJAX request to get visitor details
   const url = 'admin.php?action=get_visitor_details&id=' + encodeURIComponent(id) + (source? ('&source=' + encodeURIComponent(source)) : '');
   fetch(url)
@@ -3306,20 +3369,22 @@ function showVisitorDetails(id, source) {
           </div>
           `;
         document.getElementById('visitorDetailsContent').innerHTML = content;
-        document.getElementById('visitorModal').style.display = 'block';
       } else {
-        alert('Error loading visitor details: ' + data.message);
+        document.getElementById('visitorDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error: ' + (data.message||'Unknown error') + '</div>';
       }
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Error loading visitor details');
+      document.getElementById('visitorDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading visitor details.</div>';
     });
 }
 
 // Function to close visitor details modal
 function closeVisitorModal() {
-  document.getElementById('visitorModal').style.display = 'none';
+  var m = document.getElementById('visitorModal');
+  if(m){ m.style.display = 'none'; }
+  var c = document.getElementById('visitorDetailsContent');
+  if(c){ c.innerHTML = ''; }
 }
 
 // Close modal when clicking outside of it
@@ -3342,16 +3407,21 @@ window.onclick = function(event) {
 
 <script>
 function showReservationDetails(reservationId){
+  var c = document.getElementById('reservationDetailsContent');
+  if(c){ c.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>'; }
+  var m = document.getElementById('reservationModal');
+  if(m){ m.style.display = 'block'; }
   fetch('admin.php?action=get_reservation_details&id=' + reservationId)
     .then(r => r.json())
     .then(data => {
       if(!data.success){ alert('Error loading reservation details: ' + (data.message||'Unknown error')); return; }
       const d = data.details || {};
+      const whoLabel = (String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident';
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const content = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
           <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
+            <h4 style="color:#23412e;margin-bottom:10px;">${whoLabel}</h4>
             ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
             ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
@@ -3379,7 +3449,10 @@ function showReservationDetails(reservationId){
 }
 
 function closeReservationModal(){
-  document.getElementById('reservationModal').style.display = 'none';
+  var m = document.getElementById('reservationModal');
+  if(m){ m.style.display = 'none'; }
+  var c = document.getElementById('reservationDetailsContent');
+  if(c){ c.innerHTML = ''; }
 }
 
 window.addEventListener('click', function(event){
@@ -3400,18 +3473,25 @@ window.addEventListener('click', function(event){
 <script>
 function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return (String(h).padStart(2,'0')+":"+String(m).padStart(2,'0')); }
 function showResidentReservationDetails(rrId){
+  document.getElementById('residentReservationDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+  document.getElementById('residentReservationModal').style.display = 'block';
+  
   fetch('admin.php?action=get_resident_reservation_details&id=' + rrId)
     .then(r => r.json())
     .then(data => {
-      if(!data.success){ alert('Error loading resident reservation details: ' + (data.message||'Unknown error')); return; }
+      if(!data.success){ 
+        document.getElementById('residentReservationDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error: ' + (data.message||'Unknown error') + '</div>';
+        return; 
+      }
       const d = data.details || {};
       const ps = ((d.payment_status||'pending')+'').toLowerCase();
       const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const userType = (d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1);
         const content = `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
             <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
+              <h4 style="color:#23412e;margin-bottom:10px;">${userType}</h4>
               ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
               ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
               ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
@@ -3434,13 +3514,18 @@ function showResidentReservationDetails(rrId){
             </div>
           </div>`;
       document.getElementById('residentReservationDetailsContent').innerHTML = content;
-      document.getElementById('residentReservationModal').style.display = 'block';
     })
-    .catch(err => { console.error(err); alert('Error loading resident reservation details'); });
+    .catch(err => { 
+      console.error(err); 
+      document.getElementById('residentReservationDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
+    });
 }
 
 function closeResidentReservationModal(){
-  document.getElementById('residentReservationModal').style.display = 'none';
+  var m = document.getElementById('residentReservationModal');
+  if(m){ m.style.display = 'none'; }
+  var c = document.getElementById('residentReservationDetailsContent');
+  if(c){ c.innerHTML = ''; }
 }
 
 window.addEventListener('click', function(event){
@@ -3460,10 +3545,16 @@ window.addEventListener('click', function(event){
 
 <script>
 function showUserDetails(userId){
+  document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+  document.getElementById('userModal').style.display = 'block';
+  
   fetch('admin.php?action=get_user_details&id=' + userId)
     .then(r => r.json())
     .then(data => {
-      if(!data.success){ alert('Error loading user details: ' + (data.message||'Unknown error')); return; }
+      if(!data.success){ 
+        document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error: ' + (data.message||'Unknown error') + '</div>';
+        return; 
+      }
       const d = data.details || {};
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const content = `
@@ -3485,9 +3576,11 @@ function showUserDetails(userId){
           </div>
         </div>`;
       document.getElementById('userDetailsContent').innerHTML = content;
-      document.getElementById('userModal').style.display = 'block';
     })
-    .catch(err => { console.error(err); alert('Error loading user details'); });
+    .catch(err => { 
+      console.error(err); 
+      document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
+    });
 }
 
 function closeUserModal(){

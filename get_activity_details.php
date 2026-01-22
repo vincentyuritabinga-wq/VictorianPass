@@ -132,10 +132,14 @@ if (!$data) {
         $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
         if (!empty($row['approval_status'])) { $statusVal = $row['approval_status']; if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) { $statusVal = 'expired'; } }
 
-        $isVisitor = !empty($row['entry_pass_id']);
-        $isResident = !empty($row['user_id']);
+        $hasEntryPass = !empty($row['entry_pass_id']);
+        $uType = isset($row['user_type']) ? strtolower($row['user_type']) : '';
+        
+        $isVisitor = $hasEntryPass || $uType === 'visitor';
+        $isResident = !empty($row['user_id']) && $uType !== 'visitor';
         $hasReservation = !empty($row['amenity']);
-        if ($isVisitor) {
+        
+        if ($hasEntryPass) {
             $displayName = trim(implode(' ', array_filter([
                 $row['ep_full_name'] ?? '',
                 $row['ep_middle_name'] ?? '',

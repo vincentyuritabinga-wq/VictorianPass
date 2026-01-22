@@ -15,7 +15,7 @@ function vp_resident_link($rid){
 $user = null;
 if ($con instanceof mysqli) {
   if ($rid > 0) {
-    $stmt = $con->prepare("SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, IFNULL(status,'active') as status FROM users WHERE id = ?");
+    $stmt = $con->prepare("SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, user_type, IFNULL(status,'active') as status FROM users WHERE id = ?");
     $stmt->bind_param('i', $rid);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -25,6 +25,8 @@ if ($con instanceof mysqli) {
 }
 
 if (!$user) { $error = 'Resident not found.'; }
+elseif (($user['status'] ?? '') !== 'active') { $error = 'Account is not active.'; }
+elseif (($user['user_type'] ?? '') !== 'resident') { $error = 'Invalid user type.'; }
 
 $fullName = '';
 if ($user) {
