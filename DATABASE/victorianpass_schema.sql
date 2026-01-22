@@ -104,9 +104,12 @@ CREATE TABLE IF NOT EXISTS reservations (
   ref_code VARCHAR(50) NOT NULL UNIQUE,
   amenity VARCHAR(100) NULL COMMENT 'Nullable for visitor placeholder before amenity selection',
   start_date DATE NULL COMMENT 'Nullable until visitor selects dates',
+  start_time TIME NULL,
   end_date DATE NULL COMMENT 'Nullable until visitor selects dates',
+  end_time TIME NULL,
   persons INT NULL COMMENT 'Nullable until visitor sets party size',
   price DECIMAL(10,2) NULL COMMENT 'Nullable until pricing is computed',
+  downpayment DECIMAL(10,2) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   -- Linking fields
@@ -130,6 +133,8 @@ CREATE TABLE IF NOT EXISTS reservations (
   payment_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending' COMMENT 'Payment verification status',
   verified_by INT NULL COMMENT 'Staff ID who verified payment',
   verification_date DATETIME NULL COMMENT 'When payment was verified',
+  receipt_uploaded_at DATETIME NULL,
+  account_type ENUM('visitor','resident') NULL,
 
   -- Indexes for performance
   INDEX idx_ref_code (ref_code),

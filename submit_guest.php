@@ -20,6 +20,14 @@ $visitor_last_name  = trim($_POST['visitor_last_name'] ?? '');
 $visitor_sex        = trim($_POST['visitor_sex'] ?? '');
 $visitor_birthdate  = trim($_POST['visitor_birthdate'] ?? '');
 $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
+
+if ($visitor_birthdate !== '') {
+  $today = date('Y-m-d');
+  if ($visitor_birthdate > $today) {
+    echo json_encode(['success' => false, 'message' => 'Birthdate cannot be in the future.']);
+    exit;
+  }
+}
 $visitor_email      = trim($_POST['visitor_email'] ?? '');
 
 
@@ -46,36 +54,46 @@ if (!preg_match($namePattern, $visitor_first_name) || !preg_match($namePattern, 
   echo json_encode(['success' => false, 'message' => 'Visitor names must contain letters only.']);
   exit;
 }
-// Normalize phone numbers to +63 format
+// Normalize phone numbers to 09 format (11 digits)
 $phonesToNormalize = ['resident_contact' => &$resident_contact, 'visitor_contact' => &$visitor_contact];
 foreach ($phonesToNormalize as $key => &$pVal) {
     $phoneClean = preg_replace('/[\s\-]/', '', $pVal);
-    if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
-        $pVal = '+63' . $matches[1];
-    } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
-        $pVal = '+63' . $matches[1];
-    } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
-        $pVal = '+63' . $matches[1];
+    // Remove +63 or 63 prefix if present
+    if (preg_match('/^(\+63|63)(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '0' . $matches[2];
+    } elseif (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '0' . $matches[1];
     } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
-        $pVal = '+63' . $matches[1];
+        $pVal = '0' . $matches[1];
     }
 }
 unset($pVal);
 
-if (!preg_match('/^\+639\d{9}$/', $resident_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Resident phone must be a valid PH mobile number (e.g. 09XX... or +63 9XX...).']);
+if (!preg_match('/^09\d{9}$/', $resident_contact)) {
+  echo json_encode(['success' => false, 'message' => 'Resident phone must be 11 digits starting with 09 (e.g. 09XX...).']);
   exit;
 }
-if (!preg_match('/^\+639\d{9}$/', $visitor_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor phone must be a valid PH mobile number (e.g. 09XX... or +63 9XX...).']);
+if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
+  echo json_encode(['success' => false, 'message' => 'Visitor phone must be 11 digits starting with 09 (e.g. 09XX...).']);
   exit;
 }
 if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {
   echo json_encode(['success' => false, 'message' => 'Please provide a valid resident email address.']);
   exit;
 }
+$rParts = explode('@', $resident_email);
+if (ctype_digit($rParts[0])) {
+  echo json_encode(['success' => false, 'message' => 'Resident Email Invalid']);
+  exit;
+}
+
 if ($visitor_email === '' || !filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
   echo json_encode(['success' => false, 'message' => 'Please provide a valid visitor email address.']);
+  exit;
+}
+$vParts = explode('@', $visitor_email);
+if (ctype_digit($vParts[0])) {
+  echo json_encode(['success' => false, 'message' => 'Visitor Email Invalid']);
   exit;
 }
 

@@ -41,6 +41,17 @@ function admin_send_email($to,$subject,$body){
   $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nFrom: ".$fromName." <".$fromEmail.">\r\n";
   return @mail($to,$subject,$body,$headers);
 }
+function ensureDownpaymentColumn($con){
+     if(!($con instanceof mysqli)) return;
+     $c = $con->query("SHOW COLUMNS FROM reservations LIKE 'downpayment'");
+     if(!$c || $c->num_rows === 0){
+         @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL");
+     }
+     $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_uploaded_at'");
+     if(!$c2 || $c2->num_rows === 0){
+         @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL");
+     }
+ }
 function ensureEmailStatusColumns($con){ if(!($con instanceof mysqli)) return; $tables=['reservations','guest_forms']; foreach($tables as $t){ $c1=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent'"); if(!$c1||$c1->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0"); } $c2=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent_at'"); if(!$c2||$c2->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent_at DATETIME NULL"); } $c3=$con->query("SHOW COLUMNS FROM $t LIKE 'email_error'"); if(!$c3||$c3->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_error TEXT NULL"); } }
 }
 function send_status_email_template($to,$code){
@@ -95,6 +106,7 @@ ensureGuestFormsTable($con);
 ensureGuestFormsWantsAmenityColumn($con);
 ensureGuestFormsAmenityColumns($con);
 ensureEmailStatusColumns($con);
+ensureDownpaymentColumn($con);
 
 // Handle AJAX request for user details (admin resident profile)
 if (isset($_GET['action']) && $_GET['action'] == 'get_user_details' && isset($_GET['id'])) {
@@ -2042,11 +2054,13 @@ tr:hover { background-color: #f8fafc; }
     height: 100%;
     background-color: rgba(0,0,0,0.5);
     backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-content {
     background-color: var(--bg-surface);
-    margin: 5% auto;
+    margin: 0;
     padding: 20px;
     border: 1px solid var(--border);
     width: min(92vw, 640px);
@@ -3546,7 +3560,7 @@ window.addEventListener('click', function(event){
 <script>
 function showUserDetails(userId){
   document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
-  document.getElementById('userModal').style.display = 'block';
+  document.getElementById('userModal').style.display = 'flex';
   
   fetch('admin.php?action=get_user_details&id=' + userId)
     .then(r => r.json())

@@ -455,8 +455,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required>
               </div>
               <div class="form-row">
-                <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-                <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+                <div style="flex:1;">
+                  <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
+                </div>
+                <div style="flex:1;">
+                  <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+                </div>
               </div>
 
               <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
@@ -478,7 +482,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               <div class="input-wrap">
                 <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
               </div>
-              <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+              <div class="form-group">
+                <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+              </div>
 
               <label class="upload-box">
                 <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
@@ -521,6 +527,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                       <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Contact</th>
                       <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Email</th>
                       <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Added</th>
+                      <th style="text-align:center;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Entry Pass</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -536,12 +543,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                         $emailG = $g['visitor_email'] ?? '';
                         $created = $g['created_at'] ?? '';
                         $createdLabel = $created ? date('M d, Y', strtotime($created)) : '';
+                        $refCode = $g['ref_code'] ?? '';
                       ?>
                       <tr>
                         <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;font-weight:600;"><?php echo htmlspecialchars($guestName); ?></td>
                         <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($contact); ?></td>
                         <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($emailG); ?></td>
                         <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;color:#777;"><?php echo htmlspecialchars($createdLabel); ?></td>
+                        <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;text-align:center;">
+                          <button type="button" class="btn-view-pass" 
+                                  data-ref="<?php echo htmlspecialchars($refCode); ?>"
+                                  data-name="<?php echo htmlspecialchars($guestName); ?>"
+                                  data-resident="<?php echo htmlspecialchars($fullName); ?>"
+                                  style="padding:6px 12px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;">
+                            View Pass
+                          </button>
+                        </td>
                       </tr>
                     <?php endforeach; ?>
                   </tbody>
@@ -578,7 +595,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <p>Your guest has been successfully saved to your account.</p>
       <p><small><em>You can view and manage all guests from your resident dashboard.</em></small></p>
       <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
-        <button type="button" class="close-btn" id="refModalCloseBtn">Back to My Requests</button>
+        <button type="button" class="btn-confirm" id="refModalCloseBtn">Back to My Requests</button>
       </div>
     </div>
   </div>
@@ -587,8 +604,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <h2>Confirm Guest Request</h2>
       <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
       <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-        <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
-        <button type="button" class="btn-secondary" id="verifyConfirmBtn">Confirm</button>
+        <button type="button" class="btn-cancel" id="verifyCancelBtn">Cancel</button>
+        <button type="button" class="btn-confirm" id="verifyConfirmBtn">Confirm</button>
       </div>
     </div>
   </div>
@@ -599,9 +616,57 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <div id="activityModalBody"></div>
     </div>
   </div>
+  
+  <div id="guestPassModal" class="modal">
+    <div class="modal-content" style="max-width:350px;text-align:center;">
+      <span class="close" id="closeGuestPassModal">&times;</span>
+      <h3>Guest Entry Pass</h3>
+      <div id="guestPassContent"></div>
+    </div>
+  </div>
 </div>
 <script>
 (function(){
+  // Guest Pass Modal Logic
+  var guestPassModal = document.getElementById('guestPassModal');
+  var closeGuestPassBtn = document.getElementById('closeGuestPassModal');
+  if(closeGuestPassBtn) {
+      closeGuestPassBtn.onclick = function() { if(guestPassModal) guestPassModal.style.display = "none"; }
+  }
+  window.addEventListener('click', function(e) {
+      if (guestPassModal && e.target == guestPassModal) {
+          guestPassModal.style.display = "none";
+      }
+  });
+  function openGuestPassModal(ref, name, resident) {
+      if(!guestPassModal) return;
+      var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+      var statusLink = location.origin + basePath + '/qr_view.php?code=' + encodeURIComponent(ref);
+      var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(statusLink);
+      
+      var html = '';
+      html += '<div style="margin-bottom:15px;">';
+      html += '<h4 style="margin:0;color:#333;">' + name + '</h4>';
+      html += '<p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Guest of ' + resident + '</p>';
+      html += '</div>';
+      html += '<img src="' + qrSrc + '" style="width:200px;height:200px;border:1px solid #ddd;padding:10px;border-radius:8px;">';
+      html += '<p style="margin-top:15px;font-size:0.85rem;color:#888;">Present this QR code at the gate for entry.</p>';
+      html += '<a href="' + statusLink + '" target="_blank" style="display:inline-block;margin-top:10px;color:#4f46e5;text-decoration:underline;font-size:0.9rem;">Open full pass</a>';
+      
+      var contentEl = document.getElementById('guestPassContent');
+      if(contentEl) contentEl.innerHTML = html;
+      guestPassModal.style.display = "block";
+  }
+  // Event Delegation for View Pass buttons
+  document.addEventListener('click', function(e){
+      if(e.target.classList.contains('btn-view-pass')){
+          var ref = e.target.getAttribute('data-ref');
+          var name = e.target.getAttribute('data-name');
+          var resident = e.target.getAttribute('data-resident');
+          openGuestPassModal(ref, name, resident);
+      }
+  });
+
   var searchInput=document.getElementById('requestSearch');
     function filterList(){
     var q=(searchInput.value||'').toLowerCase();
@@ -642,6 +707,28 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(!cancelModal) return;
     cancelModalRef=ref;
     cancelModalLi=li;
+
+    var type = (li.getAttribute('data-type')||'').toLowerCase();
+    var h3 = cancelModal.querySelector('h3');
+    var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
+    var pNote = cancelModal.querySelector('.cancel-modal-note');
+    var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    
+    if(type === 'guest_form'){
+      if(h3) h3.textContent = 'Cancel Request';
+      if(pBody) pBody.textContent = 'Are you sure you want to cancel this request?';
+      if(pNote) pNote.style.display = 'none';
+      if(btnKeep) btnKeep.textContent = 'Keep Request';
+    } else {
+      if(h3) h3.textContent = 'Cancel Reservation';
+      if(pBody) pBody.textContent = 'Are you sure you want to cancel this reservation?';
+      if(pNote) {
+        pNote.style.display = 'block';
+        pNote.textContent = 'Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.';
+      }
+      if(btnKeep) btnKeep.textContent = 'Keep Reservation';
+    }
+
     cancelModal.style.display='flex';
   }
   function closeCancelModalResident(){
@@ -732,7 +819,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var s=status.toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
     var isApproved=s.indexOf('approv')!==-1;
-    if(isApproved) statusNote='This request is approved. Use this QR pass at the gate.';
+    if(isApproved) {
+        if(type==='guest_form') statusNote='This request is approved. View the entry pass in the "My Guests" tab.';
+        else statusNote='This request is approved. Use this QR pass at the gate.';
+    }
     else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
     else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
     else if(s.indexOf('pending')!==-1||s===''||s==='new') {
@@ -756,7 +846,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var html='';
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
-      if(isApproved && ref){
+      if(type!=='guest_form' && isApproved && ref){
         var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
         var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
@@ -772,14 +862,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
-      if(canCancel && ref){
-        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel reservation</button>';
+      if(type==='guest_form' && isApproved){
+         html+='<button type="button" class="item-extra-link" onclick="document.querySelector(\'[data-section=panel-my-guests]\').click()">Go to My Guests</button>';
       }
-      if(isApproved && ref){
+      if(canCancel && ref){
+        var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
+        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
+      }
+      if(type!=='guest_form' && isApproved && ref){
         var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
         html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
       }
-      if(isApproved && ref){
+      if(type!=='guest_form' && isApproved && ref){
         html+='</div></div></div>';
       }else{
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
@@ -1055,12 +1149,15 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
   }
   function isValidPhone(el){
-    var val=(el.value||'').trim();
+    var val=(el.value||'').replace(/[\s\-]/g, '');
     return /^09\d{9}$/.test(val);
   }
-  function isValidEmail(el){
+  function getEmailError(el) {
     var val=(el.value||'').trim();
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return 'Please enter a valid email.';
+    var parts = val.split('@');
+    if(/^\d+$/.test(parts[0])) return 'Email Invalid';
+    return '';
   }
   ['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){
     var el=document.getElementById(id);
@@ -1072,24 +1169,61 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var el=document.getElementById(id);
     if(!el) return;
     el.addEventListener('input',function(){
-      setWarning(id,isValidEmail(el)?'':'Please enter a valid email.');
+      var err = getEmailError(el);
+      if(!el.value.trim()) err = '';
+      setWarning(id, err);
     });
   });
   ['resident_contact','visitor_contact'].forEach(function(id){
     var el=document.getElementById(id);
     if(!el) return;
+    el.setAttribute('maxlength', '15');
+    
     el.addEventListener('input',function(){
+      var val = el.value.replace(/[^0-9+\s]/g, '');
+      if (el.value !== val) el.value = val;
+
       if(!el.value.trim()){
         setWarning(id,'');
         return;
       }
-      setWarning(id,isValidPhone(el)?'':'Please enter a valid phone number starting with 09.');
+      setWarning(id,isValidPhone(el)?'':'Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
+    });
+
+    el.addEventListener('blur', function(e){
+      var val = e.target.value.trim();
+      if (!val) return;
+      
+      // Normalize logic to 09XXXXXXXXX
+      var clean = val.replace(/\D/g, '');
+      var normalized = '';
+      
+      if (clean.length === 11 && clean.startsWith('09')) {
+         normalized = clean;
+      } else if (clean.length === 12 && clean.startsWith('639')) {
+         normalized = '0' + clean.substring(2);
+      } else if (clean.length === 10 && clean.startsWith('9')) {
+         normalized = '0' + clean;
+      } else {
+         if (!isValidPhone(el)) {
+            setWarning(id, 'Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
+         }
+         return;
+      }
+      
+      if (normalized) {
+         // Display as 09XX XXX XXXX
+         var part1 = normalized.substring(0, 4);
+         var part2 = normalized.substring(4, 7);
+         var part3 = normalized.substring(7);
+         e.target.value = part1 + ' ' + part2 + ' ' + part3;
+         setWarning(id, '');
+      }
     });
   });
 
   if(birthdateEl){
     var d=new Date();
-    d.setDate(d.getDate()-1);
     birthdateEl.setAttribute('max',d.toISOString().split('T')[0]);
   }
 
@@ -1117,8 +1251,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     if(birthdateEl && birthdateEl.value){
       var todayStr=new Date().toISOString().split('T')[0];
-      if(birthdateEl.value>=todayStr){
-        setWarning('birthdate','Birthdate must be a past date.');
+      if(birthdateEl.value>todayStr){
+        setWarning('birthdate','Birthdate cannot be in the future.');
         valid=false;
       }else{
         setWarning('birthdate','');
@@ -1128,20 +1262,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var vc=document.getElementById('visitor_contact');
     var re=document.getElementById('resident_email');
     var ve=document.getElementById('visitor_email');
-    if(re && !isValidEmail(re)){
-      setWarning('resident_email','Please enter a valid email.');
+    if(re && getEmailError(re)){
+      setWarning('resident_email', getEmailError(re));
       valid=false;
     }
-    if(ve && !isValidEmail(ve)){
-      setWarning('visitor_email','Please enter a valid email.');
+    if(ve && getEmailError(ve)){
+      setWarning('visitor_email', getEmailError(ve));
       valid=false;
     }
     if(rc && !isValidPhone(rc)){
-      setWarning('resident_contact','Please enter a valid phone number starting with 09.');
+      setWarning('resident_contact','Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
       valid=false;
     }
     if(vc && !isValidPhone(vc)){
-      setWarning('visitor_contact','Please enter a valid phone number starting with 09.');
+      setWarning('visitor_contact','Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
       valid=false;
     }
     if(idInput && !(idInput.files && idInput.files[0])){
@@ -1250,7 +1384,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         if(data && data.success){
           openGuestRefModal();
         }else{
-          setWarning('visitor_email',data && data.message ? data.message : 'Failed to save guest.');
+          var msg = data && data.message ? data.message : 'Failed to save guest.';
+          // Try to map error to field
+          if(msg.indexOf('Resident phone')!==-1) setWarning('resident_contact', msg);
+          else if(msg.indexOf('Visitor phone')!==-1) setWarning('visitor_contact', msg);
+          else if(msg.indexOf('Resident name')!==-1) setWarning('resident_full_name', msg);
+          else if(msg.indexOf('Visitor name')!==-1) setWarning('visitor_first_name', msg);
+          else if(msg.indexOf('valid ID')!==-1) setWarning('visitor_valid_id', msg);
+          else if(msg.indexOf('Resident email')!==-1) setWarning('resident_email', msg);
+          else if(msg.indexOf('Visitor email')!==-1) setWarning('visitor_email', msg);
+          else setWarning('visitor_email', msg);
         }
       })["catch"](function(){
         setWarning('visitor_email','Error connecting to server.');

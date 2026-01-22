@@ -127,9 +127,13 @@ if ($con instanceof mysqli) {
       <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required>
     </div>
     <div class="form-row">
-      <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
-      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
+      <div style="flex:1;">
+        <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
+      </div>
+      <div style="flex:1;">
+        <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+        <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
+      </div>
     </div>
 
     <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
@@ -152,7 +156,9 @@ if ($con instanceof mysqli) {
       <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
       <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
     </div>
-    <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+    <div class="form-group">
+      <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+    </div>
 
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
@@ -235,8 +241,8 @@ if ($con instanceof mysqli) {
     <h2>Confirm Guest Request</h2>
     <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
-      <button type="button" class="btn-secondary" id="verifyConfirmBtn">Confirm</button>
+      <button type="button" class="btn-cancel" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="btn-confirm" id="verifyConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
@@ -320,18 +326,24 @@ function sanitizeNameInput(e){
   } 
 }
 function isValidPhone(el){ 
-  // Allow +639... or 09...
+  // Strict 11 digits starting with 09
   const val=el.value.replace(/[\s\-]/g, '');
-  return /^(\+639|09)\d{9}$/.test(val) || /^9\d{9}$/.test(val) || /^639\d{9}$/.test(val);
+  return /^09\d{9}$/.test(val);
 }
-function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
+function getEmailError(el) {
+  const val=el.value.trim(); 
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return 'Please enter a valid email.';
+  const parts = val.split('@');
+  if(/^\d+$/.test(parts[0])) return 'Email Invalid';
+  return '';
+}
 ['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockInvalidNameChars); el.addEventListener('input',sanitizeNameInput); });
 
-['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
+['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, getEmailError(el) === 'Please enter a valid email.' && el.value.trim() === '' ? '' : (getEmailError(el) === 'Please enter a valid email.' ? '' : getEmailError(el))); }); });
 ['resident_contact','visitor_contact'].forEach(function(id){ 
   const el=document.getElementById(id); 
   if(!el) return; 
-  el.setAttribute('maxlength', '20');
+  el.setAttribute('maxlength', '15');
   
   el.addEventListener('input', function(e){ 
     // Allow digits, plus, spaces
@@ -340,7 +352,6 @@ function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.
     
     // Basic format guidance
     if(!el.value.trim()){ setWarning(id,''); return; } 
-    // Clear warning while typing if it looks partially valid
     setWarning(id,'');
   }); 
 
@@ -348,38 +359,37 @@ function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.
     let val = e.target.value.trim();
     if (!val) return;
     
-    // Normalize logic
+    // Normalize logic to 09XXXXXXXXX
     let clean = val.replace(/\D/g, '');
     let normalized = '';
     
     if (clean.length === 11 && clean.startsWith('09')) {
-       normalized = '+63' + clean.substring(1);
+       normalized = clean;
     } else if (clean.length === 12 && clean.startsWith('639')) {
-       normalized = '+' + clean;
+       normalized = '0' + clean.substring(2);
     } else if (clean.length === 10 && clean.startsWith('9')) {
-       normalized = '+63' + clean;
+       normalized = '0' + clean;
     } else {
        if (!isValidPhone(el)) {
-          setWarning(id, 'Format: +63 9XX XXX XXXX or 09XX XXX XXXX');
+          setWarning(id, 'Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
        }
        return;
     }
     
     if (normalized) {
-       // Display as +63 9XX XXX XXXX
-       const part1 = normalized.substring(0, 3);
-       const part2 = normalized.substring(3, 6);
-       const part3 = normalized.substring(6, 9);
-       const part4 = normalized.substring(9);
-       e.target.value = `${part1} ${part2} ${part3} ${part4}`;
+       // Display as 09XX XXX XXXX
+       const part1 = normalized.substring(0, 4);
+       const part2 = normalized.substring(4, 7);
+       const part3 = normalized.substring(7);
+       e.target.value = `${part1} ${part2} ${part3}`;
        setWarning(id, '');
     }
   });
 });
 
-// Birthdate must be a past date (not today)
+// Birthdate must be not in the future
 if (birthdateEl) {
-  var d=new Date(); d.setDate(d.getDate()-1);
+  var d=new Date();
   birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
 }
 
@@ -447,8 +457,8 @@ if (birthdateEl) {
   }
   if (birthdateEl && birthdateEl.value){
     var todayStr = new Date().toISOString().split('T')[0];
-    if (birthdateEl.value >= todayStr){
-      setWarning('birthdate','Birthdate must be a past date.');
+    if (birthdateEl.value > todayStr){
+      setWarning('birthdate','Birthdate cannot be in the future.');
       valid = false;
     } else {
       setWarning('birthdate','');
@@ -458,10 +468,10 @@ if (birthdateEl) {
   const vc=document.getElementById('visitor_contact');
   const re=document.getElementById('resident_email');
   const ve=document.getElementById('visitor_email');
-  if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
-  if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }
-  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number (e.g. +63 9XX...).'); valid=false; }
-  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number (e.g. +63 9XX...).'); valid=false; }
+  if(re && getEmailError(re)){ setWarning('resident_email', getEmailError(re)); valid=false; }
+  if(ve && getEmailError(ve)){ setWarning('visitor_email', getEmailError(ve)); valid=false; }
+  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number (e.g. 09XX XXX XXXX).'); valid=false; }
+  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number (e.g. 09XX XXX XXXX).'); valid=false; }
   if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
   return valid;
 }
@@ -532,7 +542,16 @@ async function performSubmit(){
     if (data && data.success) {
       openModal();
     } else {
-      setWarning('visitor_email', data && data.message ? data.message : 'Failed to save guest.');
+      let msg = data && data.message ? data.message : 'Failed to save guest.';
+      // Try to map error to field
+      if(msg.includes('Resident phone')) setWarning('resident_contact', msg);
+      else if(msg.includes('Visitor phone')) setWarning('visitor_contact', msg);
+      else if(msg.includes('Resident name')) setWarning('resident_full_name', msg);
+      else if(msg.includes('Visitor name')) setWarning('visitor_first_name', msg);
+      else if(msg.includes('valid ID')) setWarning('visitor_valid_id', msg);
+      else if(msg.includes('Resident email')) setWarning('resident_email', msg);
+      else if(msg.includes('Visitor email')) setWarning('visitor_email', msg);
+      else setWarning('visitor_email', msg); // Fallback
     }
   } catch (err) {
     setWarning('visitor_email', 'Error connecting to server.');

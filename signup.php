@@ -165,22 +165,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $address = null;
   }
 
-  // Normalize phone number to +63 format
+  // Normalize phone number to 09 format (11 digits)
   $phoneClean = preg_replace('/[\s\-]/', '', $phone);
-  if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
-      $phone = '+63' . $matches[1];
-  } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
-      $phone = '+63' . $matches[1];
-  } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
-      $phone = '+63' . $matches[1];
+  // Remove leading +63 or 63
+  if (preg_match('/^(\+63|63)(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '0' . $matches[2];
+  } elseif (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '0' . $matches[1];
   } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
-      $phone = '+63' . $matches[1];
+      $phone = '0' . $matches[1];
   } else {
-      // Keep original for error reporting if it doesn't match standard patterns
+      // Keep original for error reporting
   }
 
-  if (empty($phone) || !preg_match('/^\+639\d{9}$/', $phone)) {
-    $serverErrors['phone'] = 'Phone number must be a valid PH mobile number (e.g., 09XX... or +63 9XX...).';
+  if (empty($phone) || !preg_match('/^09\d{9}$/', $phone)) {
+    $serverErrors['phone'] = 'Phone number must be 11 digits and start with 09 (e.g., 09XX XXX XXXX).';
   }
 
   if (empty($serverErrors)) {
@@ -302,14 +301,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       z-index: 2; /* ensure close button clickable over toggle icon */
     }
     .password-field { position: relative; display: block; }
+    .password-field input { padding-right: 40px !important; }
     .toggle-password { 
       position: absolute; 
-      right: 10px; 
+      right: 12px; 
       top: 50%; 
       transform: translateY(-50%); 
       z-index: 10; 
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      width: 24px;
+      height: 24px;
+      transition: color 0.2s ease;
     }
+    .toggle-password:hover { color: #23412e; }
+    .toggle-password svg { width: 20px; height: 20px; }
     .field-warning .warn-icon {
       width: 18px; height: 18px; border-radius: 50%;
       background: #c0392b; color: #fff; display: inline-flex;
@@ -513,14 +522,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         </div>
 
-        <div class="password-field">
-          <input type="password" id="password" name="password" placeholder="Password*" required>
-          <span class="toggle-password" onclick="togglePassword('password', this)">👁️</span>
+        <div class="input-wrap">
+          <div class="password-field">
+            <input type="password" id="password" name="password" placeholder="Password*" required>
+            <span class="toggle-password" onclick="togglePassword('password', this)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </span>
+          </div>
         </div>
 
-        <div class="password-field">
-          <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password*" required>
-          <span class="toggle-password" onclick="togglePassword('confirm_password', this)">👁️</span>
+        <div class="input-wrap">
+          <div class="password-field">
+            <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password*" required>
+            <span class="toggle-password" onclick="togglePassword('confirm_password', this)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </span>
+          </div>
         </div>
 
         <script>
@@ -656,7 +673,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     function togglePassword(id, el) {
       const input = document.getElementById(id);
       if (!input) return;
-      input.type = input.type === 'password' ? 'text' : 'password';
+      
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      
+      if (isPassword) {
+        el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye-off"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+      } else {
+        el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+      }
     }
 
     function openTerms() {
@@ -866,7 +891,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // Auto-dismiss warning if input becomes valid
         if (inputEl && (key === 'phone' || key === 'email')) {
           inputEl.addEventListener('input', function autoDismiss(){
-            if ((key === 'phone' && /^09\d{9}$/.test(inputEl.value.trim())) || (key === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEl.value.trim()))) {
+            if ((key === 'phone' && /^09\d{9}$/.test(inputEl.value.replace(/\D/g, ''))) || (key === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEl.value.trim()))) {
               if (warnEl) warnEl.remove();
               inputEl.removeEventListener('input', autoDismiss);
             }
@@ -956,35 +981,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
            let clean = val.replace(/\D/g, '');
            
            // 2. Check patterns
-           // 09XX... (11 digits) -> +639XX...
-           // 639XX... (12 digits) -> +639XX...
-           // 9XX... (10 digits) -> +639XX...
+           // 09XX... (11 digits) -> 09XX...
+           // 639XX... (12 digits) -> 09XX...
+           // 9XX... (10 digits) -> 09XX...
            
            let normalized = '';
            
            if (clean.length === 11 && clean.startsWith('09')) {
-              normalized = '+63' + clean.substring(1);
+              normalized = clean;
            } else if (clean.length === 12 && clean.startsWith('639')) {
-              normalized = '+' + clean;
+              normalized = '0' + clean.substring(2);
            } else if (clean.length === 10 && clean.startsWith('9')) {
-              normalized = '+63' + clean;
+              normalized = '0' + clean;
            } else {
               // Invalid or unrecognized format
               if (val.length > 0) {
-                 setWarning('phone', 'Format: +63 9XX XXX XXXX or 09XX XXX XXXX');
+                 setWarning('phone', 'Format: 09XX XXX XXXX (11 digits)');
               }
               return;
            }
            
-           // Format for display: +63 9XX XXX XXXX
-           // +639171234567 -> +63 917 123 4567
+           // Format for display: 09XX XXX XXXX
+           // 09171234567 -> 0917 123 4567
            if (normalized) {
-              const part1 = normalized.substring(0, 3); // +63
-              const part2 = normalized.substring(3, 6); // 917
-              const part3 = normalized.substring(6, 9); // 123
-              const part4 = normalized.substring(9);    // 4567
+              const part1 = normalized.substring(0, 4); // 0917
+              const part2 = normalized.substring(4, 7); // 123
+              const part3 = normalized.substring(7);    // 4567
               
-              e.target.value = `${part1} ${part2} ${part3} ${part4}`;
+              e.target.value = `${part1} ${part2} ${part3}`;
               setWarning('phone', '');
            }
         });
@@ -1221,10 +1245,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
           // Phone format: 09 followed by 9 digits (PH mobile)
           if (phone) {
-            const val = phone.value.trim();
+            // Remove spaces and other non-digits before checking format
+            const val = phone.value.replace(/\D/g, '');
             if (!/^09\d{9}$/.test(val)) {
               setWarning('phone', 'Phone number must be 11 digits and start with 09.');
               valid = false;
+            } else {
+               // Update value to stripped version for submission? 
+               // Actually, PHP handles stripping spaces, so we just need to validate the stripped version here.
+               setWarning('phone', '');
             }
           }
 

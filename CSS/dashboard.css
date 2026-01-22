@@ -911,7 +911,7 @@ body {
     padding: 10px 0;
     border-bottom: 1px solid #f9f9f9;
     font-size: 0.9rem;
-    align-items: center;
+    align-items: flex-start;
 }
 
 .detail-row:last-child {
@@ -923,15 +923,16 @@ body {
     color: #555;
     width: 35%;
     flex-shrink: 0;
+    padding-top: 2px; /* Slight adjustment for alignment */
 }
 
 .detail-value {
     color: #333;
     text-align: right;
     width: 60%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .profile-actions {

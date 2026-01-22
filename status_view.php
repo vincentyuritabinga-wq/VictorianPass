@@ -306,6 +306,7 @@
                 const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
                 const statusLower = (data.status||'').toLowerCase();
                 const canCancel = statusLower==='pending';
+                const isGuest = String(data.type||'').toLowerCase() === 'guest entry';
                 dashboardRows.innerHTML = `
                   <tr>
                     <td>${data.name}</td>
@@ -320,7 +321,7 @@
                         ? `<a class="qr-btn" href="qr_view.php?code=${encodeURIComponent(code)}">View QR</a>`
                         : `<button class="qr-btn disabled" disabled>QR Disabled</button>`}
                     </td>
-                    <td><button class="cancel-btn" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? 'Cancel Reservation' : 'Cancel Disabled'}</button></td>
+                    <td><button class="cancel-btn" onclick="confirmCancel()" ${canCancel ? '' : 'disabled'}>${canCancel ? (isGuest ? 'Cancel Request' : 'Cancel Reservation') : 'Cancel Disabled'}</button></td>
                   </tr>`;
               }, 600);
             } else {
@@ -478,9 +479,33 @@
 
     
     function confirmCancel(){
-      const statusLower = String((window.statusData || {}).status || '').toLowerCase();
+      const data = window.statusData || {};
+      const statusLower = String(data.status || '').toLowerCase();
       if(statusLower !== 'pending'){ alert('Cancel only available for pending reservations.'); return; }
-      document.getElementById('cancelModal').style.display='flex';
+      
+      const modal = document.getElementById('cancelModal');
+      const isGuest = String(data.type || '').toLowerCase() === 'guest entry';
+      const h3 = modal.querySelector('h3');
+      const pBody = modal.querySelector('.details-body p:first-child');
+      const pNote = modal.querySelector('.details-body p:nth-of-type(2)');
+      const btnKeep = modal.querySelector('.qr-btn'); // "Keep Reservation" button
+
+      if(isGuest){
+        if(h3) h3.textContent = 'Cancel Request';
+        if(pBody) pBody.textContent = 'Are you sure you want to cancel this request?';
+        if(pNote) pNote.style.display = 'none';
+        if(btnKeep) btnKeep.textContent = 'Keep Request';
+      } else {
+        if(h3) h3.textContent = 'Cancel Reservation';
+        if(pBody) pBody.textContent = 'Are you sure you want to cancel this reservation?';
+        if(pNote) {
+           pNote.style.display = 'block';
+           pNote.textContent = 'Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.';
+        }
+        if(btnKeep) btnKeep.textContent = 'Keep Reservation';
+      }
+
+      modal.style.display='flex';
     }
     function closeCancelModal(){
       document.getElementById('cancelModal').style.display='none';
@@ -488,8 +513,11 @@
     function performCancel(){
       const params=new URLSearchParams(window.location.search);
       const code=params.get('code');
-      const statusLower = String((window.statusData || {}).status || '').toLowerCase();
-      if(statusLower !== 'pending'){ alert('Unable to cancel: only pending reservations can be canceled'); return; }
+      const d = window.statusData || {};
+      const statusLower = String(d.status || '').toLowerCase();
+      const isGuest = String(d.type || '').toLowerCase() === 'guest entry';
+
+      if(statusLower !== 'pending'){ alert(isGuest ? 'Unable to cancel: only pending requests can be canceled' : 'Unable to cancel: only pending reservations can be canceled'); return; }
       if(!code){ alert('Missing reservation code'); return; }
       fetch('status.php',{
         method:'POST',
@@ -498,14 +526,13 @@
       }).then(r=>r.json()).then(data=>{
         if(data && data.success){
           closeCancelModal();
-          alert('Reservation cancelled. Downpayment is non-refundable.');
+          alert(isGuest ? 'Request cancelled.' : 'Reservation cancelled. Downpayment is non-refundable.');
           try {
             try { sessionStorage.setItem('cancelled:'+code, '1'); } catch(_){}
-            const d = window.statusData || {};
             d.status = 'cancelled';
             window.statusData = d;
             const statusDiv = document.getElementById('statusResult');
-            statusDiv.textContent = '❌ Cancelled Reservation';
+            statusDiv.textContent = isGuest ? '❌ Cancelled Request' : '❌ Cancelled Reservation';
             statusDiv.className = 'status-message cancelled';
             const dateDisplay = (d.start_date && d.end_date)
               ? `${d.start_date} → ${d.end_date}`

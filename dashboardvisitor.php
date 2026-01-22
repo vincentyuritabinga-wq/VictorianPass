@@ -294,6 +294,28 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(!cancelModal) return;
     cancelModalRef=ref;
     cancelModalLi=li;
+    
+    var type = (li.getAttribute('data-type')||'').toLowerCase();
+    var h3 = cancelModal.querySelector('h3');
+    var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
+    var pNote = cancelModal.querySelector('.cancel-modal-note');
+    var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    
+    if(type === 'guest_form' || type === 'guest entry'){
+      if(h3) h3.textContent = 'Cancel Request';
+      if(pBody) pBody.textContent = 'Are you sure you want to cancel this request?';
+      if(pNote) pNote.style.display = 'none';
+      if(btnKeep) btnKeep.textContent = 'Keep Request';
+    } else {
+      if(h3) h3.textContent = 'Cancel Reservation';
+      if(pBody) pBody.textContent = 'Are you sure you want to cancel this reservation?';
+      if(pNote) {
+        pNote.style.display = 'block';
+        pNote.textContent = 'Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.';
+      }
+      if(btnKeep) btnKeep.textContent = 'Keep Reservation';
+    }
+    
     cancelModal.style.display='flex';
   }
   function closeCancelModalVisitor(){
@@ -309,13 +331,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       closeCancelModalVisitor();
       return;
     }
+    var type = (li.getAttribute('data-type')||'').toLowerCase();
+    var isGuest = (type === 'guest_form' || type === 'guest entry');
+
     fetch('status.php',{
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({action:'cancel',code:ref})
     }).then(function(r){return r.json();}).then(function(data){
       if(!data||!data.success){
-        alert(data && data.message ? data.message : 'Unable to cancel reservation.');
+        alert(data && data.message ? data.message : (isGuest ? 'Unable to cancel request.' : 'Unable to cancel reservation.'));
         return;
       }
       li.setAttribute('data-status','cancelled');
@@ -336,6 +361,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
       }
       closeCancelModalVisitor();
+      alert(isGuest ? 'Request cancelled.' : 'Reservation cancelled.');
     })["catch"](function(){
       alert('Network error. Please try again.');
     });
@@ -420,7 +446,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       if(canCancel && ref){
-        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel reservation</button>';
+        var cancelLabel = (type === 'guest_form' || type === 'guest entry') ? 'Cancel Request' : 'Cancel Reservation';
+        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
       }
       if(isApproved && ref){
         html+='</div></div></div>';
@@ -625,7 +652,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if (!activityModal || !activityModalBody) return;
     }
     activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
-    activityModal.style.display = 'block';
+    activityModal.style.display = 'flex';
 
     fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
       .then(r => r.text())
