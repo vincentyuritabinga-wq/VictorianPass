@@ -22,6 +22,7 @@ if ($con) {
     }
     $stmt->close();
 }
+$firstName = $user_data['first_name'] ?? 'Visitor';
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 
 // Profile Picture Logic
@@ -110,9 +111,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
   <!-- MAIN CONTENT -->
   <main class="main-content">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <!-- Top Header -->
     <header class="top-header">
       <div class="header-brand">
+        <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
         <img src="images/logo.svg" alt="Logo">
         <div class="brand-text">
           <span class="brand-main">VictorianPass</span>
@@ -123,7 +126,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
         <a href="#" class="user-profile" id="profileTrigger">
-          <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
+          <span class="user-name">Hi, <?php echo htmlspecialchars($firstName); ?></span>
           <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
         </a>
       </div>
@@ -257,13 +260,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         alert(data && data.message ? data.message : 'Unable to cancel reservation.');
         return;
       }
-      li.setAttribute('data-status','denied');
-      prevStatuses[ref]='denied';
+      li.setAttribute('data-status','cancelled');
+      prevStatuses[ref]='cancelled';
       var badge=li.querySelector('.status-badge');
       if(badge){
-        badge.textContent=fmtLabel('denied');
+        badge.textContent=fmtLabel('cancelled');
         badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
-        badge.classList.add(statusClassFor('denied'));
+        badge.classList.add(statusClassFor('cancelled'));
       }
       var extraEl=li.querySelector('.item-extra');
       if(extraEl){
@@ -294,6 +297,25 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       performCancelVisitor();
     });
   }
+
+  // Sidebar Toggle Logic
+  var menuToggle = document.getElementById('menuToggle');
+  var sidebar = document.querySelector('.sidebar');
+  var overlay = document.getElementById('sidebarOverlay');
+
+  if(menuToggle && sidebar && overlay) {
+      function closeSidebar() {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('show');
+      }
+
+      menuToggle.addEventListener('click', function() {
+          sidebar.classList.add('open');
+          overlay.classList.add('show');
+      });
+
+      overlay.addEventListener('click', closeSidebar);
+  }
   function buildExtraContent(li, extra){
     var type=(li.getAttribute('data-type')||'').toLowerCase();
     var status=li.getAttribute('data-status')||'';
@@ -305,6 +327,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var isApproved=s.indexOf('approv')!==-1;
     if(isApproved) statusNote='This request is approved. Use this QR pass at the gate.';
     else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
+    else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
     else if(s.indexOf('pending')!==-1||s===''||s==='new') statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
@@ -348,8 +371,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(isApproved && ref){
         html+='</div></div></div>';
       }else{
-        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
-        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">View details</a>';
+        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
         html+='</div></div></div>';
       }
     }else{
@@ -368,6 +390,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       cancelBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openCancelModal(li,ref);
+      });
+    }
+    var viewBtn=extra.querySelector('.view-details-btn');
+    if(viewBtn && ref){
+      viewBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        openActivityModal(ref);
       });
     }
   }
@@ -486,6 +515,48 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       })["catch"](function(){});
   }
   setInterval(refreshStatuses,10000);
+
+  // Modal handling
+  var activityModal = document.getElementById('activityModal');
+  var activityModalBody = document.getElementById('activityModalBody');
+  var activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
+
+  window.openActivityModal = function(refCode) {
+    if (!activityModal || !activityModalBody) {
+      activityModal = document.getElementById('activityModal');
+      activityModalBody = document.getElementById('activityModalBody');
+      activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
+      if (activityModalClose) {
+          activityModalClose.onclick = function() {
+            activityModal.style.display = 'none';
+          };
+      }
+      if (!activityModal || !activityModalBody) return;
+    }
+    activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+    activityModal.style.display = 'block';
+
+    fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
+      .then(r => r.text())
+      .then(html => {
+        activityModalBody.innerHTML = html;
+      })
+      .catch(() => {
+        activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Failed to load details.</div>';
+      });
+  };
+
+  if (activityModalClose) {
+    activityModalClose.onclick = function() {
+      activityModal.style.display = 'none';
+    };
+  }
+
+  window.onclick = function(event) {
+    if (event.target == activityModal) {
+      activityModal.style.display = 'none';
+    }
+  };
 })();
 </script>
 <div id="profileModal" class="profile-modal">
@@ -529,6 +600,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <div class="profile-actions">
        <a href="logout.php" class="btn-logout-modal">Log Out</a>
     </div>
+  </div>
+</div>
+
+<div id="activityModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div id="activityModalBody"></div>
   </div>
 </div>
 

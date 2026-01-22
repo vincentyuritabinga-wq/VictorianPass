@@ -1,4 +1,17 @@
 /* Reset + Font */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
+/* GLOBAL BUTTON STYLES */
+.btn, button, input[type="submit"], input[type="button"] {
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn:active, button:active, input[type="submit"]:active, input[type="button"]:active {
+  transform: scale(0.98);
+}
+
 * {
   margin: 0;
   padding: 0;

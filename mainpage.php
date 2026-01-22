@@ -142,6 +142,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $birthdate = $_POST['birthdate'] ?? '';
   $contact = trim($_POST['contact'] ?? '');
 
+  // Normalize phone number to +63 format
+  $phoneClean = preg_replace('/[\s\-]/', '', $contact);
+  if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  }
+
   // Basic validation mirroring client rules
   if ($first === '' || preg_match('/\d/', $first)) { $formErrors[] = 'Please provide a valid First Name.'; }
   if ($last === '' || preg_match('/\d/', $last)) { $formErrors[] = 'Please provide a valid Last Name.'; }
@@ -149,7 +161,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $formErrors[] = 'A valid email is required.'; }
   if ($sex === '') { $formErrors[] = 'Sex is required.'; }
   if ($birthdate === '') { $formErrors[] = 'Birthdate is required.'; }
-  if ($contact !== '' && (!preg_match('/^09\d{9}$/', $contact) && !preg_match('/^\+639\d{9}$/', $contact))) { $formErrors[] = 'Use 09xxxxxxxxx or +639xxxxxxxxx for contact.'; }
+  if ($contact !== '' && !preg_match('/^\+639\d{9}$/', $contact)) { $formErrors[] = 'Use valid PH mobile format (+63 9XX XXX XXXX or 09XX XXX XXXX).'; }
+  if (!isset($_POST['terms'])) { $formErrors[] = 'You must agree to the Terms and Services.'; }
+  if (!isset($_POST['privacy'])) { $formErrors[] = 'You must acknowledge the Privacy Policy.'; }
 
   // Handle valid ID upload (REQUIRED)
   $validIdPath = null;
@@ -242,7 +256,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="nav-actions">
         <?php if ($isLoggedIn): ?>
           <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
-             <span>Hi, <?php echo htmlspecialchars($userFirstName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
+             <span>Hi, <?php $dispName = explode(' ', trim($userFirstName ?: 'User'))[0]; echo htmlspecialchars($dispName); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
              <div class="profile-icon-wrap" id="profileWrap">
                <button id="profileAccountTrigger" type="button" class="profile-account-btn" style="background:none;border:none;padding:0;cursor:pointer;">
                  <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="profile-icon">
@@ -293,16 +307,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <p class="tagline">Every home has a Story. Starts Your in a Place Worth Remembering</p>
 
-      <div class="action-buttons" style="margin-top: 30px; display:flex; gap:15px; flex-wrap:wrap;">
+      <div class="action-buttons" style="margin-top: 30px; gap:15px; flex-wrap:wrap;">
         <?php if (!$isLoggedIn): ?>
-          <button class="btn-change" onclick="window.location.href='login.php'" style="padding: 16px 40px; font-size: 1.2rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Let’s Start</button>
+          <button class="btn-change btn-start" onclick="window.location.href='login.php'">Let’s Start</button>
           <!-- Check Status button removed per UX update -->
         <?php else: ?>
           <?php if ($isVisitor): ?>
-             <button class="btn-change" onclick="window.location.href='reserve.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #f2c24f; color: #23412e; box-shadow: 0 4px 15px rgba(242, 194, 79, 0.4); border:none; cursor:pointer; font-weight:600;">Reserve an Amenity</button>
+             <button class="btn-change btn-reserve" onclick="window.location.href='reserve.php'">Reserve an Amenity</button>
              <!-- Check Status removed for visitors on landing page -->
           <?php else: ?>
-             <button class="btn-change" onclick="window.location.href='profileresident.php'" style="padding: 16px 32px; font-size: 1.1rem; border-radius: 40px; background: #23412e; color: #fff; box-shadow: 0 4px 15px rgba(35, 65, 46, 0.4); border:1px solid #f2c24f; cursor:pointer; font-weight:600;">My Dashboard</button>
+             <button class="btn-change btn-dashboard" onclick="window.location.href='profileresident.php'">My Dashboard</button>
           <?php endif; ?>
         <?php endif; ?>
       </div>

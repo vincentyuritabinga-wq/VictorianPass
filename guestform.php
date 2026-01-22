@@ -35,8 +35,13 @@ $houseNumber = $user['house_number'] ?? '';
 $email = $user['email'] ?? '';
 $phone = $user['phone'] ?? '';
 $phoneNormalized = $phone;
-if (preg_match('/^\+63(9\d{9})$/', $phone)) {
-  $phoneNormalized = '0' . substr($phone, 3);
+$pClean = preg_replace('/\D/', '', $phoneNormalized);
+if (strlen($pClean) === 11 && strpos($pClean, '09') === 0) {
+    $phoneNormalized = '+63' . substr($pClean, 1);
+} elseif (strlen($pClean) === 12 && strpos($pClean, '639') === 0) {
+    $phoneNormalized = '+' . $pClean;
+} elseif (strlen($pClean) === 10 && strpos($pClean, '9') === 0) {
+    $phoneNormalized = '+63' . $pClean;
 }
 
 $guestRows = [];
@@ -124,6 +129,7 @@ if ($con instanceof mysqli) {
     <div class="form-row">
       <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
       <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
     </div>
 
     <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
@@ -144,6 +150,7 @@ if ($con instanceof mysqli) {
     </div>
     <div class="input-wrap">
       <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
+      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
     </div>
     <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
 
@@ -293,14 +300,82 @@ function setWarning(key, message){
 }
 
 // Client-side validation following signup patterns
-function blockDigits(e){ if(/[0-9]/.test(e.key)){ e.preventDefault(); setWarning(e.target.id, 'Numbers are not allowed in this field.'); } }
-function sanitizeNoDigits(e){ const val=e.target.value; const cleaned=val.replace(/[0-9]/g,''); if(val!==cleaned){ e.target.value=cleaned; setWarning(e.target.id,'Numbers were removed.'); } else { setWarning(e.target.id,''); } }
-function isValidPhone(el){ const val=el.value.trim(); return /^09\d{9}$/.test(val); }
+function blockInvalidNameChars(e){ 
+  if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'].includes(e.key)) return;
+  if (!/^[a-zA-Z\s\-]$/.test(e.key)){ 
+    e.preventDefault(); 
+    setWarning(e.target.id, 'Only letters, spaces, and hyphens are allowed.'); 
+  } else {
+    setWarning(e.target.id, '');
+  }
+}
+function sanitizeNameInput(e){ 
+  const val=e.target.value; 
+  const cleaned=val.replace(/[^a-zA-Z\s\-]/g,''); 
+  if(val!==cleaned){ 
+    e.target.value=cleaned; 
+    setWarning(e.target.id,'Only letters, spaces, and hyphens are allowed.'); 
+  } else { 
+    setWarning(e.target.id,''); 
+  } 
+}
+function isValidPhone(el){ 
+  // Allow +639... or 09...
+  const val=el.value.replace(/[\s\-]/g, '');
+  return /^(\+639|09)\d{9}$/.test(val) || /^9\d{9}$/.test(val) || /^639\d{9}$/.test(val);
+}
 function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
-['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockDigits); el.addEventListener('input',sanitizeNoDigits); });
+['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockInvalidNameChars); el.addEventListener('input',sanitizeNameInput); });
 
 ['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
-['resident_contact','visitor_contact'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(){ if(!el.value.trim()){ setWarning(id,''); return; } setWarning(id, isValidPhone(el)? '' : 'Please enter a valid phone number starting with 09.'); }); });
+['resident_contact','visitor_contact'].forEach(function(id){ 
+  const el=document.getElementById(id); 
+  if(!el) return; 
+  el.setAttribute('maxlength', '20');
+  
+  el.addEventListener('input', function(e){ 
+    // Allow digits, plus, spaces
+    let val = el.value.replace(/[^0-9+\s]/g, '');
+    if (el.value !== val) el.value = val;
+    
+    // Basic format guidance
+    if(!el.value.trim()){ setWarning(id,''); return; } 
+    // Clear warning while typing if it looks partially valid
+    setWarning(id,'');
+  }); 
+
+  el.addEventListener('blur', function(e){
+    let val = e.target.value.trim();
+    if (!val) return;
+    
+    // Normalize logic
+    let clean = val.replace(/\D/g, '');
+    let normalized = '';
+    
+    if (clean.length === 11 && clean.startsWith('09')) {
+       normalized = '+63' + clean.substring(1);
+    } else if (clean.length === 12 && clean.startsWith('639')) {
+       normalized = '+' + clean;
+    } else if (clean.length === 10 && clean.startsWith('9')) {
+       normalized = '+63' + clean;
+    } else {
+       if (!isValidPhone(el)) {
+          setWarning(id, 'Format: +63 9XX XXX XXXX or 09XX XXX XXXX');
+       }
+       return;
+    }
+    
+    if (normalized) {
+       // Display as +63 9XX XXX XXXX
+       const part1 = normalized.substring(0, 3);
+       const part2 = normalized.substring(3, 6);
+       const part3 = normalized.substring(6, 9);
+       const part4 = normalized.substring(9);
+       e.target.value = `${part1} ${part2} ${part3} ${part4}`;
+       setWarning(id, '');
+    }
+  });
+});
 
 // Birthdate must be a past date (not today)
 if (birthdateEl) {
@@ -308,7 +383,47 @@ if (birthdateEl) {
   birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
 }
 
-function validateForm(){
+  /* Modal Styles */
+  .center-modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+  }
+  .center-modal-content {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      animation: fadeIn 0.3s;
+  }
+  .center-modal-content h3 { margin-top: 0; color: #23412e; }
+  .close-center {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #888;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+  function openTerms(){ document.getElementById('termsModal').style.display='flex'; }
+  function closeTerms(){ document.getElementById('termsModal').style.display='none'; }
+  function openPrivacy(){ document.getElementById('privacyModal').style.display='flex'; }
+  function closePrivacy(){ document.getElementById('privacyModal').style.display='none'; }
+
+  function validateForm(){
   let valid = true;
   const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','birthdate','visitor_contact'];
   reqIds.forEach(function(id){
@@ -345,8 +460,8 @@ function validateForm(){
   const ve=document.getElementById('visitor_email');
   if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
   if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }
-  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number starting with 09.'); valid=false; }
-  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number starting with 09.'); valid=false; }
+  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number (e.g. +63 9XX...).'); valid=false; }
+  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number (e.g. +63 9XX...).'); valid=false; }
   if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
   return valid;
 }

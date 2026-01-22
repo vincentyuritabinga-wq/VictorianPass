@@ -46,12 +46,28 @@ if (!preg_match($namePattern, $visitor_first_name) || !preg_match($namePattern, 
   echo json_encode(['success' => false, 'message' => 'Visitor names must contain letters only.']);
   exit;
 }
-if (!preg_match('/^09\d{9}$/', $resident_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Resident phone must start with 09 and contain numbers only.']);
+// Normalize phone numbers to +63 format
+$phonesToNormalize = ['resident_contact' => &$resident_contact, 'visitor_contact' => &$visitor_contact];
+foreach ($phonesToNormalize as $key => &$pVal) {
+    $phoneClean = preg_replace('/[\s\-]/', '', $pVal);
+    if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '+63' . $matches[1];
+    } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '+63' . $matches[1];
+    } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '+63' . $matches[1];
+    } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '+63' . $matches[1];
+    }
+}
+unset($pVal);
+
+if (!preg_match('/^\+639\d{9}$/', $resident_contact)) {
+  echo json_encode(['success' => false, 'message' => 'Resident phone must be a valid PH mobile number (e.g. 09XX... or +63 9XX...).']);
   exit;
 }
-if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor phone must start with 09 and contain numbers only.']);
+if (!preg_match('/^\+639\d{9}$/', $visitor_contact)) {
+  echo json_encode(['success' => false, 'message' => 'Visitor phone must be a valid PH mobile number (e.g. 09XX... or +63 9XX...).']);
   exit;
 }
 if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {

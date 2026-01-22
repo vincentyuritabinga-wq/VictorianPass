@@ -4,6 +4,10 @@
 body { margin: 0; font-family: 'Poppins', sans-serif; background: #fafbfc; color: #222; animation: fadeIn .6s ease-in-out; padding-top: 76px; }
 html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%; overflow-y: auto; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 /* Navigation */
 .navbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 6%; background: rgba(43, 38, 35, 0.95); backdrop-filter: blur(10px); position: fixed; top: 0; left: 0; right: 0; z-index: 1000; border-bottom: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -483,7 +487,7 @@ select:focus {
   width: 90%;
   max-width: 450px;
   text-align: center;
-  animation: fadeIn 0.5s ease-in-out;
+  animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
   border: 1px solid #e5e7eb;
 }

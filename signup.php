@@ -118,7 +118,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   }
 
   if ($terms_agreed !== '1') {
-    $serverErrors['terms'] = 'Please read and agree to the Terms & Conditions.';
+    $serverErrors['terms'] = 'Please read and agree to the Terms and Services.';
   }
 
   if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -165,8 +165,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $address = null;
   }
 
-  if (empty($phone) || !preg_match('/^09\d{9}$/', $phone)) {
-    $serverErrors['phone'] = 'Phone number must be 11 digits and start with 09.';
+  // Normalize phone number to +63 format
+  $phoneClean = preg_replace('/[\s\-]/', '', $phone);
+  if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '+63' . $matches[1];
+  } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '+63' . $matches[1];
+  } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '+63' . $matches[1];
+  } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
+      $phone = '+63' . $matches[1];
+  } else {
+      // Keep original for error reporting if it doesn't match standard patterns
+  }
+
+  if (empty($phone) || !preg_match('/^\+639\d{9}$/', $phone)) {
+    $serverErrors['phone'] = 'Phone number must be a valid PH mobile number (e.g., 09XX... or +63 9XX...).';
   }
 
   if (empty($serverErrors)) {
@@ -383,6 +397,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       from { opacity: 0; transform: translateY(-20px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes slideDownFade {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .field-warning, .field-warning-inline {
+      animation: slideDownFade 0.3s ease-out forwards;
+    }
   </style>
 </head>
 
@@ -421,6 +442,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <div class="form-row">
           <div class="input-wrap">
             <input type="tel" name="phone" id="phone" placeholder="Phone Number*" required>
+            <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
           </div>
         </div>
 
@@ -513,13 +535,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         </script>
 
-        <div class="terms">
-          <input type="checkbox" id="terms" required disabled>
-          <label for="terms">
-            By using the <strong>VictorianPass</strong>, you agree to the rules set for security, privacy, and orderly access.
-            <a onclick="openTerms()" style="text-decoration: underline; color: rgb(245, 63, 169);">Read Terms & Conditions</a>
-          </label>
+        <div class="terms" style="display: flex; flex-direction: column; gap: 15px;">
+          <!-- Terms Checkbox -->
+          <div class="checkbox-wrapper" onclick="checkIfRead('terms', event)" style="display: flex; align-items: flex-start; gap: 8px;">
+            <input type="checkbox" id="terms" required disabled style="width:auto; margin-top: 4px;">
+            <label for="terms" style="position:static; margin:0; font-size:0.9rem; line-height: 1.4; cursor: pointer;">
+              By using our service, you agree to our Terms and Services. Here’s what you need to know. 
+              <a onclick="openTerms(); event.stopPropagation();" style="text-decoration: underline; color: rgb(245, 63, 169); cursor:pointer; font-weight: 600;">Read Terms And Services</a>
+            </label>
+          </div>
 
+          <!-- Privacy Checkbox -->
+          <div class="checkbox-wrapper" onclick="checkIfRead('privacy', event)" style="display: flex; align-items: flex-start; gap: 8px;">
+            <input type="checkbox" id="privacy" required disabled style="width:auto; margin-top: 4px;">
+            <label for="privacy" style="position:static; margin:0; font-size:0.9rem; line-height: 1.4; cursor: pointer;">
+              By using our service, you agree to our Privacy Policy. Here’s what you need to know. 
+              <a onclick="openPrivacy(); event.stopPropagation();" style="text-decoration: underline; color: rgb(245, 63, 169); cursor:pointer; font-weight: 600;">Read Privacy Policy</a>
+            </label>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -540,12 +573,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Terms & Services</h2>
         
         <p style="text-align: center; font-weight: 600; margin-bottom: 25px; line-height: 1.5; color: #000;">
-          In using this website you are deemed to have read and agreed to the following terms and conditions:
+          In using this website you are deemed to have read and agreed to the following Terms and Services:
         </p>
 
         <div style="font-size: 0.95rem; color: #333; line-height: 1.6;">
           <p style="margin-bottom: 15px;">
-            The following terminology applies to these Terms and Conditions, Privacy Statement and Disclaimer Notice and any or all Agreements: “Customer”, “You” and “Your” refers to you, the person accessing this website and accepting the Company’s terms and conditions.
+            The following terminology applies to these Terms and Services, Privacy Statement and Disclaimer Notice and any or all Agreements: “Customer”, “You” and “Your” refers to you, the person accessing this website and accepting the Company’s Terms and Services.
           </p>
           <p style="margin-bottom: 25px;">Effective Date: [September 2026]</p>
 
@@ -597,6 +630,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
     </div>
 
+    <!-- Privacy Modal -->
+    <div id="privacyModal" class="modal">
+      <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
+        <span class="close" onclick="closePrivacy()" style="top: 20px; right: 25px;">&times;</span>
+        <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Privacy Policy</h2>
+        
+        <div style="font-size: 0.95rem; color: #333; line-height: 1.6;">
+          <p style="margin-bottom: 20px;">
+            Data Privacy Act of 2012 Notice: In accordance with the law Republic Act NO. 10173 - It is the policy of the State to protect the fundamental human right of privacy, of communication while ensuring free flow of information to promote innovation and growth. its inherent obligation to ensure that personal information in information and communications systems in the government and in the private sector are secured and protected.
+          </p>
+          <p style="margin-bottom: 30px;">
+            The Data Gathered is only limited on verification and for recordings limited only to the authorized staff
+          </p>
+        </div>
+
+        <button class="btn confirm" onclick="agreePrivacy()" style="width: 100%; background-color: #355340; padding: 12px; border-radius: 6px; font-size: 1rem;">Confirm</button>
+      </div>
+    </div>
     
   </div>
   
@@ -616,6 +667,65 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     function closeTerms() {
       const modal = document.getElementById('termsModal');
       if (modal) modal.style.display = 'none';
+    }
+
+    function openPrivacy() {
+      const modal = document.getElementById('privacyModal');
+      if (modal) modal.style.display = 'block';
+    }
+
+    function closePrivacy() {
+      const modal = document.getElementById('privacyModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function agreePrivacy() {
+      const privacy = document.getElementById('privacy');
+      if (privacy) {
+        privacy.disabled = false;
+        privacy.checked = true;
+      }
+      closePrivacy();
+      if (typeof setWarning === 'function') setWarning('privacy', '');
+    }
+
+    function checkIfRead(type, event) {
+      const checkbox = document.getElementById(type);
+      // If checkbox is disabled, it means they haven't agreed via modal yet.
+      // We check if the click target was NOT the link (which has its own handler).
+      // Since we use stopPropagation on the link, this function fires for clicks on the wrapper/label/checkbox.
+      
+      if (checkbox && checkbox.disabled) {
+        // Show warning
+        let msg = '';
+        if (type === 'terms') {
+          msg = 'Please read the Terms and Services first.';
+        } else {
+          msg = 'Please read the Privacy Policy first.';
+        }
+        
+        // We can use the existing setWarning or a simple alert/popover. 
+        // Given the requirement "add a warning if they didnt read those 2", using setWarning is consistent.
+        if (typeof setWarning === 'function') setWarning(type, msg);
+      } else if (checkbox && !checkbox.disabled) {
+          // If enabled, allow toggle (browser handles click on input/label, but we caught it on wrapper)
+          // If the user clicked the wrapper but not the input, we might need to manually toggle if the wrapper is not a label.
+          // However, our wrapper contains the label which triggers the input.
+          // But wait, if we click the wrapper (div), it doesn't automatically trigger the input unless the input is inside a label or we do it manually.
+          // In my HTML structure:
+          // <div class="checkbox-wrapper" onclick="...">
+          //   <input ...>
+          //   <label ...>
+          // </div>
+          // Clicking the label triggers the input. Clicking the div outside label/input does nothing by default.
+          // But 'checkIfRead' is on the wrapper.
+          
+          // If the event target is the input or label, let it propagate (if enabled).
+          // If disabled, we want to intercept.
+          // Since the input is disabled, clicking it or the label won't change its state.
+          
+          // So the logic is fine: if disabled, warn.
+      }
     }
 
     function agreeTerms() {
@@ -690,7 +800,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       let container = null;
       if (key === 'houseHidden') {
         container = document.querySelector('.homeowner');
-      } else if (key === 'terms') {
+      } else if (key === 'terms' || key === 'privacy') {
         container = document.querySelector('.terms');
       } else if (inputEl) {
         container = inputEl.closest('.input-wrap') || inputEl.closest('.password-field') || inputEl.closest('.form-group');
@@ -789,42 +899,95 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       const addressField = document.getElementById('addressField');
       const form = document.getElementById('signupForm');
 
-      function blockDigits(e) {
-        if (/[0-9]/.test(e.key)) {
+      function blockInvalidNameChars(e) {
+        // Allow navigation keys, backspace, tab, etc.
+        if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'].includes(e.key)) return;
+        
+        // Allow letters, spaces, and hyphens
+        if (!/^[a-zA-Z\s\-]$/.test(e.key)) {
           e.preventDefault();
-          // setWarning(e.target.id, 'Numbers are not allowed in this field.'); // Disabled real-time warning
+          setWarning(e.target.id, 'Only letters, spaces, and hyphens are allowed.');
+        } else {
+           setWarning(e.target.id, '');
         }
       }
 
-      function sanitizeNoDigits(e) {
+      function sanitizeNameInput(e) {
         const val = e.target.value;
-        const cleaned = val.replace(/[0-9]/g, '');
+        // Keep only letters, spaces, and hyphens
+        const cleaned = val.replace(/[^a-zA-Z\s\-]/g, '');
         if (val !== cleaned) {
           e.target.value = cleaned;
-          // setWarning(e.target.id, 'Numbers were removed.'); // Disabled real-time warning
+          setWarning(e.target.id, 'Only letters, spaces, and hyphens are allowed.');
         } else {
-          // no toast for clearing
+           setWarning(e.target.id, '');
         }
       }
 
       [first, last, middle].forEach(function(inp) {
         if (!inp) return;
-        inp.addEventListener('keydown', blockDigits);
-        inp.addEventListener('input', sanitizeNoDigits);
+        inp.addEventListener('keydown', blockInvalidNameChars);
+        inp.addEventListener('input', sanitizeNameInput);
       });
 
       if (phone) {
-        // Real-time phone validation removed
-        /*
+        phone.setAttribute('maxlength', '20');
+        
         phone.addEventListener('input', function(e) {
-          const val = e.target.value.trim();
-          if (!/^09\d{9}$/.test(val)) {
-            setWarning('phone', 'Phone number must be 11 digits and start with 09.');
-          } else {
-            setWarning('phone', '');
+          // Allow digits, plus sign, and spaces
+          let val = e.target.value.replace(/[^0-9+\s]/g, '');
+          
+          if (e.target.value !== val) {
+            e.target.value = val;
+          }
+          
+          // Basic format guidance while typing
+          const clean = val.replace(/\D/g, '');
+          if (clean.length > 0) {
+             // Just ensure it looks vaguely like a phone number
+             setWarning('phone', '');
           }
         });
-        */
+        
+        phone.addEventListener('blur', function(e) {
+           let val = e.target.value.trim();
+           // Normalize logic
+           // 1. Strip everything except digits
+           let clean = val.replace(/\D/g, '');
+           
+           // 2. Check patterns
+           // 09XX... (11 digits) -> +639XX...
+           // 639XX... (12 digits) -> +639XX...
+           // 9XX... (10 digits) -> +639XX...
+           
+           let normalized = '';
+           
+           if (clean.length === 11 && clean.startsWith('09')) {
+              normalized = '+63' + clean.substring(1);
+           } else if (clean.length === 12 && clean.startsWith('639')) {
+              normalized = '+' + clean;
+           } else if (clean.length === 10 && clean.startsWith('9')) {
+              normalized = '+63' + clean;
+           } else {
+              // Invalid or unrecognized format
+              if (val.length > 0) {
+                 setWarning('phone', 'Format: +63 9XX XXX XXXX or 09XX XXX XXXX');
+              }
+              return;
+           }
+           
+           // Format for display: +63 9XX XXX XXXX
+           // +639171234567 -> +63 917 123 4567
+           if (normalized) {
+              const part1 = normalized.substring(0, 3); // +63
+              const part2 = normalized.substring(3, 6); // 917
+              const part3 = normalized.substring(6, 9); // 123
+              const part4 = normalized.substring(9);    // 4567
+              
+              e.target.value = `${part1} ${part2} ${part3} ${part4}`;
+              setWarning('phone', '');
+           }
+        });
       }
 
       // Real-time password validation (debounce)
@@ -1100,6 +1263,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           if (terms && !terms.checked) {
             setWarning('terms', 'Please read and agree to the Terms & Conditions.');
             valid = false;
+          }
+          if (document.getElementById('privacy') && !document.getElementById('privacy').checked) {
+             setWarning('privacy', 'Please read and agree to the Privacy Policy.');
+             valid = false;
           }
 
           if (!valid) return;

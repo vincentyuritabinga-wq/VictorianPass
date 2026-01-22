@@ -13,7 +13,7 @@ $user = null;
 
 // Fetch resident details
 if ($con) {
-  $stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, status, sex FROM users WHERE id = ?");
+  $stmt = mysqli_prepare($con, "SELECT id, first_name, middle_name, last_name, email, phone, birthdate, house_number, address, status FROM users WHERE id = ?");
   if ($stmt) {
     mysqli_stmt_bind_param($stmt, 'i', $userId);
     mysqli_stmt_execute($stmt);
@@ -32,16 +32,6 @@ if (!$user) {
 // Compose full name for display
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 
-// Normalize phone and prepare resident fields for guest form
-$houseNumber = $user['house_number'] ?? '';
-$email = $user['email'] ?? '';
-$phoneRaw = $user['phone'] ?? '';
-$phoneNormalized = $phoneRaw;
-if (preg_match('/^\+63(9\d{9})$/', $phoneNormalized)) {
-  $phoneNormalized = '0' . substr($phoneNormalized, 3);
-}
-$displayPhone = $phoneNormalized ?: $phoneRaw;
-
 // Profile Picture Logic
 $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
 if (file_exists('uploads/profiles/user_' . $userId . '.jpg')) {
@@ -53,10 +43,20 @@ if (file_exists('uploads/profiles/user_' . $userId . '.jpg')) {
 }
 $profilePicUrl = $profilePicPath . '?t=' . time();
 
-// Fetch saved guests for resident
+// Normalize phone and prepare resident fields for guest form
+$houseNumber = $user['house_number'] ?? '';
+$email = $user['email'] ?? '';
+$phoneRaw = $user['phone'] ?? '';
+$phoneNormalized = $phoneRaw;
+if (preg_match('/^\+63(9\d{9})$/', $phoneNormalized)) {
+  $phoneNormalized = '0' . substr($phoneNormalized, 3);
+}
+$displayPhone = $phoneNormalized ?: $phoneRaw;
+
+// Fetch saved guests for resident (Approved only)
 $guestRows = [];
 if ($con instanceof mysqli) {
-  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status = 'approved' ORDER BY created_at DESC");
   if ($stmtG) {
     $stmtG->bind_param('i', $userId);
     $stmtG->execute();
@@ -81,6 +81,124 @@ $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urle
 $img = @file_get_contents($qrUrl);
 if ($img !== false) { @file_put_contents($qrAbsPath, $img); } else { $qrRelPath = $qrUrl; }
 
+$activeSection = 'panel-requests';
+
+// Handle Incident Report Submission
+$reportSuccess = false;
+$reportSuccessMessage = '';
+$reportErrors = [];
+$reportValues = []; // To keep values on error
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'submit_report') {
+    $activeSection = 'panel-report-incident';
+    
+    $complainant = trim($_POST['complainant'] ?? '');
+    $subject = trim($_POST['subject'] ?? '');
+    $report_date = trim($_POST['report_date'] ?? '');
+    $addr = trim($_POST['address'] ?? '');
+    $other = trim($_POST['other'] ?? '');
+    $natureArr = isset($_POST['nature']) && is_array($_POST['nature']) ? $_POST['nature'] : [];
+
+    $reportValues = [
+        'subject' => $subject,
+        'report_date' => $report_date,
+        'address' => $addr,
+        'other' => $other,
+        'nature' => $natureArr
+    ];
+
+    if ($subject === '') { $reportErrors[] = 'Complainee is required.'; }
+    if ($addr === '') { $reportErrors[] = 'Address is required.'; }
+    if ($report_date === '') { $reportErrors[] = 'Date is required.'; }
+    if ($report_date !== '') {
+        $dt = DateTime::createFromFormat('Y-m-d', $report_date);
+        if (!($dt && $dt->format('Y-m-d') === $report_date)) { $reportErrors[] = 'Date format is invalid.'; }
+    }
+    if (count($natureArr) === 0) { $reportErrors[] = 'Please select at least one nature of concern.'; }
+
+    $uploadDir = 'resident_reports_uploads/';
+    $allowed_exts = ['jpg','jpeg','png','pdf','docx'];
+    $saved_files = [];
+    $upload_errors = [];
+    if (!is_dir($uploadDir)) { @mkdir($uploadDir, 0755, true); }
+    
+    if (!empty($_FILES['proof']) && is_array($_FILES['proof']['name'])) {
+        $names = $_FILES['proof']['name'];
+        $tmps  = $_FILES['proof']['tmp_name'];
+        $errs  = $_FILES['proof']['error'];
+        $sizes = $_FILES['proof']['size'];
+        for ($i = 0; $i < count($names); $i++) {
+            if ($errs[$i] !== UPLOAD_ERR_OK) { continue; }
+            $ext = strtolower(pathinfo($names[$i], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed_exts, true)) { $upload_errors[] = 'File type is not allowed: ' . $names[$i]; continue; }
+            if ($sizes[$i] > 10 * 1024 * 1024) { $upload_errors[] = 'File size exceeds 10 MB: ' . $names[$i]; continue; }
+            $safeName = preg_replace('/[^A-Za-z0-9_\-.]/', '_', $names[$i]);
+            $newName = 'report_' . time() . '_' . $safeName;
+            $dest = $uploadDir . $newName;
+            if (move_uploaded_file($tmps[$i], $dest)) { $saved_files[] = $dest; }
+        }
+    }
+    if (!empty($upload_errors)) { $reportErrors = array_merge($reportErrors, $upload_errors); }
+
+    if (empty($reportErrors)) {
+        // Ensure tables exist
+        $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          complainant VARCHAR(150) NOT NULL,
+          subject VARCHAR(150) NULL,
+          address VARCHAR(255) NOT NULL,
+          nature VARCHAR(255) NULL,
+          other_concern VARCHAR(255) NULL,
+          user_id INT NULL,
+          report_date DATE NULL,
+          status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL,
+          INDEX idx_status (status),
+          INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB");
+        
+        // Column checks
+        $chk1 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'subject'");
+        if ($chk1 && $chk1->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN subject VARCHAR(150) NULL"); }
+        $chk2 = $con->query("SHOW COLUMNS FROM incident_reports LIKE 'report_date'");
+        if ($chk2 && $chk2->num_rows === 0) { $con->query("ALTER TABLE incident_reports ADD COLUMN report_date DATE NULL"); }
+
+        $con->query("CREATE TABLE IF NOT EXISTS incident_proofs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          report_id INT NOT NULL,
+          file_path VARCHAR(255) NOT NULL,
+          uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_report_id (report_id)
+        ) ENGINE=InnoDB");
+
+        $natureStr = implode(', ', array_map('strval', $natureArr));
+        $uID = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null;
+        $stmtR = $con->prepare("INSERT INTO incident_reports (complainant, subject, address, nature, other_concern, user_id, report_date) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        if ($stmtR) {
+            $stmtR->bind_param('sssssis', $complainant, $subject, $addr, $natureStr, $other, $uID, $report_date);
+            if ($stmtR->execute()) {
+                $report_id = $stmtR->insert_id;
+                $stmtR->close();
+                if (!empty($saved_files)) {
+                    foreach ($saved_files as $p) {
+                        $stmtP = $con->prepare("INSERT INTO incident_proofs (report_id, file_path) VALUES (?, ?)");
+                        if ($stmtP) { $stmtP->bind_param('is', $report_id, $p); $stmtP->execute(); $stmtP->close(); }
+                    }
+                }
+                $reportSuccess = true;
+                $reportSuccessMessage = 'Your report has been successfully submitted. The Guard will review it shortly.';
+                // Clear values on success
+                $reportValues = [];
+            } else {
+                $reportErrors[] = 'Failed to save report database entry.';
+            }
+        } else {
+            $reportErrors[] = 'Failed to prepare report statement.';
+        }
+    }
+}
+
 // Fetch Activities (Reservations, Reports, Guest Forms)
 $activities = [];
 
@@ -93,7 +211,9 @@ if ($stmt) {
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
         $start = $row['start_date'];
-        $timeStr = ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? '');
+        $sTime = strtotime($row['start_time'] ?? '');
+        $eTime = strtotime($row['end_time'] ?? '');
+        $timeStr = ($sTime ? date('h:i A', $sTime) : '') . ' - ' . ($eTime ? date('h:i A', $eTime) : '');
         $activities[] = [
             'type' => 'reservation',
             'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
@@ -136,7 +256,7 @@ if ($stmt) {
         $activities[] = [
             'type' => 'guest_form',
             'title' => 'Guest Request - ' . $vName,
-            'details' => 'Visit: ' . date('M d, Y', strtotime($row['visit_date'])) . ' ' . ($row['visit_time'] ?? ''),
+            'details' => '',
             'status' => $row['approval_status'] ?? 'pending',
             'date' => $row['created_at'],
             'ref_code' => $row['ref_code'] ?? 'GST'
@@ -214,7 +334,71 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   color: #555;
 }
 
-/* Profile Modal styles moved to dashboard.css */
+/* Removed view-details-btn styles as they are now in dashboard.css */
+
+/* Resident ID Card Styles (Hidden but used for Canvas) - Matches resident_qr_view.php */
+.resident-id-card { width: 360px; background: #1e1e1e; border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.35); overflow: hidden; color:#fff; font-family: 'Poppins', sans-serif; }
+.resident-id-card .card-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#111; }
+.resident-id-card .brand { display:flex; align-items:center; gap:8px; }
+.resident-id-card .brand img { height:28px; }
+.resident-id-card .brand .text { font-weight:700; color:#e5ddc6; }
+.resident-id-card .id-top { display:flex; gap:12px; padding:14px 16px; background:#181818; }
+.resident-id-card .avatar { width:160px; height:160px; border-radius:12px; background:#ffffff; color:#23412e; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.4rem; overflow:hidden; }
+.resident-id-card .avatar img { width:100%; height:100%; object-fit:contain; }
+.resident-id-card .top-info { flex:1; }
+.resident-id-card .top-info .name { font-size:1.05rem; font-weight:700; margin:0 0 4px 0; color:#eaeaea; }
+.resident-id-card .top-info .contact { font-size:0.86rem; color:#cfcfcf; }
+.resident-id-card .divider { height:1px; background:#2f2f2f; margin:0 16px; }
+.resident-id-card .id-body { padding:14px 16px; }
+.resident-id-card .row { display:flex; align-items:center; justify-content:space-between; margin:6px 0; }
+.resident-id-card .label { color:#bdbdbd; font-weight:600; font-size:0.85rem; }
+.resident-id-card .value { color:#eaeaea; font-size:0.95rem; }
+.resident-id-card .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700; }
+.resident-id-card .badge.active { background:#23412e; color:#e5ddc6; }
+.resident-id-card .badge.disabled { background:#a83b3b; color:#fff; }
+.resident-id-card .foot { padding:10px 16px; color:#aaa; font-size:0.82rem; }
+
+    .report-card {
+        background: #fff;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .report-header { text-align:center; margin-bottom:25px; border-bottom:1px solid #f0f0f0; padding-bottom:15px; }
+    .report-header h2 { margin: 0; font-size: 1.4rem; color: #23412e; font-weight:700; }
+    .report-sub { font-size: 0.85rem; color:#666; margin: 2px 0; }
+    .report-title { text-align:center; font-weight:700; margin: 15px 0 0; font-size:1.1rem; color:#333; }
+    
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+    .checkbox-group label { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor:pointer; }
+    .checkbox-group input[type="checkbox"] { width:18px; height:18px; accent-color:#23412e; }
+    
+    .file-list { margin-top: 10px; font-size: 0.85rem; color: #555; }
+    
+    .error-box { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; padding:12px; border-radius:8px; margin-bottom:20px; font-size:0.9rem; }
+    .error-text { color:#dc2626; font-size:0.8rem; margin-top:4px; }
+    
+    .explanation-panel {
+        background: #2b2b2b; color: #eee; padding: 25px; border-radius: 12px; margin-bottom:25px;
+        display:flex; flex-direction:column; gap:10px;
+        border-left: 5px solid #e5b84a;
+    }
+    .explanation-panel h3 { margin:0; color:#fff; }
+    .explanation-panel p { margin:0; font-size:0.9rem; opacity:0.9; line-height:1.5; }
+    .explanation-links { display:flex; gap:15px; margin-top:10px; }
+    .explanation-links a { color:#e5b84a; text-decoration:none; font-size:0.85rem; font-weight:600; }
+    .explanation-links a:hover { text-decoration:underline; }
+
+    /* Modal Tweaks for Profile Page context */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 2000; }
+    .modal-content { background: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 600px; position: relative; max-height:80vh; overflow-y:auto; }
+    .close-btn { position: absolute; top: 15px; right: 15px; font-size: 20px; cursor: pointer; color: #555; }
+
+/* Sidebar UI Improvements */
+/* Moved to dashboard.css */
 </style>
 </head>
 <body>
@@ -227,20 +411,21 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     </div>
 
     <nav class="nav-menu">
-      <a href="#" class="nav-item active" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
+      <a href="#" class="nav-item <?php echo $activeSection === 'panel-requests' ? 'active' : ''; ?>" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
       <a href="#" class="nav-item" data-section="panel-guest-form"><i class="fa-solid fa-user-plus"></i> <span>Guest Form</span></a>
       <a href="#" class="nav-item" data-section="panel-my-guests"><i class="fa-solid fa-user-group"></i> <span>My Guests</span></a>
-      <a href="residentreport.php" class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
+      <a href="#" class="nav-item <?php echo $activeSection === 'panel-report-incident' ? 'active' : ''; ?>" data-section="panel-report-incident"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
     </nav>
 
     <div class="sidebar-footer">
       <div class="qr-section">
         <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:#555;">My Personal QR Code</div>
-        <!-- Visible Simple QR Image -->
-        <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="Personal QR Code" style="width:100%; max-width:150px; border-radius:8px; display:block; margin:0 auto;">
         
-        <a href="#" onclick="downloadPersonalQR(); return false;" class="download-qr-btn">Download Personal QR</a>
+        <a href="#" onclick="downloadPersonalQR(); return false;" class="download-qr-btn">Download QR Code</a>
+        <div style="font-size:0.75rem; color:#666; margin-top:8px; line-height:1.3; text-align:center;">
+            You may show this QR code to the guard for verification.
+        </div>
       </div>
       <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
     </div>
@@ -263,7 +448,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             <div class="row"><div class="label">Block</div><div class="value"><?php echo htmlspecialchars($user['house_number']??'-'); ?></div></div>
             <div class="row"><div class="label">Unit</div><div class="value"><?php echo htmlspecialchars($user['address']??'-'); ?></div></div>
             <div class="row"><div class="label">Contact</div><div class="value"><?php echo htmlspecialchars($displayPhone?:'-'); ?></div></div>
-            <div class="row"><div class="label">Status</div><div class="value"><span class="badge <?php echo ((strtolower($user['status']??'active')==='active')?'active':'disabled'); ?>"><?php echo htmlspecialchars(ucfirst($user['status']??'active')); ?></span></div></div>
           </div>
           <div class="foot">Scan to verify • Resident Access</div>
         </div>
@@ -288,9 +472,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
   <!-- MAIN CONTENT -->
   <main class="main-content">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <!-- Top Header -->
     <header class="top-header">
       <div class="header-brand">
+        <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
         <img src="images/logo.svg" alt="Logo">
         <div class="brand-text">
           <span class="brand-main">VictorianPass</span>
@@ -301,7 +487,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
         <a href="#" class="user-profile" id="profileTrigger">
-          <span class="user-name">Hi, <?php echo htmlspecialchars($fullName); ?></span>
+          <span class="user-name">Hi, <?php $fName = explode(' ', trim($user['first_name'] ?? 'Resident'))[0]; echo htmlspecialchars($fName); ?></span>
           <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
         </a>
       </div>
@@ -337,7 +523,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                      <div>
                        <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
                        <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                       <?php if(!empty($act['details'])): ?>
                        <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                       <?php else: ?>
+                       <span class="item-details" style="display:none;"></span>
+                       <?php endif; ?>
                      </div>
                      <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
                    </div>
@@ -464,6 +654,103 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             <?php endif; ?>
           </div>
         </div>
+
+        <!-- RESIDENT REPORT INCIDENT SECTION -->
+        <div class="panel-section" id="panel-report-incident" style="display:none;">
+          <div class="activity-list-header">
+            <div>Report Incident</div>
+          </div>
+          
+          <div class="report-card" style="margin-top:10px;">
+            <!-- Explanation / Intro -->
+            <div class="explanation-panel">
+                <h3>Resident Incident Report</h3>
+                <p>Reporting complaints ensures that every resident’s voice is heard and that community standards are properly maintained. Please be responsible when filing a complaint.</p>
+                <div class="explanation-links">
+                    <a href="#" onclick="openModal('termsModal'); return false;">Terms and Conditions</a>
+                    <a href="#" onclick="openModal('rulesModal'); return false;">Rules and Regulations</a>
+                </div>
+            </div>
+
+            <?php if (!empty($reportErrors)): ?>
+                <div class="error-box">
+                    <?php foreach ($reportErrors as $e): ?><div><i class="fa-solid fa-circle-exclamation"></i> <?php echo htmlspecialchars($e); ?></div><?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($reportSuccess): ?>
+                <div style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:15px; border-radius:8px; margin-bottom:20px; text-align:center;">
+                    <i class="fa-solid fa-check-circle" style="font-size:1.2rem; margin-bottom:8px; display:block;"></i>
+                    <strong><?php echo htmlspecialchars($reportSuccessMessage); ?></strong>
+                </div>
+            <?php endif; ?>
+
+            <form id="reportForm" method="POST" enctype="multipart/form-data">
+              <input type="hidden" name="action" value="submit_report">
+              <div class="report-header">
+                <h2>Victorian Heights Subdivision</h2>
+                <div class="report-sub">Dahlia Fairview, BRGY. Sauyo, Quezon City</div>
+                <div class="report-title">CASE REPORT FORM</div>
+              </div>
+
+              <input type="hidden" id="complainant" name="complainant" value="<?php echo htmlspecialchars($fullName); ?>">
+
+              <div class="form-row">
+                <div class="form-group">
+                    <label for="subject" class="form-label">Complainee / Subject Name*</label>
+                    <input type="text" id="subject" name="subject" placeholder="Enter name" value="<?php echo htmlspecialchars($reportValues['subject'] ?? ''); ?>" required>
+                </div>
+                <div class="form-group">
+                    <label for="reportDate" class="form-label">Date of Incident*</label>
+                    <input type="date" id="reportDate" name="report_date" value="<?php echo htmlspecialchars($reportValues['report_date'] ?? ''); ?>" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                    <label for="address" class="form-label">Address / Location of Incident*</label>
+                    <input type="text" id="address" name="address" placeholder="Enter address or location" value="<?php echo htmlspecialchars($reportValues['address'] ?? ''); ?>" required>
+                </div>
+              </div>
+
+              <div style="margin-bottom: 20px;">
+                <label class="form-label">Nature of Complaint (Check all that apply)</label>
+                <div class="checkbox-group">
+                    <?php 
+                    $natures = ['Noise Disturbance', 'Pet Violation', 'Parking Violation', 'Trash/Garbage', 'Vandalism', 'Security Concern', 'Harassment', 'Other'];
+                    $selectedNatures = $reportValues['nature'] ?? [];
+                    foreach ($natures as $n): 
+                        $chk = in_array($n, $selectedNatures) ? 'checked' : '';
+                    ?>
+                    <label><input type="checkbox" name="nature[]" value="<?php echo $n; ?>" <?php echo $chk; ?>> <?php echo $n; ?></label>
+                    <?php endforeach; ?>
+                </div>
+              </div>
+
+              <div class="form-row">
+                  <div class="form-group">
+                    <label for="other" class="form-label">Details of Incident*</label>
+                    <textarea id="other" name="other" rows="5" placeholder="Please describe what happened..." required><?php echo htmlspecialchars($reportValues['other'] ?? ''); ?></textarea>
+                  </div>
+              </div>
+
+              <div style="margin-bottom: 20px;">
+                <label class="form-label">Evidence / Attachments</label>
+                <label class="upload-box">
+                    <input type="file" id="proof" name="proof[]" multiple hidden onchange="handleFileSelect(this)">
+                    <img src="images/mainpage/upload.svg" alt="Upload">
+                    <p>Click to upload photos or documents<br><small>(Max 10MB per file)</small></p>
+                </label>
+                <div id="fileList" class="file-list"></div>
+              </div>
+
+              <div class="form-actions" style="margin-top:30px;">
+                <button type="submit" class="submit-btn">Submit Report</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
       </div>
     </div>
   </main>
@@ -503,121 +790,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       </div>
     </div>
   </div>
-  
-  <!-- Profile Modal -->
-  <div id="profileModal" class="profile-modal">
-    <div class="profile-modal-content">
-      <button class="close-profile-modal">&times;</button>
-      <div class="profile-header">
-        <div class="profile-icon-large">
-          <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
-          <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
-             <i class="fa-solid fa-camera"></i>
-          </label>
-          <input type="file" id="profileUpload" accept="image/*" style="display:none">
-        </div>
-        <div class="profile-title">
-          <h3><?php echo htmlspecialchars($fullName); ?></h3>
-          <span class="profile-role">Resident</span>
-        </div>
-      </div>
-      <div class="profile-details">
-        <div class="detail-row">
-          <span class="detail-label">Name</span>
-          <span class="detail-value"><?php echo htmlspecialchars($fullName); ?></span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Email</span>
-          <span class="detail-value"><?php echo htmlspecialchars($email); ?></span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Contact</span>
-          <span class="detail-value"><?php echo htmlspecialchars($displayPhone); ?></span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Account Type</span>
-          <span class="detail-value">Resident</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Sex</span>
-          <span class="detail-value"><?php echo htmlspecialchars($user['sex'] ?? 'N/A'); ?></span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Birthdate</span>
-          <span class="detail-value"><?php echo htmlspecialchars($user['birthdate']); ?></span>
-        </div>
-      </div>
-      <div class="profile-actions">
-        <a href="mainpage.php" class="btn-open-dashboard">Open Dashboard</a>
-        <a href="logout.php" class="btn-logout-modal">Log Out</a>
-      </div>
+
+  <div id="activityModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div id="activityModalBody"></div>
     </div>
   </div>
 </div>
-<script>
-  // Profile Modal Logic
-  document.addEventListener('DOMContentLoaded', function() {
-      var profileModal = document.getElementById("profileModal");
-      var profileTrigger = document.getElementById("profileTrigger");
-      var profileClose = document.getElementsByClassName("close-profile-modal")[0];
-
-      if(profileTrigger) {
-          profileTrigger.onclick = function(e) {
-              e.preventDefault();
-              profileModal.style.display = "block";
-          }
-      }
-
-      if(profileClose) {
-          profileClose.onclick = function() {
-              profileModal.style.display = "none";
-          }
-      }
-
-      window.onclick = function(event) {
-          if (event.target == profileModal) {
-              profileModal.style.display = "none";
-          }
-      }
-
-      // Profile Picture Upload
-      var profileUpload = document.getElementById('profileUpload');
-      if(profileUpload) {
-          profileUpload.addEventListener('change', function() {
-              if (this.files && this.files[0]) {
-                  var formData = new FormData();
-                  formData.append('profile_pic', this.files[0]);
-
-                  // Show loading or opacity change
-                  var img = document.getElementById('profileModalImg');
-                  img.style.opacity = '0.5';
-
-                  fetch('upload_profile_pic.php', {
-                      method: 'POST',
-                      body: formData
-                  })
-                  .then(response => response.json())
-                  .then(data => {
-                      img.style.opacity = '1';
-                      if (data.success) {
-                          // Update images with new URL (append time to force reload)
-                          if(img) img.src = data.new_url;
-                          var headerImg = document.getElementById('headerProfileImg');
-                          if(headerImg) headerImg.src = data.new_url;
-                      } else {
-                          alert(data.message || 'Upload failed');
-                      }
-                  })
-                  .catch(error => {
-                      img.style.opacity = '1';
-                      console.error('Error:', error);
-                      alert('An error occurred during upload.');
-                  });
-              }
-          });
-      }
-  });
-</script>
 <script>
 (function(){
   var searchInput=document.getElementById('requestSearch');
@@ -684,13 +864,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         alert(data && data.message ? data.message : 'Unable to cancel reservation.');
         return;
       }
-      li.setAttribute('data-status','denied');
-      prevStatuses[ref]='denied';
+      li.setAttribute('data-status','cancelled');
+      prevStatuses[ref]='cancelled';
       var badge=li.querySelector('.status-badge');
       if(badge){
-        badge.textContent=fmtLabel('denied');
+        badge.textContent=fmtLabel('cancelled');
         badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
-        badge.classList.add(statusClassFor('denied'));
+        badge.classList.add(statusClassFor('cancelled'));
       }
       var extraEl=li.querySelector('.item-extra');
       if(extraEl){
@@ -721,6 +901,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       performCancelResident();
     });
   }
+
+  // Sidebar Toggle Logic
+  var menuToggle = document.getElementById('menuToggle');
+  var sidebar = document.querySelector('.sidebar');
+  var overlay = document.getElementById('sidebarOverlay');
+
+  if(menuToggle && sidebar && overlay) {
+      function closeSidebar() {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('show');
+      }
+
+      menuToggle.addEventListener('click', function() {
+          sidebar.classList.add('open');
+          overlay.classList.add('show');
+      });
+
+      overlay.addEventListener('click', closeSidebar);
+  }
+
   function buildExtraContent(li, extra){
     var type=(li.getAttribute('data-type')||'').toLowerCase();
     var status=li.getAttribute('data-status')||'';
@@ -732,7 +932,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var isApproved=s.indexOf('approv')!==-1;
     if(isApproved) statusNote='This request is approved. Use this QR pass at the gate.';
     else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
-    else if(s.indexOf('pending')!==-1||s===''||s==='new') statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
+    else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
+    else if(s.indexOf('pending')!==-1||s===''||s==='new') {
+        if(type==='guest_form') statusNote='Wait until the guest is approved. Once approved, a unique QR code will be available in "My Guests" under the guest\'s name.';
+        else statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
+    }
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
     var titleEl=li.querySelector('.item-title');
@@ -776,8 +980,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(isApproved && ref){
         html+='</div></div></div>';
       }else{
-        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
-        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">View details</a>';
+        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
         html+='</div></div></div>';
       }
     }else if(type==='report'){
@@ -805,6 +1008,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       cancelBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openCancelModal(li,ref);
+      });
+    }
+    var viewBtn=extra.querySelector('.view-details-btn');
+    if(viewBtn && ref){
+      viewBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        openActivityModal(ref);
       });
     }
   }
@@ -845,15 +1055,70 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     notifPanel.innerHTML=html;
   }
-  document.querySelectorAll('.item-list .list-item').forEach(function(li){
+  // Modal handling
+  var activityModal = document.getElementById('activityModal');
+  var activityModalBody = document.getElementById('activityModalBody');
+  var activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
+
+  window.openActivityModal = function(refCode) {
+    if (!activityModal || !activityModalBody) {
+      // Re-fetch in case it was missing on load
+      activityModal = document.getElementById('activityModal');
+      activityModalBody = document.getElementById('activityModalBody');
+      if (!activityModal || !activityModalBody) return;
+    }
+    activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+    activityModal.style.display = 'block';
+
+    fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
+      .then(r => r.text())
+      .then(html => {
+        activityModalBody.innerHTML = html;
+      })
+      .catch(e => {
+        activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
+      });
+  }
+
+  if (activityModalClose) {
+    activityModalClose.onclick = function() {
+      activityModal.style.display = "none";
+    }
+  }
+
+  window.addEventListener('click', function(event) {
+     if (event.target == activityModal) {
+       activityModal.style.display = "none";
+     }
+   });
+   
+   window.downloadQRImage = function(code) {
+      var img = document.querySelector('#activityModalBody img[alt="QR Code"]');
+      if (!img) { alert('QR Code not found'); return; }
+      fetch(img.src)
+        .then(resp => resp.blob())
+        .then(blob => {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'QR_' + code + '.png';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(() => alert('Could not download image.'));
+   };
+ 
+   document.querySelectorAll('.item-list .list-item').forEach(function(li){
     li.addEventListener('click',function(e){
-      if(e.target.closest('a')) return;
+      if(e.target.closest('a') || e.target.closest('button')) return;
+      
       li.classList.toggle('expanded');
-      var extra=li.querySelector('.item-extra');
-      if(!extra) return;
-      if(extra.getAttribute('data-loaded')!=='1'&&li.classList.contains('expanded')){
-        buildExtraContent(li,extra);
-        extra.setAttribute('data-loaded','1');
+      var extra = li.querySelector('.item-extra');
+      if (extra && extra.getAttribute('data-loaded') !== '1' && li.classList.contains('expanded')) {
+          buildExtraContent(li, extra);
+          extra.setAttribute('data-loaded', '1');
       }
     });
   });
@@ -1264,6 +1529,111 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   setInterval(refreshStatuses,10000);
 })();
+</script>
+<div id="profileModal" class="profile-modal">
+  <div class="profile-modal-content">
+    <button class="close-profile-modal">&times;</button>
+    <div class="profile-header">
+      <div class="profile-icon-large">
+        <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
+        <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
+           <i class="fa-solid fa-camera"></i>
+        </label>
+        <input type="file" id="profileUpload" accept="image/*" style="display:none">
+      </div>
+      <div class="profile-title">
+        <h3><?php echo htmlspecialchars($fullName); ?></h3>
+        <span class="profile-role">Resident</span>
+      </div>
+    </div>
+    <div class="profile-details">
+      <div class="detail-row">
+        <div class="detail-label">Name</div>
+        <div class="detail-value"><?php echo htmlspecialchars($fullName); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Email</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user['email'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Contact Number</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user['phone'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">House Number</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user['house_number'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Address</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user['address'] ?? ''); ?></div>
+      </div>
+    </div>
+    <div class="profile-actions">
+       <a href="logout.php" class="btn-logout-modal">Log Out</a>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var profileModal = document.getElementById("profileModal");
+    var profileTrigger = document.getElementById("profileTrigger");
+    var profileClose = document.getElementsByClassName("close-profile-modal")[0];
+
+    if(profileTrigger) {
+        profileTrigger.onclick = function(e) {
+            e.preventDefault();
+            profileModal.style.display = "block";
+        }
+    }
+
+    if(profileClose) {
+        profileClose.onclick = function() {
+            profileModal.style.display = "none";
+        }
+    }
+
+    window.onclick = function(event) {
+        if (event.target == profileModal) {
+            profileModal.style.display = "none";
+        }
+    }
+
+    // Profile Picture Upload
+    var profileUpload = document.getElementById('profileUpload');
+    if(profileUpload) {
+        profileUpload.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                var formData = new FormData();
+                formData.append('profile_pic', this.files[0]);
+
+                var img = document.getElementById('profileModalImg');
+                img.style.opacity = '0.5';
+
+                fetch('upload_profile_pic.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    img.style.opacity = '1';
+                    if (data.success) {
+                        if(img) img.src = data.new_url;
+                        var headerImg = document.getElementById('headerProfileImg');
+                        if(headerImg) headerImg.src = data.new_url;
+                    } else {
+                        alert(data.message || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    img.style.opacity = '1';
+                    console.error('Error:', error);
+                    alert('An error occurred during upload.');
+                });
+            }
+        });
+    }
+});
 </script>
 </body>
 </html>

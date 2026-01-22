@@ -99,7 +99,6 @@ $qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . urle
         <div class="row"><div class="label">Unit / Address</div><div class="value"><?php echo htmlspecialchars($user['address'] ?? '-'); ?></div></div>
         <div class="row"><div class="label">Contact</div><div class="value"><?php echo htmlspecialchars($displayPhone ?: '-') ; ?></div></div>
         <div class="row"><div class="label">Email</div><div class="value"><?php echo htmlspecialchars($user['email'] ?? '-') ; ?></div></div>
-        <div class="row"><div class="label">Status</div><div class="value"><span class="badge <?php echo ((strtolower($user['status']??'active')==='active')?'active':'disabled'); ?>"><?php echo htmlspecialchars(ucfirst($user['status'] ?? 'Active')); ?></span></div></div>
       </div>
       <div class="divider"></div>
       <div class="foot">Scan QR to open this digital ID • Code linked to resident profile<br>

@@ -1,4 +1,17 @@
 /* =============== Base =============== */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
+/* GLOBAL BUTTON STYLES */
+.btn, button, input[type="submit"], input[type="button"] {
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn:active, button:active, input[type="submit"]:active, input[type="button"]:active {
+  transform: scale(0.98);
+}
+
 body {
   margin:0;
   font-family:'Poppins',sans-serif;
@@ -218,6 +231,8 @@ body {
   background: rgba(0,0,0,0.6);
   align-items: center;
   justify-content: center;
+  backdrop-filter: blur(4px);
+  transition: opacity 0.3s ease;
 }
 .modal-content {
   background: #fff;
@@ -227,11 +242,12 @@ body {
   width: 90%;
   max-width: 450px;
   text-align: center;
-  animation: fadeIn 0.5s ease-in-out;
+  animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.25);
 }
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.9) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .modal-content h2 { margin: 0 0 12px; font-weight: 700; color: #23412e; }
 .modal-content p { margin-bottom: 16px; line-height: 1.6; }

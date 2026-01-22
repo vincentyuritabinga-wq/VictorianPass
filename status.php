@@ -47,11 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
-                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='denied', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU->bind_param('s', $code);
                 $stmtU->execute();
                 $stmtU->close();
-                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='cancelled', status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtUR->bind_param('s', $code);
                 $stmtUR->execute();
                 $stmtUR->close();
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
-                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='cancelled', status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
                 $stmtU2->close();
@@ -89,11 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
-                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='denied', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU3->bind_param('s', $code);
                 $stmtU3->execute();
                 $stmtU3->close();
-                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='denied', status='rejected', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='cancelled', status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtUR2->bind_param('s', $code);
                 $stmtUR2->execute();
                 $stmtUR2->close();
@@ -114,6 +114,113 @@ $code = isset($_GET['code']) ? trim($_GET['code']) : '';
 if ($code === '') {
     echo json_encode(['success' => false, 'message' => 'Status code is required.']);
     exit;
+}
+
+// Check if code is a Resident QR URL (contains resident_qr_view.php?rid=X)
+$residentId = 0;
+if (preg_match('/rid=(\d+)/', $code, $matches)) {
+    $residentId = intval($matches[1]);
+}
+
+if ($residentId > 0) {
+    // Handle Resident Scan
+    $stmtRes = $con->prepare("SELECT id, first_name, middle_name, last_name, email, phone, house_number, address, status FROM users WHERE id = ?");
+    $stmtRes->bind_param('i', $residentId);
+    $stmtRes->execute();
+    $resRes = $stmtRes->get_result();
+    
+    if ($resRes && $resRes->num_rows > 0) {
+        $rUser = $resRes->fetch_assoc();
+        $stmtRes->close();
+        
+        $fullName = trim(($rUser['first_name'] ?? '') . ' ' . ($rUser['middle_name'] ?? '') . ' ' . ($rUser['last_name'] ?? ''));
+        $statusVal = 'Active'; // Residents are generally active if they exist in DB
+        if (isset($rUser['status']) && strtolower($rUser['status']) === 'inactive') {
+             $statusVal = 'Inactive';
+        }
+        
+        $refCode = 'RES-' . $rUser['id'];
+        
+        $resp = [
+            'success' => true,
+            'code' => $refCode,
+            'name' => $fullName,
+            'type' => 'Resident',
+            'status' => $statusVal,
+            'qr_path' => 'images/mainpage/qr.png', // Default or generate if needed
+            'message' => 'Resident Entry Verified',
+            'payment_status' => null,
+            'entry_pass_id' => null,
+            'email' => $rUser['email'],
+            'phone' => $rUser['phone'],
+            'address' => $rUser['house_number'] . ' ' . $rUser['address'],
+            'contact' => $rUser['phone'],
+            'sex' => '',
+            'birthdate' => '',
+            'resident_name' => $fullName,
+            'resident_house_number' => $rUser['house_number'],
+            'resident_email' => $rUser['email'],
+            'resident_phone' => $rUser['phone'],
+            'purpose' => 'Resident Entry',
+            'persons' => 1,
+            'price' => null,
+            'downpayment' => null,
+            'start_date' => date('m/d/y'),
+            'end_date' => date('m/d/y'),
+            'start_time' => null,
+            'end_time' => null,
+            'expires_at' => ''
+        ];
+
+        // Guard scan logging
+        if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
+            $gid = isset($_SESSION['staff_id']) ? intval($_SESSION['staff_id']) : null;
+            $gname = isset($_SESSION['guard_surname']) ? trim($_SESSION['guard_surname']) : '';
+            if ($gname === '' && isset($_SESSION['email'])) {
+                $local = explode('@', $_SESSION['email'])[0] ?? '';
+                $s = $local;
+                if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+                if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+                $s = preg_replace('/[^a-zA-Z]/', '', $s);
+                $gname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+            }
+            $resp['scanned_by'] = $gname !== '' ? $gname : 'Guard';
+            
+            // Persist scan entry
+            if ($con instanceof mysqli) {
+                // For residents, we might allow multiple scans per day (entry/exit), but for now we'll stick to the "one scan record per day" or maybe just log it.
+                // The existing logic prevents duplicate scans for the same ref_code on the same day.
+                // For residents, "RES-ID" will be the ref_code.
+                
+                $exists = false;
+                $chk = $con->prepare("SELECT 1 FROM entry_scans WHERE ref_code = ? AND DATE(scanned_at) = CURDATE() LIMIT 1");
+                $chk->bind_param('s', $refCode);
+                $chk->execute();
+                $cres = $chk->get_result();
+                if ($cres && $cres->num_rows > 0) { $exists = true; }
+                $chk->close();
+                
+                if (!$exists) {
+                    $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $sd = date('Y-m-d');
+                    $ed = date('Y-m-d');
+                    $subject = $resp['name']; 
+                    $etype = $resp['type']; 
+                    $stat = $resp['status'];
+                    $stmtLog->bind_param('sissssss', $refCode, $gid, $gname, $subject, $etype, $stat, $sd, $ed);
+                    @$stmtLog->execute();
+                    @$stmtLog->close();
+                }
+            }
+        }
+        
+        echo json_encode($resp);
+        exit;
+    } else {
+        $stmtRes->close();
+        echo json_encode(['success' => false, 'message' => 'Resident not found.']);
+        exit;
+    }
 }
 
 // First, try to retrieve from guest_forms (new guest entry flow)
@@ -144,6 +251,7 @@ if ($resGF && $resGF->num_rows > 0) {
         case 'pending': $statusMessage = 'Pending: Awaiting admin review.'; break;
         case 'expired': $statusMessage = 'Expired: This pass has reached its validity end.'; break;
         case 'denied': $statusMessage = 'Denied: Your request was not approved.'; break;
+        case 'cancelled': $statusMessage = 'Cancelled: This request was cancelled by the user.'; break;
         default: $statusMessage = ucfirst($statusVal);
     }
 
@@ -323,6 +431,9 @@ if ($result && $result->num_rows > 0) {
         case 'denied':
             $statusMessage = 'Denied: Your reservation was not approved.';
             break;
+        case 'cancelled':
+            $statusMessage = 'Cancelled: This request was cancelled by the user.';
+            break;
         case 'rejected':
             $statusMessage = 'Rejected: Your payment was rejected.';
             break;
@@ -437,6 +548,7 @@ if ($res2 && $res2->num_rows > 0) {
         case 'pending': $statusMessage = 'Pending: Awaiting admin review.'; break;
         case 'expired': $statusMessage = 'Expired: This reservation has ended.'; break;
         case 'denied': $statusMessage = 'Denied: Your reservation was not approved.'; break;
+        case 'cancelled': $statusMessage = 'Cancelled: This request was cancelled by the user.'; break;
         default: $statusMessage = ucfirst($statusVal);
     }
 

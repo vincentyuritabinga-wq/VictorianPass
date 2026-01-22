@@ -57,7 +57,10 @@ if ($resGF && $resGF->num_rows > 0) {
     $rStartTime = null;
     $rEndTime = null;
     $rPersons = null;
-    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, qr_path FROM reservations WHERE ref_code = ? LIMIT 1");
+    $rPrice = null;
+    $rDownpayment = null;
+
+    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, qr_path FROM reservations WHERE ref_code = ? LIMIT 1");
     if ($stmtR) {
         $stmtR->bind_param('s', $row['ref_code']);
         if ($stmtR->execute()) {
@@ -70,6 +73,9 @@ if ($resGF && $resGF->num_rows > 0) {
                 $rStartTime = $r['start_time'] ?? null;
                 $rEndTime = $r['end_time'] ?? null;
                 $rPersons = isset($r['persons']) ? intval($r['persons']) : null;
+                $rPrice = isset($r['price']) ? floatval($r['price']) : null;
+                $rDownpayment = isset($r['downpayment']) ? floatval($r['downpayment']) : null;
+
                 $hasReservation = !empty($rAmenity);
                 if (!$qrPath && !empty($r['qr_path'])) { $qrPath = $r['qr_path']; $qrImg = $qrPath; }
                 if ($hasReservation) {
@@ -96,6 +102,8 @@ if ($resGF && $resGF->num_rows > 0) {
         'start_time' => $rStartTime,
         'end_time' => $rEndTime,
         'persons' => $rPersons,
+        'price' => $rPrice,
+        'downpayment' => $rDownpayment,
         'publish' => $publishDate,
         'expire' => $expireDate,
         'valid_window' => $validWindow,
@@ -157,6 +165,7 @@ if (!$data) {
         $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
         $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
         $qrImg = $qrPath ? $qrPath : ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink));
+        
         $data = [
             'code' => $row['ref_code'],
             'status' => $statusVal,
@@ -167,6 +176,11 @@ if (!$data) {
             'email' => $email,
             'address' => $address,
             'amenity' => $row['amenity'] ?? '',
+            'start_time' => $row['start_time'] ?? null,
+            'end_time' => $row['end_time'] ?? null,
+            'persons' => isset($row['persons']) ? intval($row['persons']) : null,
+            'price' => isset($row['price']) ? floatval($row['price']) : null,
+            'downpayment' => isset($row['downpayment']) ? floatval($row['downpayment']) : null,
             'publish' => $publishDate,
             'expire' => $expireDate,
             'valid_window' => $validWindow,
@@ -207,6 +221,7 @@ if (!$data) {
         $expireDate = !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : '';
         $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
         $qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink);
+        
         $data = [
             'code' => $row['ref_code'],
             'status' => $statusVal,
@@ -217,6 +232,11 @@ if (!$data) {
             'email' => $email,
             'address' => $address,
             'amenity' => $row['amenity'] ?? '',
+            'start_time' => null, // Assuming not available in resident_reservations unless added
+            'end_time' => null,
+            'persons' => null,
+            'price' => null,
+            'downpayment' => null,
             'publish' => $publishDate,
             'expire' => $expireDate,
             'valid_window' => $validWindow,
@@ -231,72 +251,249 @@ if (!$data) {
 }
 
 if (!$data) {
-    echo '<div style="padding:20px;text-align:center;">Details not found or invalid reference code.</div>';
+    echo '<div style="padding:20px;text-align:center;font-family:\'Poppins\',sans-serif;">Details not found or invalid reference code.</div>';
     exit;
 }
 ?>
 
-<div class="qr-card">
-    <div class="card-header">
-        <img src="images/logo.svg" alt="Victorian Heights" />
-        <div class="brand">Victorian Heights</div>
-    </div>
-    <div class="banner <?php echo htmlspecialchars($data['status']); ?>">
-        <?php 
-          switch($data['status']){
-            case 'approved': echo '✅ Valid Entry Pass'; break;
-            case 'expired': echo '❌ Expired Entry Pass'; break;
-            case 'denied': echo '❌ Denied Entry Pass'; break;
-            case 'rejected': echo 'Rejected'; break;
-            default: echo '⏳ Pending Review';
-          }
-        ?>
-    </div>
-    <?php if (($data['status'] ?? '') === 'approved'): ?>
-    <div class="qr-area">
-        <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" crossorigin="anonymous" />
-    </div>
-    <?php endif; ?>
-    <div class="content">
-        <div class="row">
-          <div class="label">QR <?php echo !empty($data['is_guest']) ? "Resident's Guest" : ($data['is_resident'] ? 'Resident' : ($data['is_visitor'] ? 'Visitor' : 'Pass')); ?></div>
-          <div>
-            <?php if ($data['is_resident']): ?><span class="badge resident">Resident</span><?php endif; ?>
-            <?php if ($data['has_reservation']): ?><span class="badge reservation">Reservation</span><?php endif; ?>
-            <?php if ($data['is_visitor']): ?><span class="badge visitor"><?php echo !empty($data['is_guest']) ? "Resident's Guest" : 'Visitor'; ?></span><?php endif; ?>
-          </div>
-        </div>
-        <div class="meta">
-          <?php if (!empty($data['resident_name']) && !empty($data['is_guest'])): ?><p><strong>Resident:</strong> <?php echo htmlspecialchars($data['resident_name']); ?></p><?php endif; ?>
-          <p><strong><?php echo !empty($data['is_guest']) ? "Resident's Guest Name" : "Name"; ?>:</strong> <?php echo htmlspecialchars($data['name']); ?></p>
-          <?php if ($data['birthdate']): ?><p><strong>Birthdate:</strong> <?php echo htmlspecialchars($data['birthdate']); ?></p><?php endif; ?>
-          <?php if (!empty($data['sex'])): ?><p><strong>Sex:</strong> <?php echo htmlspecialchars($data['sex']); ?></p><?php endif; ?>
+<div class="activity-details-container">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        .activity-details-container {
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+        }
+        .details-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .details-header img {
+            height: 40px;
+        }
+        .details-header .title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #23412e;
+        }
+        
+        .section-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #555;
+            margin: 15px 0 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #eee;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+        
+        .info-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #111;
+            font-weight: 600;
+            text-align: right;
+        }
+        
+        .status-badge-lg {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+        .st-approved { background: #dcfce7; color: #166534; }
+        .st-pending { background: #ffedd5; color: #c2410c; }
+        .st-denied { background: #fee2e2; color: #991b1b; }
+        .st-expired { background: #f3f4f6; color: #4b5563; }
+        
+        .qr-display {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 12px;
+        }
+        .qr-display img {
+            max-width: 180px;
+            height: auto;
+        }
+        
+        .price-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .total-price {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #23412e;
+        }
 
-          <?php if (!empty($data['address'])): ?><p><strong><?php echo !empty($data['is_guest']) ? "Resident House Number" : "Address"; ?>:</strong> <?php echo htmlspecialchars($data['address']); ?></p><?php endif; ?>
-          <?php if (!empty($data['purpose'])): ?><p><strong>Purpose:</strong> <?php echo htmlspecialchars($data['purpose']); ?></p><?php endif; ?>
-          <?php if (!empty($data['amenity'])): ?><p><strong>Amenity/Visit:</strong> <?php echo htmlspecialchars($data['amenity']); ?></p><?php endif; ?>
-          <?php $t1 = !empty($data['start_time']) ? date('H:i', strtotime($data['start_time'])) : ''; $t2 = !empty($data['end_time']) ? date('H:i', strtotime($data['end_time'])) : ''; if($t1 || $t2){ ?>
-            <p><strong>Time:</strong> <?php echo htmlspecialchars($t1 . ($t2 ? ' → ' . $t2 : '')); ?></p>
-          <?php } ?>
-          <?php if (!empty($data['persons'])): ?><p><strong>Persons:</strong> <?php echo htmlspecialchars($data['persons']); ?></p><?php endif; ?>
+        .action-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #23412e;
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: background 0.2s;
+            border: none;
+            cursor: pointer;
+            font-family: 'Poppins', sans-serif;
+        }
+        .action-btn:hover {
+            background-color: #1b3324;
+        }
+    </style>
+
+    <div class="details-header">
+        <img src="images/logo.svg" alt="Logo">
+        <div class="title">Request Details</div>
+    </div>
+
+    <?php 
+        $stClass = 'st-pending';
+        $stLabel = 'Pending Review';
+        $s = strtolower($data['status']);
+        if(strpos($s, 'approv')!==false) { $stClass = 'st-approved'; $stLabel = 'Approved'; }
+        else if(strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) { $stClass = 'st-denied'; $stLabel = 'Denied'; }
+        else if(strpos($s, 'expire')!==false) { $stClass = 'st-expired'; $stLabel = 'Expired'; }
+    ?>
+    <div style="text-align:center;">
+        <span class="status-badge-lg <?php echo $stClass; ?>"><?php echo $stLabel; ?></span>
+    </div>
+
+    <?php if ($data['has_reservation'] && !empty($data['amenity'])): ?>
+    <div class="section-title">Amenity Booking Details</div>
+    <div class="info-grid">
+        <div class="info-row">
+            <span class="info-label">Amenity Type</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['amenity']); ?></span>
         </div>
-        <div class="divider"></div>
-        <div class="meta">
-          <p><strong>Valid Dates:</strong> <?php echo htmlspecialchars($data['valid_window']); ?></p>
-          <p><strong>Code:</strong> <?php echo htmlspecialchars($data['code']); ?></p>
+        
+        <?php if(!empty($data['publish'])): ?>
+        <div class="info-row">
+            <span class="info-label">Booking Date</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['publish']); ?><?php if(!empty($data['expire']) && $data['expire'] !== $data['publish']) echo ' - ' . htmlspecialchars($data['expire']); ?></span>
         </div>
-        <div class="divider"></div>
-        <div class="foot">
-          <p><strong>Reminder:</strong><br>
-            Please present this pass upon entry.
-          </p>
-          <div class="cols">
-            <?php if (!empty($data['created'])): ?><div><strong>Date Created:</strong><br><?php echo htmlspecialchars($data['created']); ?></div><?php endif; ?>
-          </div>
+        <?php endif; ?>
+
+        <?php 
+            $timeStr = '';
+            if(!empty($data['start_time'])) {
+                $timeStr .= date('h:i A', strtotime($data['start_time']));
+                if(!empty($data['end_time'])) {
+                    $timeStr .= ' - ' . date('h:i A', strtotime($data['end_time']));
+                    // Calculate hours
+                    $t1 = strtotime($data['start_time']);
+                    $t2 = strtotime($data['end_time']);
+                    if($t2 > $t1) {
+                        $hrs = round(($t2 - $t1) / 3600, 1);
+                        $timeStr .= " ({$hrs} hrs)";
+                    }
+                }
+            }
+        ?>
+        <?php if($timeStr): ?>
+        <div class="info-row">
+            <span class="info-label">Time & Hours</span>
+            <span class="info-value"><?php echo htmlspecialchars($timeStr); ?></span>
+        </div>
+        <?php endif; ?>
+
+        <?php if(!empty($data['persons'])): ?>
+        <div class="info-row">
+            <span class="info-label">No. of Persons</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['persons']); ?> Pax</span>
+        </div>
+        <?php endif; ?>
+
+        <?php if($data['price'] !== null): ?>
+        <div class="price-section">
+            <div class="info-row total-price">
+                <span>Total Price</span>
+                <span>₱<?php echo number_format($data['price'], 2); ?></span>
+            </div>
+            <?php if($data['downpayment'] !== null && $data['downpayment'] > 0): ?>
+            <div class="info-row" style="margin-top:5px; font-size:0.9rem; color:#666;">
+                <span>Downpayment Paid</span>
+                <span>- ₱<?php echo number_format($data['downpayment'], 2); ?></span>
+            </div>
+            <div class="info-row" style="margin-top:5px; font-weight:600; color:#c2410c;">
+                <span>Balance Due</span>
+                <span>₱<?php echo number_format(max(0, $data['price'] - $data['downpayment']), 2); ?></span>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="section-title">Personal Information</div>
+    <div class="info-grid">
+        <div class="info-row">
+            <span class="info-label">Name</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['name']); ?></span>
+        </div>
+        <?php if(!empty($data['contact'])): ?>
+        <div class="info-row">
+            <span class="info-label">Contact</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['contact']); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if(!empty($data['email'])): ?>
+        <div class="info-row">
+            <span class="info-label">Email</span>
+            <span class="info-value" style="font-size:0.85rem;"><?php echo htmlspecialchars($data['email']); ?></span>
+        </div>
+        <?php endif; ?>
+        <div class="info-row">
+            <span class="info-label">Reference Code</span>
+            <span class="info-value" style="font-family:monospace; letter-spacing:1px;"><?php echo htmlspecialchars($data['code']); ?></span>
         </div>
     </div>
-    
+
     <?php if (($data['status'] ?? '') === 'approved'): ?>
-      <div class="verify"><a href="#" onclick="downloadQRImage('<?php echo htmlspecialchars($data['code']); ?>');return false;">Download QR</a></div>
+    <div class="qr-display">
+        <div style="margin-bottom:10px; font-size:0.9rem; color:#666;">Present this QR code at the gate</div>
+        <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" crossorigin="anonymous" />
+        <button type="button" class="action-btn" onclick="downloadQRImage('<?php echo htmlspecialchars($data['code']); ?>');return false;">
+            <i class="fa-solid fa-download"></i> Download QR Pass
+        </button>
+    </div>
     <?php endif; ?>
+
 </div>
