@@ -477,7 +477,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
 $residentGuests = [];
 if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && isset($_SESSION['user_id']) && ($con instanceof mysqli)) {
   $rid = intval($_SESSION['user_id']);
-  $stmtRG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+  $stmtRG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status = 'approved' ORDER BY created_at DESC");
   if ($stmtRG) {
     $stmtRG->bind_param('i', $rid);
     $stmtRG->execute();
@@ -518,10 +518,67 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       <div class="top-actions">
         <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'">&#8592; Back to Account</button>
       </div>
-      <div class="section-header" id="amenitiesHeader"><h2>Amenities</h2><p>Select an amenity</p></div>
+      
+      <?php $isResident = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'); ?>
+
+      <?php if ($isResident): ?>
+      <div id="bookingForSectionInitial" class="booking-for-section-initial" style="margin-bottom: 2rem;">
+          <div class="section-header"><h2>Who is this reservation for?</h2><p>Select resident or guest</p></div>
+          <div class="booking-for-options" style="display:flex; flex-direction:column; gap:12px; max-width:600px;">
+              <label class="booking-option-card" style="display:flex; align-items:center; padding:16px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:all 0.2s; background:#fff;">
+                  <input type="radio" name="initial_booking_for" value="resident" style="margin-right:12px;">
+                  <div>
+                      <div style="font-weight:600; color:#111;">Resident (Myself)</div>
+                      <div style="font-size:0.9rem; color:#666;">Book an amenity for yourself</div>
+                  </div>
+              </label>
+              <label class="booking-option-card" style="display:flex; align-items:center; padding:16px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:all 0.2s; background:#fff;">
+                  <input type="radio" name="initial_booking_for" value="guest" style="margin-right:12px;">
+                  <div>
+                      <div style="font-weight:600; color:#111;">Guest / Visitor</div>
+                      <div style="font-size:0.9rem; color:#666;">Book for an approved guest</div>
+                  </div>
+              </label>
+          </div>
+
+          <div id="initialGuestList" style="display:none; margin-top:16px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
+              <h4 style="margin:0 0 12px; font-size:1rem;">Select an Approved Guest</h4>
+              <?php if (!empty($residentGuests)): ?>
+                <div style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
+                <?php foreach ($residentGuests as $g): ?>
+                  <?php
+                    $parts = [];
+                    if (!empty($g['visitor_first_name'])) { $parts[] = $g['visitor_first_name']; }
+                    if (!empty($g['visitor_middle_name'])) { $parts[] = $g['visitor_middle_name']; }
+                    if (!empty($g['visitor_last_name'])) { $parts[] = $g['visitor_last_name']; }
+                    $gName = trim(implode(' ', $parts));
+                    if ($gName === '') { $gName = 'Guest'; }
+                  ?>
+                  <label class="guest-option" style="display:flex; align-items:center; padding:10px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;">
+                    <input type="radio" name="initial_guest_choice" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>" style="margin-right:10px;">
+                    <div>
+                      <div style="font-weight:600; font-size:0.95rem;"><?php echo htmlspecialchars($gName); ?></div>
+                      <?php if (!empty($g['visitor_email']) || !empty($g['visitor_contact'])): ?>
+                        <div style="font-size:0.85rem; color:#666;">
+                          <?php echo htmlspecialchars($g['visitor_email'] . ($g['visitor_email'] && $g['visitor_contact'] ? ' • ' : '') . $g['visitor_contact']); ?>
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </label>
+                <?php endforeach; ?>
+                </div>
+                <button type="button" id="confirmGuestBtn" class="btn-main small" style="margin-top:12px;" disabled>Continue</button>
+              <?php else: ?>
+                <div style="padding:12px; text-align:center; color:#666;">No approved guests found. Please add or wait for approval in your account.</div>
+              <?php endif; ?>
+          </div>
+      </div>
+      <?php endif; ?>
+
+      <div class="section-header" id="amenitiesHeader" style="<?php echo $isResident ? 'display:none;' : ''; ?>"><h2>Amenities</h2><p>Select an amenity</p></div>
       <div class="amenities-wrapper">
         <div class="amenities-right">
-          <div class="amenities-list" id="amenitiesList">
+          <div class="amenities-list" id="amenitiesList" style="<?php echo $isResident ? 'display:none;' : ''; ?>">
             <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175">
               <div class="amenity-media">
                 <img src="images/pool.svg" alt="Pool">
@@ -594,22 +651,31 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
               </div>
               <div class="booking-steps-body">
-                <div class="booking-step is-active">
+                <?php if ($isResident): ?>
+                <div class="booking-step is-active" id="step-who">
                   <div class="step-index">1</div>
+                  <div class="step-content">
+                    <div class="step-title">Who</div>
+                    <div class="step-subtitle">Resident or Guest</div>
+                  </div>
+                </div>
+                <?php endif; ?>
+                <div class="booking-step <?php echo $isResident ? '' : 'is-active'; ?>" id="step-amenity">
+                  <div class="step-index"><?php echo $isResident ? '2' : '1'; ?></div>
                   <div class="step-content">
                     <div class="step-title">Select amenity</div>
                     <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
                   </div>
                 </div>
-                <div class="booking-step">
-                  <div class="step-index">2</div>
+                <div class="booking-step" id="step-schedule">
+                  <div class="step-index"><?php echo $isResident ? '3' : '2'; ?></div>
                   <div class="step-content">
                     <div class="step-title">Set schedule</div>
                     <div class="step-subtitle">Pick an available date and time from the calendar</div>
                   </div>
                 </div>
-                <div class="booking-step">
-                  <div class="step-index">3</div>
+                <div class="booking-step" id="step-review">
+                  <div class="step-index"><?php echo $isResident ? '4' : '3'; ?></div>
                   <div class="step-content">
                     <div class="step-title">Review &amp; pay</div>
                     <div class="step-subtitle">Check your reservation details and partial downpayment</div>
@@ -2035,7 +2101,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         end_time:document.getElementById('endTimeInput').value||'',
         persons:document.getElementById('personsInput').value||'1',
         hours:document.getElementById('hoursInput')?.value||'',
-        downpayment:document.getElementById('downpaymentInput')?.value||''
+        downpayment:document.getElementById('downpaymentInput')?.value||'',
+        booking_for:document.getElementById('bookingForField')?.value||'',
+        guest_id:document.getElementById('guestIdField')?.value||'',
+        guest_ref:document.getElementById('guestRefField')?.value||''
       };
       sessionStorage.setItem('reserve_form', JSON.stringify(data));
     }catch(_){}
@@ -2044,6 +2113,24 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     try{
       const raw=sessionStorage.getItem('reserve_form'); if(!raw) return;
       const data=JSON.parse(raw||'{}');
+      
+      if(data.booking_for){
+         const r = document.querySelector(`input[name="initial_booking_for"][value="${data.booking_for}"]`);
+         if(r) {
+           r.checked = true;
+           r.dispatchEvent(new Event('change'));
+         }
+      }
+      if(data.booking_for === 'guest' && data.guest_id){
+         const gr = document.querySelector(`input[name="initial_guest_choice"][value="${data.guest_id}"]`);
+         if(gr) {
+           gr.checked = true;
+           gr.dispatchEvent(new Event('change'));
+           const btn = document.getElementById('confirmGuestBtn');
+           if(btn) btn.click();
+         }
+      }
+
       if(data.amenity){ document.getElementById('amenityField').value=data.amenity; }
       if(data.start_date){ document.getElementById('startDateInput').value=data.start_date; }
       if(data.end_date){ document.getElementById('endDateInput').value=data.end_date; }
@@ -2122,6 +2209,104 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function goBack(){ persistForm(); if(document.referrer){ window.history.back(); } else { window.location.href = 'mainpage.php'; } }
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}
+
+  document.addEventListener('DOMContentLoaded', function(){
+    const initialBookingForRadios = document.querySelectorAll('input[name="initial_booking_for"]');
+    const guestListSection = document.getElementById('initialGuestList');
+    const guestRadios = document.querySelectorAll('input[name="initial_guest_choice"]');
+    const confirmGuestBtn = document.getElementById('confirmGuestBtn');
+    const amenitiesHeader = document.getElementById('amenitiesHeader');
+    const amenitiesList = document.getElementById('amenitiesList');
+    const bookingForField = document.getElementById('bookingForField');
+    const guestIdField = document.getElementById('guestIdField');
+    const guestRefField = document.getElementById('guestRefField');
+    const stepWho = document.getElementById('step-who');
+    const stepAmenity = document.getElementById('step-amenity');
+    
+    // Hide verify modal choice section if resident and initial selection exists
+    const verifyBookingSection = document.getElementById('bookingForSection');
+    if(verifyBookingSection && initialBookingForRadios.length > 0) {
+      verifyBookingSection.style.display = 'none';
+    }
+
+    initialBookingForRadios.forEach(r => {
+      r.addEventListener('change', function(){
+        // Reset selection visual states
+        document.querySelectorAll('.booking-option-card').forEach(c => {
+           c.style.borderColor = '#e5e7eb';
+           c.style.backgroundColor = '#fff';
+        });
+        const card = this.closest('.booking-option-card');
+        if(card) {
+            card.style.borderColor = '#2e7d32';
+            card.style.backgroundColor = '#f0faf2';
+        }
+
+        if(this.value === 'resident') {
+          // Resident selected
+          if(guestListSection) guestListSection.style.display = 'none';
+          if(bookingForField) bookingForField.value = 'resident';
+          if(guestIdField) guestIdField.value = '';
+          if(guestRefField) guestRefField.value = '';
+          
+          // Show amenities
+          if(amenitiesHeader) amenitiesHeader.style.display = '';
+          if(amenitiesList) amenitiesList.style.display = '';
+          
+          // Update steps
+          if(stepWho) stepWho.classList.remove('is-active');
+          if(stepAmenity) stepAmenity.classList.add('is-active');
+          
+        } else if (this.value === 'guest') {
+          // Guest selected
+          if(guestListSection) guestListSection.style.display = 'block';
+          if(bookingForField) bookingForField.value = ''; // wait for guest selection
+          
+          // Hide amenities until guest confirmed
+          if(amenitiesHeader) amenitiesHeader.style.display = 'none';
+          if(amenitiesList) amenitiesList.style.display = 'none';
+          
+          if(stepWho) stepWho.classList.add('is-active');
+          if(stepAmenity) stepAmenity.classList.remove('is-active');
+          
+          // Reset amenities if any selected
+          resetAmenitySelection();
+        }
+      });
+    });
+
+    guestRadios.forEach(gr => {
+      gr.addEventListener('change', function(){
+        if(confirmGuestBtn) confirmGuestBtn.disabled = false;
+        document.querySelectorAll('.guest-option').forEach(go => go.style.borderColor = '#e5e7eb');
+        const go = this.closest('.guest-option');
+        if(go) go.style.borderColor = '#2e7d32';
+      });
+    });
+
+    if(confirmGuestBtn) {
+      confirmGuestBtn.addEventListener('click', function(){
+        const selected = document.querySelector('input[name="initial_guest_choice"]:checked');
+        if(selected) {
+          if(bookingForField) bookingForField.value = 'guest';
+          if(guestIdField) guestIdField.value = selected.value;
+          if(guestRefField) guestRefField.value = selected.getAttribute('data-ref');
+          
+          // Show amenities
+          if(amenitiesHeader) amenitiesHeader.style.display = '';
+          if(amenitiesList) amenitiesList.style.display = '';
+          
+          // Update steps
+          if(stepWho) stepWho.classList.remove('is-active');
+          if(stepAmenity) stepAmenity.classList.add('is-active');
+          
+          // Scroll to amenities
+          if(amenitiesHeader) amenitiesHeader.scrollIntoView({behavior: 'smooth'});
+        }
+      });
+    }
+  });
+
 </script>
 
 <script>
