@@ -96,7 +96,7 @@ $activities = [];
 
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -106,15 +106,19 @@ if ($stmt) {
         $sTime = strtotime($row['start_time'] ?? '');
         $eTime = strtotime($row['end_time'] ?? '');
         $timeStr = ($sTime ? date('h:i A', $sTime) : '') . ' - ' . ($eTime ? date('h:i A', $eTime) : '');
+        $statusVal = $row['approval_status'] ?? '';
+        if ($statusVal === '' || $statusVal === null) {
+            $statusVal = $row['status'] ?? 'pending';
+        }
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
-        if (stripos($row['status'] ?? '', 'cancel') !== false) {
+        if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
         }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
             'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
-            'status' => $row['status'] ?? 'pending',
+            'status' => $statusVal ?? 'pending',
             'date' => $row['created_at'],
             'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
             'ref_code' => $row['ref_code'] ?? 'RES'
@@ -1649,7 +1653,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
 
   function refreshStatuses(){
-    fetch('profileresident.php?ajax=1',{credentials:'same-origin'})
+    fetch('profileresident.php?ajax=1&t='+new Date().getTime(),{credentials:'same-origin'})
       .then(function(r){return r.json();})
       .then(function(data){
         if(!data||!data.success) return;
@@ -1668,6 +1672,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     var oldStatus = prevStatuses[code];
                     var newStatus = item.status;
                     
+                    // Prevent reverting final states to pending (stale data protection)
+                    var oldS = (oldStatus||'').toLowerCase();
+                    var newS = (newStatus||'').toLowerCase();
+                    if((oldS.indexOf('cancel')!==-1 || oldS.indexOf('denied')!==-1 || oldS.indexOf('reject')!==-1) && newS.indexOf('pending')!==-1){
+                        return;
+                    }
+
                     li.setAttribute('data-status', newStatus);
                     
                     // Update Visuals

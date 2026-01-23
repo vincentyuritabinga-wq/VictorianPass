@@ -821,12 +821,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     
     // Always show View Details
-    if(isApproved && ref){
-        html+='</div></div></div>';
-    }else{
-        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
-        html+='</div></div></div>';
-    }
+    html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+    html+='</div></div></div>';
     
     extra.innerHTML=html;
 
