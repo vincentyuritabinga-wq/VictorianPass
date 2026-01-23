@@ -96,6 +96,45 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 <link rel="stylesheet" href="css/dashboard.css">
 <!-- FontAwesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* Fix for Visitor Dashboard Modal to ensure it fits screen and close button is visible */
+  #activityModal .modal-content {
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 0;
+  }
+  #activityModal .close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 28px;
+      font-weight: bold;
+      color: #555;
+      cursor: pointer;
+      z-index: 100;
+      background: rgba(255,255,255,0.9);
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+  }
+  #activityModal .close:hover {
+      color: #000;
+      background: #fff;
+      transform: scale(1.1);
+  }
+  #activityModalBody {
+      overflow-y: auto;
+      padding: 30px;
+      flex: 1;
+  }
+</style>
 </head>
 <body>
 

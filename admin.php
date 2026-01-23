@@ -225,7 +225,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
                                     r.price, r.downpayment, r.payment_status,
-                                    u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number
+                                    u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
                              FROM reservations r
                              LEFT JOIN users u ON r.user_id = u.id
                              WHERE r.id = ? LIMIT 1");
@@ -1887,61 +1887,7 @@ tr:hover { background-color: #f8fafc; }
 .notif-item:hover .notif-dismiss { opacity: 1; }
 .notif-dismiss:hover { color: var(--danger); }
 
-/* Modals */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.6);
-    backdrop-filter: blur(4px);
-    animation: fadeIn 0.2s ease-out;
-}
-
-.modal-content {
-    background-color: var(--bg-surface);
-    margin: 5% auto;
-    padding: 20px;
-    border-radius: 16px;
-    width: min(92vw, 640px);
-    max-height: 85vh;
-    box-shadow: var(--shadow-lg);
-    position: relative;
-    animation: slideIn 0.3s ease-out;
-    border: 1px solid rgba(255,255,255,0.1);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.modal-content h3{
-    margin: 0;
-    padding: 8px 8px 12px 4px;
-    font-size: 1.15rem;
-    line-height: 1.3;
-    border-bottom: 1px solid var(--border-light);
-    position: sticky;
-    top: 0;
-    background: var(--bg-surface);
-    z-index: 1;
-}
-.modal-content > div{
-    overflow-y: auto;
-    max-height: calc(85vh - 64px);
-    overscroll-behavior: contain;
-    padding-right: 4px;
-    word-wrap: break-word;
-    overflow-wrap: anywhere;
-    white-space: normal;
-    hyphens: auto;
-}
-.modal-content p{ margin: 6px 0; line-height: 1.5; }
-.modal-content img{ max-width: 100%; height: auto; display: block; }
-.modal-content table{ width: 100%; border-collapse: collapse; }
-.modal-content td{ padding: 6px 0; }
+/* Modals Styles consolidated below */
 
 .close {
     position: absolute;
@@ -2043,17 +1989,17 @@ tr:hover { background-color: #f8fafc; }
     border: 2px solid #211b18;
 }
 
-/* Notification Modal */
+/* Modals - Square & Centered */
 .modal {
     display: none;
     position: fixed;
-    z-index: 1000;
+    z-index: 2000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    backdrop-filter: blur(2px);
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
     align-items: center;
     justify-content: center;
 }
@@ -2063,15 +2009,19 @@ tr:hover { background-color: #f8fafc; }
     margin: 0;
     padding: 20px;
     border: 1px solid var(--border);
-    width: min(92vw, 640px);
-    max-height: 85vh;
-    border-radius: var(--radius);
+    border-radius: 16px;
     box-shadow: var(--shadow-lg);
     position: relative;
     display: flex;
     flex-direction: column;
     gap: 12px;
     animation: slideIn 0.3s ease-out;
+    
+    /* Square Shape & Sizing */
+    width: min(90vw, 550px);
+    aspect-ratio: 1/1;
+    max-height: 90vh;
+    overflow: hidden;
 }
 
 .modal-content h3 {
@@ -2080,21 +2030,32 @@ tr:hover { background-color: #f8fafc; }
     margin: 0;
     font-size: 1.15rem;
     background: var(--bg-surface);
-    border-radius: var(--radius) var(--radius) 0 0;
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 10;
 }
 
-.tab-body {
-    padding: 0;
+/* Scrollable Content */
+.modal-content > div, 
+.tab-body,
+#visitorDetailsContent, 
+#reservationDetailsContent, 
+#residentReservationDetailsContent, 
+#userDetailsContent,
+#priceDetailsContent {
     overflow-y: auto;
     flex: 1;
+    padding-right: 4px;
     word-wrap: break-word;
     overflow-wrap: anywhere;
     white-space: normal;
     hyphens: auto;
 }
+
+.modal-content p{ margin: 6px 0; line-height: 1.5; }
+.modal-content img{ max-width: 100%; height: auto; display: block; }
+.modal-content table{ width: 100%; border-collapse: collapse; }
+.modal-content td{ padding: 6px 0; }
 
 .notif-item {
     padding: 15px 20px;
@@ -2361,7 +2322,7 @@ tr:hover { background-color: #f8fafc; }
           const p=document.getElementById('notifPanel');
           const m=document.getElementById('notifModal');
           const mc=document.getElementById('notifModalClose');
-          if(t&&m){ t.addEventListener('click',function(){ m.style.display = (m.style.display==='block') ? 'none' : 'block'; }); }
+          if(t&&m){ t.addEventListener('click',function(){ m.style.display = (m.style.display==='flex') ? 'none' : 'flex'; }); }
           if(mc&&m){ mc.addEventListener('click',function(){ m.style.display='none'; }); }
           document.addEventListener('click',function(e){ if(m && e.target===m){ m.style.display='none'; } });
           var lastTotal = null;
@@ -2870,7 +2831,7 @@ function openPriceDetails(totalStr, downStr){
       + '<tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱' + fmt(r) + '</td></tr>'
       + '</table>';
   }
-  var m = document.getElementById('priceDetailsModal'); if(m){ m.style.display = 'block'; }
+  var m = document.getElementById('priceDetailsModal'); if(m){ m.style.display = 'flex'; }
 }
 function closePriceDetailsModal(){ var m=document.getElementById('priceDetailsModal'); if(m){ m.style.display='none'; } }
 window.addEventListener('click', function(e){ var m=document.getElementById('priceDetailsModal'); if(e.target===m){ m.style.display='none'; } });
@@ -2878,13 +2839,15 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
 
 <!-- Receipt Image Modal -->
 <div id="receiptModal" class="modal">
-  <div class="modal-content" style="max-width:90vw;width:min(90vw,800px)">
+  <div class="modal-content">
     <span class="close" onclick="closeReceiptModal()">&times;</span>
-    <img id="receiptModalImg" alt="Receipt" style="width:100%;height:auto;border-radius:8px"/>
+    <div style="overflow-y: auto; flex: 1; display: flex; align-items: center; justify-content: center;">
+      <img id="receiptModalImg" alt="Receipt" style="width:100%;height:auto;border-radius:8px"/>
+    </div>
   </div>
 </div>
 <script>
-function openReceiptModal(src){ var m=document.getElementById('receiptModal'); var img=document.getElementById('receiptModalImg'); if(img){ img.src = src; } if(m){ m.style.display='block'; } }
+function openReceiptModal(src){ var m=document.getElementById('receiptModal'); var img=document.getElementById('receiptModalImg'); if(img){ img.src = src; } if(m){ m.style.display='flex'; } }
 function closeReceiptModal(){ var m=document.getElementById('receiptModal'); if(m){ m.style.display='none'; } }
 window.addEventListener('click', function(e){ var m=document.getElementById('receiptModal'); if(e.target===m){ m.style.display='none'; } });
 </script>
@@ -3256,7 +3219,9 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <div id="incidentProofModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeIncidentProofModal()">&times;</span>
-    <img id="incidentProofImg" src="" alt="Proof" />
+    <div style="overflow-y: auto; flex: 1; display: flex; align-items: center; justify-content: center;">
+      <img id="incidentProofImg" src="" alt="Proof" />
+    </div>
   </div>
 </div>
 
@@ -3283,7 +3248,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 function showIncidentProofModal(src){
   var m=document.getElementById('incidentProofModal');
   var img=document.getElementById('incidentProofImg');
-  if(m&&img){ img.src=src; m.style.display='block'; }
+  if(m&&img){ img.src=src; m.style.display='flex'; }
 }
 function closeIncidentProofModal(){ var m=document.getElementById('incidentProofModal'); if(m){ m.style.display='none'; } }
 
@@ -3295,7 +3260,7 @@ function showVisitorDetails(id, source) {
   const modal = document.getElementById('visitorModal');
   const modalTitleEl = document.querySelector('#visitorModal h3');
   if(modalTitleEl) modalTitleEl.textContent = 'Request Details';
-  if(modal) modal.style.display = 'block';
+  if(modal) modal.style.display = 'flex';
 
   // Make AJAX request to get visitor details
   const url = 'admin.php?action=get_visitor_details&id=' + encodeURIComponent(id) + (source? ('&source=' + encodeURIComponent(source)) : '');
@@ -3424,7 +3389,7 @@ function showReservationDetails(reservationId){
   var c = document.getElementById('reservationDetailsContent');
   if(c){ c.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>'; }
   var m = document.getElementById('reservationModal');
-  if(m){ m.style.display = 'block'; }
+  if(m){ m.style.display = 'flex'; }
   fetch('admin.php?action=get_reservation_details&id=' + reservationId)
     .then(r => r.json())
     .then(data => {
@@ -3433,7 +3398,7 @@ function showReservationDetails(reservationId){
       const whoLabel = (String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident';
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const content = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div style="display: flex; flex-direction: column; gap: 20px;">
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">${whoLabel}</h4>
             ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
@@ -3457,7 +3422,7 @@ function showReservationDetails(reservationId){
           </div>
         </div>`;
       document.getElementById('reservationDetailsContent').innerHTML = content;
-      document.getElementById('reservationModal').style.display = 'block';
+      document.getElementById('reservationModal').style.display = 'flex';
     })
     .catch(err => { console.error(err); alert('Error loading reservation details'); });
 }
@@ -3488,7 +3453,7 @@ window.addEventListener('click', function(event){
 function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return (String(h).padStart(2,'0')+":"+String(m).padStart(2,'0')); }
 function showResidentReservationDetails(rrId){
   document.getElementById('residentReservationDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
-  document.getElementById('residentReservationModal').style.display = 'block';
+  document.getElementById('residentReservationModal').style.display = 'flex';
   
   fetch('admin.php?action=get_resident_reservation_details&id=' + rrId)
     .then(r => r.json())
@@ -3502,8 +3467,13 @@ function showResidentReservationDetails(rrId){
       const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const userType = (d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1);
-        const content = `
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      
+      // Dynamic Title Update
+      const modalTitle = document.querySelector('#residentReservationModal h3');
+      if(modalTitle) modalTitle.textContent = userType + ' Reservation Details';
+
+      const content = `
+          <div style="display: flex; flex-direction: column; gap: 20px;">
             <div>
               <h4 style="color:#23412e;margin-bottom:10px;">${userType}</h4>
               ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
