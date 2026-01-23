@@ -256,7 +256,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="nav-actions">
         <?php if ($isLoggedIn): ?>
           <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
-             <span>Hi, <?php $dispName = explode(' ', trim($userFirstName ?: 'User'))[0]; echo htmlspecialchars($dispName); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
+             <span>Hi, <?php echo htmlspecialchars($userFirstName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
              <div class="profile-icon-wrap" id="profileWrap">
                <button id="profileAccountTrigger" type="button" class="profile-account-btn" style="background:none;border:none;padding:0;cursor:pointer;">
                  <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="profile-icon">

@@ -96,7 +96,7 @@ $activities = [];
 
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -106,12 +106,17 @@ if ($stmt) {
         $sTime = strtotime($row['start_time'] ?? '');
         $eTime = strtotime($row['end_time'] ?? '');
         $timeStr = ($sTime ? date('h:i A', $sTime) : '') . ' - ' . ($eTime ? date('h:i A', $eTime) : '');
+        $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
+        if (stripos($row['status'] ?? '', 'cancel') !== false) {
+            $resTitle .= ' - Cancelled';
+        }
         $activities[] = [
             'type' => 'reservation',
-            'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
+            'title' => $resTitle,
             'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
             'status' => $row['status'] ?? 'pending',
             'date' => $row['created_at'],
+            'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
             'ref_code' => $row['ref_code'] ?? 'RES'
         ];
     }
@@ -131,6 +136,7 @@ if ($stmt) {
             'details' => 'Address: ' . ($row['address'] ?? ''),
             'status' => $row['status'] ?? 'new',
             'date' => $row['created_at'],
+            'event_timestamp' => strtotime($row['created_at']),
             'ref_code' => 'REP-' . $row['id']
         ];
     }
@@ -138,19 +144,25 @@ if ($stmt) {
 }
 
 // 3. Guest Forms
-$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
         $vName = ($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? '');
+        $title = 'Guest Request - ' . $vName;
+        if (stripos($row['approval_status'] ?? '', 'cancel') !== false) {
+            $title .= ' - Cancelled';
+        }
+        $visitTs = strtotime(($row['visit_date']??date('Y-m-d')) . ' ' . ($row['visit_time']??'23:59:59'));
         $activities[] = [
             'type' => 'guest_form',
-            'title' => 'Guest Request - ' . $vName,
+            'title' => $title,
             'details' => '',
             'status' => $row['approval_status'] ?? 'pending',
             'date' => $row['created_at'],
+            'event_timestamp' => $visitTs,
             'ref_code' => $row['ref_code'] ?? 'GST'
         ];
     }
@@ -161,9 +173,47 @@ usort($activities, function($a, $b) {
     return strtotime($b['date']) - strtotime($a['date']);
 });
 
+// Split into Active and History
+$activeActivities = [];
+$historyActivities = [];
+$now = time();
+
+foreach ($activities as $act) {
+    $s = strtolower($act['status']);
+    if (strpos($s, 'deleted') !== false) continue;
+
+    $isHistory = false;
+
+    // 1. Explicit history statuses
+    if (strpos($s, 'cancel') !== false || 
+        strpos($s, 'denied') !== false || 
+        strpos($s, 'reject') !== false || 
+        strpos($s, 'expired') !== false) {
+        $isHistory = true;
+    } 
+    // 2. Approved/Resolved but passed date
+    else if ((strpos($s, 'approv') !== false || strpos($s, 'resolved') !== false)) {
+        // If event timestamp is in the past
+        if ($act['event_timestamp'] < $now) {
+            $isHistory = true;
+        }
+    }
+
+    if ($isHistory) {
+        $historyActivities[] = $act;
+    } else {
+        $activeActivities[] = $act;
+    }
+}
+
+
 if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'items' => $activities]);
+    echo json_encode([
+        'success' => true, 
+        'active' => $activeActivities, 
+        'history' => $historyActivities
+    ]);
     exit;
 }
 
@@ -342,6 +392,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
     <nav class="nav-menu">
       <a href="#" class="nav-item <?php echo $activeSection === 'panel-requests' ? 'active' : ''; ?>" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
+      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
       <a href="#" class="nav-item" data-section="panel-guest-form"><i class="fa-solid fa-user-plus"></i> <span>Guest Form</span></a>
       <a href="#" class="nav-item" data-section="panel-my-guests"><i class="fa-solid fa-user-group"></i> <span>My Guests</span></a>
@@ -421,7 +472,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
         <a href="#" class="user-profile" id="profileTrigger">
-          <span class="user-name">Hi, <?php $fName = explode(' ', trim($user['first_name'] ?? 'Resident'))[0]; echo htmlspecialchars($fName); ?></span>
+          <span class="user-name">Hi, <?php echo htmlspecialchars($user['first_name'] ?? 'Resident'); ?></span>
           <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
         </a>
       </div>
@@ -439,10 +490,53 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           </div>
 
           <div class="item-list">
-            <?php if (empty($activities)): ?>
-              <div style="padding:20px; text-align:center; color:#777;">No records found.</div>
+            <?php if (empty($activeActivities)): ?>
+              <div style="padding:20px; text-align:center; color:#777;">No active requests.</div>
             <?php else: ?>
-              <?php foreach ($activities as $act):
+              <?php foreach ($activeActivities as $act):
+                  $statusClass = 'status-pending';
+                  $s = strtolower($act['status']);
+                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
+                  $displayStatus = ucfirst($act['status']);
+              ?>
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+                 <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
+                 <div class="item-content">
+                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                     <div>
+                       <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
+                       <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                       <?php if(!empty($act['details'])): ?>
+                       <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                       <?php else: ?>
+                       <span class="item-details" style="display:none;"></span>
+                       <?php endif; ?>
+                     </div>
+                     <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
+                   </div>
+                   <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
+                     <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
+                   </div>
+                   <div class="item-extra" data-loaded="0"></div>
+                 </div>
+              </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <div class="panel-section" id="panel-history" style="display:none;">
+          <div class="activity-list-header">
+            <div>History</div>
+          </div>
+
+          <div class="item-list">
+            <?php if (empty($historyActivities)): ?>
+              <div style="padding:20px; text-align:center; color:#777;">No history records found.</div>
+            <?php else: ?>
+              <?php foreach ($historyActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
@@ -707,11 +801,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
   var searchInput=document.getElementById('requestSearch');
     function filterList(){
-    var q=(searchInput.value||'').toLowerCase();
-    document.querySelectorAll('.item-list .list-item').forEach(function(li){
-      var text=li.textContent.toLowerCase();
-      li.style.display=text.indexOf(q)!==-1?'':'none';
-    });
+    var q=(searchInput.value||'').trim().toLowerCase();
+    var panel = document.getElementById('panel-requests');
+    if(panel) {
+        panel.querySelectorAll('.item-list .list-item').forEach(function(li){
+            var text=li.textContent.toLowerCase();
+            li.style.display=text.indexOf(q)!==-1?'':'none';
+        });
+    }
   }
   if(searchInput){ searchInput.addEventListener('input',filterList); }
   var prevStatuses={};
@@ -741,11 +838,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   var cancelModalClose=cancelModal?cancelModal.querySelector('.cancel-modal-close'):null;
   var cancelModalRef=null;
   var cancelModalLi=null;
+  var modalAction = 'cancel';
+
   function openCancelModal(li,ref){
     if(!cancelModal) return;
     cancelModalRef=ref;
     cancelModalLi=li;
-
+    modalAction = 'cancel';
+    
     var type = (li.getAttribute('data-type')||'').toLowerCase();
     var h3 = cancelModal.querySelector('h3');
     var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
@@ -769,6 +869,28 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
     cancelModal.style.display='flex';
   }
+
+  function openDeleteModal(li,ref){
+    if(!cancelModal) return;
+    cancelModalRef=ref;
+    cancelModalLi=li;
+    modalAction = 'delete';
+    
+    var h3 = cancelModal.querySelector('h3');
+    var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
+    var pNote = cancelModal.querySelector('.cancel-modal-note');
+    var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
+    
+    if(h3) h3.textContent = 'Delete Request';
+    if(pBody) pBody.textContent = 'Are you sure you want to permanently delete this request from your history?';
+    if(pNote) pNote.style.display = 'none';
+    if(btnKeep) btnKeep.textContent = 'Keep Request';
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Delete';
+    
+    cancelModal.style.display='flex';
+  }
+
   function closeCancelModalResident(){
     if(!cancelModal) return;
     cancelModal.style.display='none';
@@ -782,6 +904,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       closeCancelModalResident();
       return;
     }
+    // Reset modal text for next time (or handle in openCancelModal)
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Cancel';
+
     fetch('status.php',{
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -793,6 +919,24 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
       li.setAttribute('data-status','cancelled');
       prevStatuses[ref]='cancelled';
+
+      // Move to History Panel
+      var historyPanel = document.getElementById('panel-history');
+      if(historyPanel){
+          var historyList = historyPanel.querySelector('.item-list');
+          if(historyList){
+             var noRecs = historyList.querySelector('div[style*="text-align:center"]');
+             if(noRecs) noRecs.remove();
+             historyList.insertBefore(li, historyList.firstChild);
+             li.style.display = ''; // Ensure visible
+          }
+      }
+
+      // Update Title immediately
+      var titleEl = li.querySelector('.item-title');
+      if (titleEl && titleEl.textContent.indexOf('Cancelled') === -1) {
+          titleEl.textContent += ' - Cancelled';
+      }
       var badge=li.querySelector('.status-badge');
       if(badge){
         badge.textContent=fmtLabel('cancelled');
@@ -810,9 +954,33 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
       closeCancelModalResident();
     })["catch"](function(){
-      alert('Network error. Please try again.');
+      // alert('Network error. Please try again.');
     });
   }
+  
+  function performDeleteResident(){
+    var ref=cancelModalRef;
+    var li=cancelModalLi;
+    if(!ref||!li){
+      closeCancelModalResident();
+      return;
+    }
+    fetch('status.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'delete',code:ref})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to delete request.');
+        return;
+      }
+      li.remove();
+      closeCancelModalResident();
+    })["catch"](function(){
+       // alert('Network error. Please try again.');
+    });
+  }
+  
   if(cancelModalKeep){
     cancelModalKeep.addEventListener('click',function(){
       closeCancelModalResident();
@@ -825,7 +993,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   if(cancelModalConfirm){
     cancelModalConfirm.addEventListener('click',function(){
-      performCancelResident();
+      if(modalAction === 'delete'){
+        performDeleteResident();
+      } else {
+        performCancelResident();
+      }
     });
   }
 
@@ -881,6 +1053,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(refSpan){ summaryParts.push('Code: '+refSpan.textContent.trim()); }
     var summaryText=summaryParts.join(' • ');
     var canCancel=(type==='reservation'||type==='guest_form')&&(s.indexOf('pending')!==-1||s===''||s==='new');
+    var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
     var html='';
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
@@ -906,6 +1079,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(canCancel && ref){
         var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
+      }
+      if(canDelete && ref){
+         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="margin-top:10px; padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
       }
       if(type!=='guest_form' && isApproved && ref){
         var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
@@ -942,6 +1118,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       cancelBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openCancelModal(li,ref);
+      });
+    }
+    var deleteBtn=extra.querySelector('.item-extra-delete');
+    if(deleteBtn && ref && canDelete){
+      deleteBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        openDeleteModal(li,ref);
       });
     }
     var viewBtn=extra.querySelector('.view-details-btn');
@@ -1469,45 +1652,67 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     fetch('profileresident.php?ajax=1',{credentials:'same-origin'})
       .then(function(r){return r.json();})
       .then(function(data){
-        if(!data||!data.success||!Array.isArray(data.items)) return;
-        var map={};
-        data.items.forEach(function(it){ if(it.ref_code) map[it.ref_code]=it; });
-        var changed=0;
-        document.querySelectorAll('.item-list .list-item').forEach(function(li){
-          var code=li.getAttribute('data-ref-code')||'';
-          if(!code||!map[code]) return;
-          var info=map[code];
-          var newStatus=info.status||'';
-          var oldStatus=prevStatuses[code];
-          if(oldStatus!==undefined && oldStatus!==newStatus){
-            changed++;
-            li.classList.add('status-updated');
-            addNotificationEntry(code,newStatus,li);
-          }
-          prevStatuses[code]=newStatus;
-          li.setAttribute('data-status',newStatus);
-          var badge=li.querySelector('.status-badge');
-          if(badge){
-            badge.textContent=fmtLabel(newStatus);
-            badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
-            badge.classList.add(statusClassFor(newStatus));
-          }
-          var timeEl=li.querySelector('.item-time');
-          if(timeEl && info.date){
-            var d=new Date(info.date.replace(' ','T'));
-            if(!isNaN(d.getTime())) timeEl.textContent=d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-          }
-        });
-        if(notifPanel) renderNotifPanel();
-        if(notifCountEl){
-          if(changed>0){
-            notifCountEl.textContent=String(changed);
-            notifCountEl.style.display='inline-block';
-          }else{
-            notifCountEl.textContent='0';
-            notifCountEl.style.display='none';
-          }
+        if(!data||!data.success) return;
+        
+        function updateAndMove(list, panelId){
+            var panel = document.getElementById(panelId);
+            if(!panel) return;
+            var container = panel.querySelector('.item-list');
+            if(!container) return;
+            
+            list.forEach(function(item){
+                var code = item.ref_code;
+                var li = document.querySelector('.list-item[data-ref-code="'+code+'"]');
+                if(li){
+                    // Update Data
+                    var oldStatus = prevStatuses[code];
+                    var newStatus = item.status;
+                    
+                    li.setAttribute('data-status', newStatus);
+                    
+                    // Update Visuals
+                    var titleEl = li.querySelector('.item-title');
+                    if(titleEl) titleEl.textContent = item.title;
+                    
+                    var badge = li.querySelector('.status-badge');
+                    if(badge){
+                        badge.textContent = fmtLabel(newStatus);
+                        badge.className = 'status-badge ' + statusClassFor(newStatus);
+                    }
+                    
+                    // Check if needs moving
+                    var currentPanel = li.closest('.panel-section');
+                    if(currentPanel && currentPanel.id !== panelId){
+                         var noRecs = container.querySelector('div[style*="text-align:center"]');
+                         if(noRecs) noRecs.remove();
+                         
+                         // Insert at top
+                         container.insertBefore(li, container.firstChild);
+                         li.style.display = ''; 
+                    }
+                    
+                    // Notifications (only for Active items changing status)
+                    if(oldStatus && oldStatus !== newStatus && panelId === 'panel-requests'){
+                        if(newStatus.toLowerCase().indexOf('cancel') === -1){
+                            li.classList.add('status-updated');
+                            addNotificationEntry(code, newStatus, li);
+                            if(notifCountEl){
+                                var c = parseInt(notifCountEl.textContent||'0') + 1;
+                                notifCountEl.textContent = c;
+                                notifCountEl.style.display = 'inline-block';
+                            }
+                        }
+                    }
+                    
+                    prevStatuses[code] = newStatus;
+                }
+            });
         }
+        
+        if(data.active) updateAndMove(data.active, 'panel-requests');
+        if(data.history) updateAndMove(data.history, 'panel-history');
+        
+        if(notifPanel) renderNotifPanel();
       })["catch"](function(){});
   }
   setInterval(refreshStatuses,10000);

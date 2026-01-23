@@ -40,7 +40,7 @@ $profilePicUrl = $profilePicPath . '?t=' . time();
 $activities = [];
 
 // Reservations
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -48,6 +48,9 @@ if ($stmt) {
     while ($row = $res->fetch_assoc()) {
         $start = $row['start_date'];
         $end = $row['end_date'] ?? null;
+        $sTime = strtotime($row['start_time'] ?? '');
+        $eTime = strtotime($row['end_time'] ?? '');
+        
         $dateStr = '';
         if (!empty($start) && !empty($end)) {
             $dateStr = date('M d, Y', strtotime($start)) . ' - ' . date('M d, Y', strtotime($end));
@@ -57,17 +60,43 @@ if ($stmt) {
             $dateStr = 'Date not set';
         }
         
+        if ($sTime && $eTime) {
+             $dateStr .= ' ' . date('h:i A', $sTime) . ' - ' . date('h:i A', $eTime);
+        }
+        
         $statusVal = $row['status'] ?? 'pending';
         if (!empty($row['approval_status'])) {
             $statusVal = $row['approval_status'];
         }
+        
+        $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
+        if (stripos($statusVal, 'cancel') !== false) {
+            $resTitle .= ' - Cancelled';
+        }
+
+        // Calculate event timestamp for history sorting
+        $eventTs = 0;
+        if ($eTime) {
+            $eventTs = $eTime; // If end time is set
+            // If end date is set, combine
+             if ($end) {
+                $eventTs = strtotime($end . ' ' . ($row['end_time'] ?? '23:59:59'));
+            } elseif ($start) {
+                $eventTs = strtotime($start . ' ' . ($row['end_time'] ?? '23:59:59'));
+            }
+        } else {
+             // Fallback to end of day of start date
+             if ($start) $eventTs = strtotime($start . ' 23:59:59');
+             else $eventTs = strtotime($row['created_at']);
+        }
 
         $activities[] = [
             'type' => 'reservation',
-            'title' => 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity'),
+            'title' => $resTitle,
             'details' => $dateStr,
             'status' => $statusVal,
             'date' => $row['created_at'],
+            'event_timestamp' => $eventTs,
             'ref_code' => $row['ref_code'] ?? 'RES'
         ];
     }
@@ -78,9 +107,46 @@ usort($activities, function($a, $b) {
     return strtotime($b['date']) - strtotime($a['date']);
 });
 
+// Split into Active and History
+$activeActivities = [];
+$historyActivities = [];
+$now = time();
+
+foreach ($activities as $act) {
+    $s = strtolower($act['status']);
+    if (strpos($s, 'deleted') !== false) continue;
+
+    $isHistory = false;
+
+    // 1. Explicit history statuses
+    if (strpos($s, 'cancel') !== false || 
+        strpos($s, 'denied') !== false || 
+        strpos($s, 'reject') !== false || 
+        strpos($s, 'expired') !== false) {
+        $isHistory = true;
+    } 
+    // 2. Approved/Resolved but passed date
+    else if ((strpos($s, 'approv') !== false || strpos($s, 'resolved') !== false)) {
+        // If event timestamp is in the past
+        if ($act['event_timestamp'] < $now) {
+            $isHistory = true;
+        }
+    }
+
+    if ($isHistory) {
+        $historyActivities[] = $act;
+    } else {
+        $activeActivities[] = $act;
+    }
+}
+
 if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'items' => $activities]);
+    echo json_encode([
+        'success' => true, 
+        'active' => $activeActivities, 
+        'history' => $historyActivities
+    ]);
     exit;
 }
 ?>
@@ -146,7 +212,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     </div>
 
     <nav class="nav-menu">
-      <a href="#" class="nav-item active"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
+      <a href="#" class="nav-item active" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
+      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
     </nav>
 
@@ -180,46 +247,96 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
     <div class="content-wrapper">
       <div class="right-panel">
-        <div class="activity-list-header">
-          <div>My Requests</div>
-          <div class="search-bar">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" placeholder="Search by code or keyword" id="requestSearch">
+        
+        <!-- ACTIVE REQUESTS PANEL -->
+        <div class="panel-section" id="panel-requests">
+          <div class="activity-list-header">
+            <div>My Requests</div>
+            <div class="search-bar">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" placeholder="Search by code or keyword" class="request-search" data-target="active">
+            </div>
+          </div>
+
+          <div class="item-list" id="list-active">
+            <?php if (empty($activeActivities)): ?>
+              <div style="padding:20px; text-align:center; color:#777;">No active requests.</div>
+            <?php else: ?>
+              <?php foreach ($activeActivities as $act):
+                  $statusClass = 'status-pending';
+                  $s = strtolower($act['status']);
+                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
+                  $displayStatus = ucfirst($act['status']);
+              ?>
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+                 <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
+                 <div class="item-content">
+                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                     <div>
+                       <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
+                       <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                       <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                     </div>
+                     <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
+                   </div>
+                   <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
+                     <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
+                   </div>
+                   <div class="item-extra" data-loaded="0"></div>
+                 </div>
+              </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
           </div>
         </div>
 
-        <div class="item-list">
-          <?php if (empty($activities)): ?>
-            <div style="padding:20px; text-align:center; color:#777;">No records found.</div>
-          <?php else: ?>
-            <?php foreach ($activities as $act):
-                $statusClass = 'status-pending';
-                $s = strtolower($act['status']);
-                if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
-                elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
-                elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
-                $displayStatus = ucfirst($act['status']);
-            ?>
-            <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
-               <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
-               <div class="item-content">
-                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                   <div>
-                     <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
-                     <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
-                     <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
-                   </div>
-                   <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
-                 </div>
-                 <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
-                   <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
-                 </div>
-                 <div class="item-extra" data-loaded="0"></div>
-               </div>
+        <!-- HISTORY PANEL -->
+        <div class="panel-section" id="panel-history" style="display:none;">
+          <div class="activity-list-header">
+            <div>History</div>
+            <div class="search-bar">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" placeholder="Search history..." class="request-search" data-target="history">
             </div>
-            <?php endforeach; ?>
-          <?php endif; ?>
+          </div>
+
+          <div class="item-list" id="list-history">
+            <?php if (empty($historyActivities)): ?>
+              <div style="padding:20px; text-align:center; color:#777;">No history records.</div>
+            <?php else: ?>
+              <?php foreach ($historyActivities as $act):
+                  $statusClass = 'status-pending';
+                  $s = strtolower($act['status']);
+                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-completed'; // Completed/Past
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
+                  elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
+                  $displayStatus = ucfirst($act['status']);
+              ?>
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+                 <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
+                 <div class="item-content">
+                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                     <div>
+                       <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
+                       <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
+                       <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                     </div>
+                     <div class="item-time"><?php echo date('M d, Y', strtotime($act['date'])); ?></div>
+                   </div>
+                   <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
+                     <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
+                   </div>
+                   <div class="item-extra" data-loaded="0"></div>
+                 </div>
+              </div>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
         </div>
+
       </div>
     </div>
   </main>
@@ -293,76 +410,159 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 <script>
 (function(){
   var visitorName = "<?php echo htmlspecialchars($fullName); ?>";
-  var searchInput=document.getElementById('requestSearch');
-  function filterList(){
-    var q=(searchInput.value||'').toLowerCase();
-    document.querySelectorAll('.item-list .list-item').forEach(function(li){
-      var text=li.textContent.toLowerCase();
-      li.style.display=text.indexOf(q)!==-1?'':'none';
+  
+  // Tab Switching
+  var navItems = document.querySelectorAll('.nav-item[data-section]');
+  var sections = document.querySelectorAll('.panel-section');
+  
+  navItems.forEach(function(item) {
+      item.addEventListener('click', function(e) {
+          e.preventDefault();
+          var sectionId = this.getAttribute('data-section');
+          
+          // Update Nav
+          navItems.forEach(function(n) { n.classList.remove('active'); });
+          this.classList.add('active');
+          
+          // Update Sections
+          sections.forEach(function(s) { s.style.display = 'none'; });
+          var target = document.getElementById(sectionId);
+          if (target) target.style.display = 'block';
+      });
+  });
+
+  // Search Logic
+  var searchInputs = document.querySelectorAll('.request-search');
+  searchInputs.forEach(function(inp){
+    inp.addEventListener('input', function(){
+        var targetType = this.getAttribute('data-target'); // active or history
+        var listId = 'list-' + targetType;
+        var listContainer = document.getElementById(listId);
+        if(!listContainer) return;
+        
+        var q = (this.value || '').toLowerCase();
+        var items = listContainer.querySelectorAll('.list-item');
+        
+        items.forEach(function(li){
+            var text = li.textContent.toLowerCase();
+            li.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+        });
     });
-  }
-  if(searchInput){ searchInput.addEventListener('input',filterList); }
+  });
+
   var prevStatuses={};
   document.querySelectorAll('.item-list .list-item').forEach(function(li){
     var code=li.getAttribute('data-ref-code')||'';
     var st=li.getAttribute('data-status')||'';
     if(code) prevStatuses[code]=st;
+    
+    // Expand/Collapse click
+    li.addEventListener('click', function(e){
+        // Avoid triggering if clicked on button/link
+        if(e.target.closest('button') || e.target.closest('a')) return;
+        
+        var wasExpanded = this.classList.contains('expanded');
+        // Collapse all others
+        // document.querySelectorAll('.list-item.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+        
+        if(!wasExpanded){
+            this.classList.add('expanded');
+            var icon = this.querySelector('.item-icon i');
+            if(icon) { icon.classList.remove('fa-chevron-right'); icon.classList.add('fa-chevron-down'); }
+            
+            var extra = this.querySelector('.item-extra');
+            if(extra && extra.getAttribute('data-loaded')!=='1'){
+                buildExtraContent(this, extra);
+                extra.setAttribute('data-loaded','1');
+            }
+        } else {
+            this.classList.remove('expanded');
+            var icon = this.querySelector('.item-icon i');
+            if(icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-right'); }
+        }
+    });
   });
+
   function statusClassFor(s){
     s=(s||'').toLowerCase();
     if(s.indexOf('approv')!==-1||s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
+    if(s.indexOf('expired')!==-1) return 'status-denied';
+    if(s.indexOf('complete')!==-1) return 'status-completed';
     return 'status-pending';
   }
   function fmtLabel(s){
     s=String(s||'').toLowerCase();
     return s.charAt(0).toUpperCase()+s.slice(1);
   }
+
+  // Notification Logic (Stubbed for now as per user reqs)
   var notifCountEl=document.getElementById('notifCount');
   var notifBtn=document.getElementById('notifBtn');
   var notifPanel=document.getElementById('notifPanel');
-  var notifItems=[];
+  
+  // Modal Logic
   var cancelModal=document.getElementById('cancelModal');
   var cancelModalKeep=cancelModal?cancelModal.querySelector('.cancel-modal-keep'):null;
   var cancelModalConfirm=cancelModal?cancelModal.querySelector('.cancel-modal-confirm'):null;
   var cancelModalClose=cancelModal?cancelModal.querySelector('.cancel-modal-close'):null;
   var cancelModalRef=null;
   var cancelModalLi=null;
-  function openCancelModal(li,ref){
+  var modalAction = 'cancel';
+
+  window.openCancelModal = function(li,ref){
     if(!cancelModal) return;
     cancelModalRef=ref;
     cancelModalLi=li;
+    modalAction = 'cancel';
     
-    var type = (li.getAttribute('data-type')||'').toLowerCase();
     var h3 = cancelModal.querySelector('h3');
     var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
     var pNote = cancelModal.querySelector('.cancel-modal-note');
     var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
     
-    if(type === 'guest_form' || type === 'guest entry'){
-      if(h3) h3.textContent = 'Cancel Request';
-      if(pBody) pBody.textContent = 'Are you sure you want to cancel this request?';
-      if(pNote) pNote.style.display = 'none';
-      if(btnKeep) btnKeep.textContent = 'Keep Request';
-    } else {
-      if(h3) h3.textContent = 'Cancel Reservation';
-      if(pBody) pBody.textContent = 'Are you sure you want to cancel this reservation?';
-      if(pNote) {
-        pNote.style.display = 'block';
-        pNote.textContent = 'Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.';
-      }
-      if(btnKeep) btnKeep.textContent = 'Keep Reservation';
+    if(h3) h3.textContent = 'Cancel Reservation';
+    if(pBody) pBody.textContent = 'Are you sure you want to cancel this reservation?';
+    if(pNote) {
+      pNote.style.display = 'block';
+      pNote.textContent = 'Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.';
     }
+    if(btnKeep) btnKeep.textContent = 'Keep Reservation';
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Cancel';
     
     cancelModal.style.display='flex';
-  }
+  };
+
+  window.openDeleteModal = function(li,ref){
+    if(!cancelModal) return;
+    cancelModalRef=ref;
+    cancelModalLi=li;
+    modalAction = 'delete';
+    
+    var h3 = cancelModal.querySelector('h3');
+    var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
+    var pNote = cancelModal.querySelector('.cancel-modal-note');
+    var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
+    
+    if(h3) h3.textContent = 'Delete Request';
+    if(pBody) pBody.textContent = 'Are you sure you want to permanently delete this request from your history?';
+    if(pNote) pNote.style.display = 'none';
+    if(btnKeep) btnKeep.textContent = 'Keep Request';
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Delete';
+    
+    cancelModal.style.display='flex';
+  };
+
   function closeCancelModalVisitor(){
     if(!cancelModal) return;
     cancelModal.style.display='none';
     cancelModalRef=null;
     cancelModalLi=null;
   }
+  
   function performCancelVisitor(){
     var ref=cancelModalRef;
     var li=cancelModalLi;
@@ -370,8 +570,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       closeCancelModalVisitor();
       return;
     }
-    var type = (li.getAttribute('data-type')||'').toLowerCase();
-    var isGuest = (type === 'guest_form' || type === 'guest entry');
 
     fetch('status.php',{
       method:'POST',
@@ -379,17 +577,38 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       body:new URLSearchParams({action:'cancel',code:ref})
     }).then(function(r){return r.json();}).then(function(data){
       if(!data||!data.success){
-        alert(data && data.message ? data.message : (isGuest ? 'Unable to cancel request.' : 'Unable to cancel reservation.'));
+        alert(data && data.message ? data.message : 'Unable to cancel reservation.');
         return;
       }
+      // Success - Update UI without alert
       li.setAttribute('data-status','cancelled');
-      prevStatuses[ref]='cancelled';
+      if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='cancelled';
+
+      // Move to History List
+      var historyList = document.getElementById('list-history');
+      if(historyList){
+         var noRecs = historyList.querySelector('div[style*="text-align:center"]');
+         if(noRecs) noRecs.remove();
+         // Insert at top
+         historyList.insertBefore(li, historyList.firstChild);
+         li.style.display = ''; 
+      }
+
+      // Update Title immediately
+      var titleEl = li.querySelector('.item-title');
+      if (titleEl && titleEl.textContent.indexOf('Cancelled') === -1) {
+          titleEl.textContent += ' - Cancelled';
+      }
+      
+      // Update Status Badge
       var badge=li.querySelector('.status-badge');
       if(badge){
         badge.textContent=fmtLabel('cancelled');
-        badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
+        badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed','status-expired');
         badge.classList.add(statusClassFor('cancelled'));
       }
+      
+      // Rebuild Extra Content
       var extraEl=li.querySelector('.item-extra');
       if(extraEl){
         extraEl.setAttribute('data-loaded','0');
@@ -399,12 +618,37 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           extraEl.setAttribute('data-loaded','1');
         }
       }
+      
       closeCancelModalVisitor();
-      alert(isGuest ? 'Request cancelled.' : 'Reservation cancelled.');
+
     })["catch"](function(){
-      alert('Network error. Please try again.');
+      // alert('Network error. Please try again.'); // Suppress as per request
     });
   }
+
+  function performDeleteVisitor(){
+    var ref=cancelModalRef;
+    var li=cancelModalLi;
+    if(!ref||!li){
+      closeCancelModalVisitor();
+      return;
+    }
+    fetch('status.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'delete',code:ref})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to delete request.');
+        return;
+      }
+      li.remove();
+      closeCancelModalVisitor();
+    })["catch"](function(){
+      // alert('Network error. Please try again.');
+    });
+  }
+
   if(cancelModalKeep){
     cancelModalKeep.addEventListener('click',function(){
       closeCancelModalVisitor();
@@ -417,7 +661,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   if(cancelModalConfirm){
     cancelModalConfirm.addEventListener('click',function(){
-      performCancelVisitor();
+      if(modalAction === 'delete'){
+        performDeleteVisitor();
+      } else {
+        performCancelVisitor();
+      }
     });
   }
 
@@ -439,21 +687,93 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
       overlay.addEventListener('click', closeSidebar);
   }
+
+  // Activity Modal Logic (View Details)
+  var activityModal = document.getElementById('activityModal');
+  var activityModalBody = document.getElementById('activityModalBody');
+  var activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
+
+  window.downloadQRImage = function(code) {
+      var img = document.querySelector('#activityModalBody img[alt="QR Code"]');
+      if (!img) { alert('QR Code not found'); return; }
+      fetch(img.src)
+        .then(resp => resp.blob())
+        .then(blob => {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'QR_' + code + '.png';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(() => alert('Could not download image.'));
+  };
+
+  window.openActivityModal = function(refCode) {
+      if(!activityModal || !activityModalBody) {
+          activityModal = document.getElementById('activityModal');
+          activityModalBody = document.getElementById('activityModalBody');
+          if(!activityModal || !activityModalBody) return;
+      }
+      
+      activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+      activityModal.style.display = 'flex';
+
+      fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
+        .then(r => r.text())
+        .then(html => {
+            activityModalBody.innerHTML = html;
+        })
+        .catch(e => {
+            activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
+        });
+  };
+
+  if(activityModalClose) {
+      activityModalClose.addEventListener('click', function() {
+          activityModal.style.display = 'none';
+      });
+  }
+  
+  // Close modals when clicking outside
+  window.addEventListener('click', function(e) {
+      if (e.target === activityModal) {
+          activityModal.style.display = 'none';
+      }
+      if (e.target === cancelModal) {
+          cancelModal.style.display = 'none';
+      }
+      if (e.target === notifPanel) {
+          notifPanel.style.display = 'none'; // logic for notif panel is handled separately usually, but good to have safety
+      }
+  });
+
+
+  // Helper to build extra content (details)
   function buildExtraContent(li, extra){
     var type=(li.getAttribute('data-type')||'').toLowerCase();
-    var status=li.getAttribute('data-status')||'';
+    var status=(li.getAttribute('data-status')||'').toLowerCase();
     var ref=li.getAttribute('data-ref-code')||'';
     var label=fmtLabel(status);
     var statusNote='';
     var s=status.toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
     var isApproved=s.indexOf('approv')!==-1;
-    if(isApproved) statusNote='This request is approved. Use this QR pass at the gate.';
+
+    // Visitor specific notes
+    if(isApproved) {
+        statusNote='This request is approved. Use this QR pass at the gate.';
+    }
     else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
     else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
-    else if(s.indexOf('pending')!==-1||s===''||s==='new') statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
+    else if(s.indexOf('pending')!==-1||s===''||s==='new') {
+        statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
+    }
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
+
     var titleEl=li.querySelector('.item-title');
     var detailsEl=li.querySelector('.item-details');
     var refSpan=li.querySelector('.item-ref span');
@@ -465,361 +785,63 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(detailsEl){ summaryParts.push(detailsEl.textContent.replace(/^\s*-\s*/,'').trim()); }
     if(refSpan){ summaryParts.push('Code: '+refSpan.textContent.trim()); }
     var summaryText=summaryParts.join(' • ');
-    var canCancel=(type==='reservation'||type==='guest_form')&&(s.indexOf('pending')!==-1||s===''||s==='new');
+
+    var canCancel=(s.indexOf('pending')!==-1||s===''||s==='new');
+    var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
+    
     var html='';
-    if(type==='reservation'||type==='guest_form'){
-      html+='<div class="item-extra-section">';
-      if(isApproved && ref){
+    html+='<div class="item-extra-section">';
+    if(isApproved && ref){
+        var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
+        var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         html+='<div class="item-extra-title">Entry QR Pass</div>';
         html+='<div class="item-extra-body">';
-        html+='<div class="item-extra-action">';
-        html+='<button class="btn-download-pass" onclick="generateAndDownloadPass(\''+esc(ref)+'\', \''+esc(visitorName)+'\', \''+esc(detailsEl.textContent.replace(/^\s*-\s*/,'').trim())+'\', \'Visitor\')"><i class="fa-solid fa-download"></i> Download Entry Pass</button>';
-        html+='</div>';
+        html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
         html+='<div class="item-extra-info">';
-      }else{
+    }else{
         html+='<div class="item-extra-title">Entry Request Status</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
-      }
-      html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
-      if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
-      if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
-      if(canCancel && ref){
-        var cancelLabel = (type === 'guest_form' || type === 'guest entry') ? 'Cancel Request' : 'Cancel Reservation';
-        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
-      }
-      if(isApproved && ref){
+    }
+    
+    html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+    if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+    if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
+    
+    if(canCancel && ref){
+        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
+    }
+    if(canDelete && ref){
+         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="margin-top:10px; padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
+    }
+    
+    if(isApproved && ref){
+        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
+        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
+    }
+    
+    // Always show View Details
+    if(isApproved && ref){
         html+='</div></div></div>';
-      }else{
+    }else{
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
         html+='</div></div></div>';
-      }
-    }else{
-      html+='<div class="item-extra-section">';
-      html+='<div class="item-extra-title">Request Details</div>';
-      html+='<div class="item-extra-body">';
-      html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
-      if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
-      if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
-      html+='</div></div></div>';
     }
+    
     extra.innerHTML=html;
-    var cancelBtn=extra.querySelector('.item-extra-cancel');
-    if(cancelBtn && ref && canCancel){
-      cancelBtn.addEventListener('click',function(ev){
-        ev.stopPropagation();
-        openCancelModal(li,ref);
-      });
-    }
-    var viewBtn=extra.querySelector('.view-details-btn');
-    if(viewBtn && ref){
-      viewBtn.addEventListener('click',function(ev){
-        ev.stopPropagation();
-        openActivityModal(ref);
-      });
-    }
-  }
-  function addNotificationEntry(code,status,li){
-    if(!code) return;
-    var key=code+'|'+String(status||'');
-    for(var i=0;i<notifItems.length;i++){ if(notifItems[i].key===key) return; }
-    var type=(li.getAttribute('data-type')||'').toLowerCase();
-    var titleEl=li.querySelector('.item-title');
-    var title=titleEl?titleEl.textContent.trim():(type==='reservation'?'Reservation Schedule':'Request Update');
-    var timeText='';
-    try{ timeText=new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}); }catch(e){ timeText=''; }
-    notifItems.push({
-      key:key,
-      code:code,
-      status:fmtLabel(status),
-      title:title,
-      type:type,
-      time:timeText
-    });
-  }
-  function renderNotifPanel(){
-    if(!notifPanel) return;
-    if(!notifItems.length){
-      notifPanel.innerHTML='<div class="notif-empty">No recent updates</div>';
-      return;
-    }
-    var html='';
-    for(var i=notifItems.length-1;i>=0;i--){
-      var it=notifItems[i]||{};
-      var code=String(it.code||'').replace(/[<>]/g,'');
-      var title=String(it.title||'').replace(/[<>]/g,'');
-      var status=String(it.status||'').replace(/[<>]/g,'');
-      var time=String(it.time||'').replace(/[<>]/g,'');
-      html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">Code: '+code+' • '+status+'</div>';
-      if(time) html+='<div class="notif-item-time">'+time+'</div>';
-      html+='</div></div>';
-    }
-    notifPanel.innerHTML=html;
-  }
-  document.querySelectorAll('.item-list .list-item').forEach(function(li){
-    li.addEventListener('click',function(e){
-      if(e.target.closest('a')) return;
-      li.classList.toggle('expanded');
-      var extra=li.querySelector('.item-extra');
-      if(!extra) return;
-      if(extra.getAttribute('data-loaded')!=='1'&&li.classList.contains('expanded')){
-        buildExtraContent(li,extra);
-        extra.setAttribute('data-loaded','1');
-      }
-    });
-  });
-  if(notifBtn){
-    notifBtn.addEventListener('click',function(e){
-      e.stopPropagation();
-      if(notifPanel){
-        notifPanel.style.display=(notifPanel.style.display==='block'?'none':'block');
-      }
-      document.querySelectorAll('.item-list .list-item.status-updated').forEach(function(li){
-        li.classList.remove('status-updated');
-      });
-      if(notifCountEl){
-        notifCountEl.textContent='0';
-        notifCountEl.style.display='none';
-      }
-    });
-  }
-  if(notifPanel){
-    document.addEventListener('click',function(e){
-      var t=e.target;
-      if(t===notifPanel||notifPanel.contains(t)||t===notifBtn||(notifBtn&&notifBtn.contains(t))) return;
-      notifPanel.style.display='none';
-    });
-  }
 
-  // Make function global so inline onclick can access it
-  window.generateAndDownloadPass = function(ref, name, details, typeLabel) {
-    var card = document.getElementById('hiddenPassCard');
-    var qrImg = document.getElementById('passQR');
-    var nameEl = document.getElementById('passName');
-    var refEl = document.getElementById('passRef');
-    var dateEl = document.getElementById('passDate');
+    // Attach event listeners for the new buttons
+    var cancelBtn = extra.querySelector('.item-extra-cancel');
+    if(cancelBtn) cancelBtn.addEventListener('click', function(){ window.openCancelModal(li, ref); });
     
-    // Populate
-    nameEl.textContent = name;
-    refEl.textContent = ref;
-    dateEl.textContent = details; 
+    var deleteBtn = extra.querySelector('.item-extra-delete');
+    if(deleteBtn) deleteBtn.addEventListener('click', function(){ window.openDeleteModal(li, ref); });
     
-    // Generate QR URL
-    var basePath = window.location.pathname.replace(/\/[^\/]*$/,'');
-    var verifyLink = window.location.origin + basePath + '/qr_view.php?code=' + encodeURIComponent(ref);
-    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(verifyLink);
-    
-    // Set QR and wait for load
-    qrImg.onload = function() {
-        html2canvas(card, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: null 
-        }).then(function(canvas) {
-            var link = document.createElement('a');
-            link.download = 'EntryPass_' + ref + '.png';
-            link.href = canvas.toDataURL('image/png');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
-    };
-    qrImg.src = qrUrl;
-  };
-
-  function refreshStatuses(){
-    fetch('dashboardvisitor.php?ajax=1',{credentials:'same-origin'})
-      .then(function(r){return r.json();})
-      .then(function(data){
-        if(!data||!data.success||!Array.isArray(data.items)) return;
-        var map={};
-        data.items.forEach(function(it){ if(it.ref_code) map[it.ref_code]=it; });
-        var changed=0;
-        document.querySelectorAll('.item-list .list-item').forEach(function(li){
-          var code=li.getAttribute('data-ref-code')||'';
-          if(!code||!map[code]) return;
-          var info=map[code];
-          var newStatus=info.status||'';
-          var oldStatus=prevStatuses[code];
-          if(oldStatus!==undefined && oldStatus!==newStatus){
-            changed++;
-            li.classList.add('status-updated');
-          }
-          prevStatuses[code]=newStatus;
-          li.setAttribute('data-status',newStatus);
-          var badge=li.querySelector('.status-badge');
-          if(badge){
-            badge.textContent=fmtLabel(newStatus);
-            badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
-            badge.classList.add(statusClassFor(newStatus));
-          }
-          var timeEl=li.querySelector('.item-time');
-          if(timeEl && info.date){
-            var d=new Date(info.date.replace(' ','T'));
-            if(!isNaN(d.getTime())) timeEl.textContent=d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-          }
-        });
-        if(notifCountEl){
-          if(changed>0){
-            notifCountEl.textContent=String(changed);
-            notifCountEl.style.display='inline-block';
-          }else{
-            notifCountEl.textContent='0';
-            notifCountEl.style.display='none';
-          }
-        }
-      })["catch"](function(){});
-  }
-  setInterval(refreshStatuses,10000);
-
-  // Modal handling
-  var activityModal = document.getElementById('activityModal');
-  var activityModalBody = document.getElementById('activityModalBody');
-  var activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
-
-  window.openActivityModal = function(refCode) {
-    if (!activityModal || !activityModalBody) {
-      activityModal = document.getElementById('activityModal');
-      activityModalBody = document.getElementById('activityModalBody');
-      activityModalClose = activityModal ? activityModal.querySelector('.close') : null;
-      if (activityModalClose) {
-          activityModalClose.onclick = function() {
-            activityModal.style.display = 'none';
-          };
-      }
-      if (!activityModal || !activityModalBody) return;
-    }
-    activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
-    activityModal.style.display = 'flex';
-
-    fetch('get_activity_details.php?code=' + encodeURIComponent(refCode))
-      .then(r => r.text())
-      .then(html => {
-        activityModalBody.innerHTML = html;
-      })
-      .catch(() => {
-        activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Failed to load details.</div>';
-      });
-  };
-
-  if (activityModalClose) {
-    activityModalClose.onclick = function() {
-      activityModal.style.display = 'none';
-    };
+    var viewBtn = extra.querySelector('.view-details-btn');
+    if(viewBtn) viewBtn.addEventListener('click', function(){ window.openActivityModal(ref); });
   }
 
-  window.onclick = function(event) {
-    if (event.target == activityModal) {
-      activityModal.style.display = 'none';
-    }
-  };
 })();
-</script>
-<div id="profileModal" class="profile-modal">
-  <div class="profile-modal-content">
-    <button class="close-profile-modal">&times;</button>
-    <div class="profile-header">
-      <div class="profile-icon-large">
-        <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
-        <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
-           <i class="fa-solid fa-camera"></i>
-        </label>
-        <input type="file" id="profileUpload" accept="image/*" style="display:none">
-      </div>
-      <div class="profile-title">
-        <h3><?php echo htmlspecialchars($fullName); ?></h3>
-        <span class="profile-role">Visitor</span>
-      </div>
-    </div>
-    <div class="profile-details">
-      <div class="detail-row">
-        <div class="detail-label">Name</div>
-        <div class="detail-value"><?php echo htmlspecialchars($fullName); ?></div>
-      </div>
-      <div class="detail-row">
-        <div class="detail-label">Email</div>
-        <div class="detail-value"><?php echo htmlspecialchars($user_data['email'] ?? ''); ?></div>
-      </div>
-      <div class="detail-row">
-        <div class="detail-label">Contact Number</div>
-        <div class="detail-value"><?php echo htmlspecialchars($user_data['phone'] ?? ''); ?></div>
-      </div>
-      <div class="detail-row">
-        <div class="detail-label">Sex</div>
-        <div class="detail-value"><?php echo htmlspecialchars(ucfirst($user_data['sex'] ?? '')); ?></div>
-      </div>
-      <div class="detail-row">
-        <div class="detail-label">Birthdate</div>
-        <div class="detail-value"><?php echo htmlspecialchars($user_data['birthdate'] ?? ''); ?></div>
-      </div>
-    </div>
-    <div class="profile-actions">
-       <a href="logout.php" class="btn-logout-modal">Log Out</a>
-    </div>
-  </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    var profileModal = document.getElementById("profileModal");
-    var profileTrigger = document.getElementById("profileTrigger");
-    var profileClose = document.getElementsByClassName("close-profile-modal")[0];
-
-    if(profileTrigger) {
-        profileTrigger.onclick = function(e) {
-            e.preventDefault();
-            profileModal.style.display = "block";
-        }
-    }
-
-    if(profileClose) {
-        profileClose.onclick = function() {
-            profileModal.style.display = "none";
-        }
-    }
-
-    window.onclick = function(event) {
-        if (event.target == profileModal) {
-            profileModal.style.display = "none";
-        }
-    }
-
-    // Profile Picture Upload
-    var profileUpload = document.getElementById('profileUpload');
-    if(profileUpload) {
-        profileUpload.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                var formData = new FormData();
-                formData.append('profile_pic', this.files[0]);
-
-                var img = document.getElementById('profileModalImg');
-                img.style.opacity = '0.5';
-
-                fetch('upload_profile_pic.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    img.style.opacity = '1';
-                    if (data.success) {
-                        if(img) img.src = data.new_url;
-                        var headerImg = document.getElementById('headerProfileImg');
-                        if(headerImg) headerImg.src = data.new_url;
-                    } else {
-                        alert(data.message || 'Upload failed');
-                    }
-                })
-                .catch(error => {
-                    img.style.opacity = '1';
-                    console.error('Error:', error);
-                    alert('An error occurred during upload.');
-                });
-            }
-        });
-    }
-});
 </script>
 </body>
 </html>

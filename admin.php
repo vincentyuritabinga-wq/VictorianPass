@@ -287,9 +287,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $newreqs = getNewRequestsCount($con);
     $requests = [];
     $receipts = [];
-    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') ORDER BY created_at DESC LIMIT 8");
+    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-    $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' ORDER BY created_at DESC LIMIT 8");
+    $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
     if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
@@ -305,6 +305,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     // Include escalated incident reports for admin notifications
     $ir = $con->query("SELECT id, status, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 8");
     if($ir){ while($row=$ir->fetch_assoc()){ $requests[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    
+    // Fetch system notifications (cancellations, etc.)
+    $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 8");
+    if($notifs){ while($row=$notifs->fetch_assoc()){ 
+        $requests[] = ['id'=>$row['id'], 'type'=>'notification','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+    } }
+
     $items = array_merge($receipts, $requests);
     usort($items, function($a, $b){
         $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
@@ -324,6 +331,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
         'receipts' => $receipts,
         'items' => array_slice($items,0,12)
     ]);
+    exit;
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'dismiss_notification' && isset($_GET['id'])) {
+    $nid = intval($_GET['id']);
+    $stmt = $con->prepare("UPDATE notifications SET is_read = 1 WHERE id = ?");
+    $stmt->bind_param('i', $nid);
+    $stmt->execute();
+    $stmt->close();
+    echo json_encode(['success' => true]);
     exit;
 }
 
@@ -541,7 +558,7 @@ function getPaymentReceiptsCount($con) {
 }
 
 function getPendingPaymentCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status = 'pending')";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status = 'pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
   $r = $con->query($q);
   if($r){ $row = $r->fetch_assoc(); if($row){ return intval($row['c']); } }
   return 0;
@@ -551,7 +568,9 @@ function getAmenityAwaitingPaymentCount($con){
         FROM guest_forms gf
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
-          AND (r.payment_status IS NULL OR r.payment_status <> 'verified')";
+          AND (r.payment_status IS NULL OR r.payment_status <> 'verified')
+          AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
+          AND (r.status IS NULL OR r.status != 'cancelled')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getAmenityReadyForApprovalCount($con){
@@ -559,7 +578,9 @@ function getAmenityReadyForApprovalCount($con){
         FROM guest_forms gf
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
-          AND r.payment_status = 'verified'";
+          AND r.payment_status = 'verified'
+          AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
+          AND (r.status IS NULL OR r.status != 'cancelled')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getOpenIncidentCount($con){
@@ -567,39 +588,47 @@ function getOpenIncidentCount($con){
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingResidentAmenityCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending'";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' AND (status IS NULL OR status != 'cancelled')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingGuestFormCount($con){
-  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending'";
+  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingVisitorLegacyCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending'))";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getNewRequestsCount($con){
   return getPendingResidentAmenityCount($con) + getPendingGuestFormCount($con) + getPendingVisitorLegacyCount($con);
 }
+function getUnreadSystemNotificationsCount($con){
+  $q = "SELECT COUNT(*) AS c FROM notifications WHERE user_id IS NULL AND is_read = 0";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
 function getRecentNotifications($con){
   $items = [];
-  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') ORDER BY created_at DESC LIMIT 5");
+  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' ORDER BY created_at DESC LIMIT 5");
+  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' ORDER BY gf.created_at DESC LIMIT 5");
+  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY gf.created_at DESC LIMIT 5");
   if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 5");
+  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ 
       $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
       $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
       $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
       $items[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
   } }
-  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 5");
+  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
+  $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 5");
+  if($notifs){ while($row=$notifs->fetch_assoc()){ 
+      $items[] = ['id'=>$row['id'], 'type'=>'notification','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+  } }
   usort($items, function($a, $b){
     $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
     $eb = isset($b['epoch']) ? intval($b['epoch']) : 0;
@@ -649,6 +678,8 @@ function getResidentReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL
+              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
+              AND (r.status IS NULL OR r.status != 'cancelled')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -659,6 +690,8 @@ function getResidentOnlyReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
+              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
+              AND (r.status IS NULL OR r.status != 'cancelled')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -669,6 +702,8 @@ function getVisitorAccountReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
+              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
+              AND (r.status IS NULL OR r.status != 'cancelled')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -682,6 +717,7 @@ function getGuestAmenityReservations($con) {
               FROM guest_forms gf
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.amenity IS NOT NULL
+              AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
               ORDER BY gf.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -727,6 +763,8 @@ function getVisitorRequests($con) {
               FROM reservations r 
               JOIN entry_passes ep ON r.entry_pass_id = ep.id 
               WHERE r.entry_pass_id IS NOT NULL 
+              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled')
+              AND (r.status IS NULL OR r.status != 'cancelled')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     if ($result) {
@@ -746,6 +784,7 @@ function getResidentVisitorRequests($con) {
               LEFT JOIN reservations r ON r.ref_code = gf.ref_code
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.resident_user_id IS NOT NULL
+              AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
               ORDER BY gf.created_at DESC";
     $res = $con->query($query);
     if ($res && $res->num_rows > 0) return $res;
@@ -757,6 +796,8 @@ function getResidentVisitorRequests($con) {
                            JOIN entry_passes ep ON r.entry_pass_id = ep.id
                            LEFT JOIN users u ON r.user_id = u.id
                            WHERE r.entry_pass_id IS NOT NULL AND r.user_id IS NOT NULL
+                           AND (r.approval_status IS NULL OR r.approval_status != 'cancelled')
+                           AND (r.status IS NULL OR r.status != 'cancelled')
                            ORDER BY r.created_at DESC");
     return $legacy ?: false;
 }
@@ -767,6 +808,8 @@ function getVisitorOnlyRequests($con) {
                            FROM reservations r
                            JOIN entry_passes ep ON r.entry_pass_id = ep.id
                            WHERE r.entry_pass_id IS NOT NULL AND (r.user_id IS NULL OR r.user_id = 0)
+                           AND (r.approval_status IS NULL OR r.approval_status != 'cancelled')
+                           AND (r.status IS NULL OR r.status != 'cancelled')
                            ORDER BY r.created_at DESC");
     return $legacy ?: false;
 }
@@ -788,8 +831,8 @@ function ensureReceiptUploadedAtColumn($con) {
     }
 }
 function autoExpireReservations($con) {
-    // Mark reservations expired when past end_date
-    $con->query("UPDATE reservations SET status='expired' WHERE end_date < CURDATE() AND status <> 'expired'");
+    // Mark reservations expired when past end_date, but do not touch cancelled ones
+    $con->query("UPDATE reservations SET status='expired' WHERE end_date < CURDATE() AND status NOT IN ('expired', 'cancelled')");
 }
 
 // Ensure incident-related tables exist to prevent runtime errors
@@ -873,6 +916,23 @@ function ensureUsersStatusColumn($con) {
     }
 }
 ensureUsersStatusColumn($con);
+
+// Ensure notifications table exists
+function ensureNotificationsTable($con) {
+    $con->query("CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL COMMENT 'For residents',
+        entry_pass_id INT NULL COMMENT 'For visitors',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+        INDEX idx_user_id (user_id),
+        INDEX idx_is_read (is_read)
+    ) ENGINE=InnoDB");
+}
+ensureNotificationsTable($con);
 
 // Ensure new guest_forms table and its QR column exist
 function ensureGuestFormsTable($con) {
@@ -1209,7 +1269,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             
             // Redirect to prevent form resubmission
-            header("Location: admin.php?page=requests");
+            $redirect_page = $_POST['redirect_page'] ?? 'requests';
+            header("Location: admin.php?page=" . $redirect_page);
             exit;
         }
 
@@ -1218,28 +1279,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $reservation_id = intval($_POST['reservation_id'] ?? 0);
             if ($reservation_id > 0) {
                 // Prefer guest_forms
-                $stmtGF = $con->prepare("SELECT approval_status FROM guest_forms WHERE id = ?");
+                $stmtGF = $con->prepare("SELECT approval_status, ref_code FROM guest_forms WHERE id = ?");
                 $stmtGF->bind_param('i', $reservation_id);
                 $stmtGF->execute();
                 $resGF = $stmtGF->get_result();
                 $stmtGF->close();
                 if ($resGF && $rowGF = $resGF->fetch_assoc()) {
-                    if (($rowGF['approval_status'] ?? '') === 'denied') {
+                    $status = strtolower($rowGF['approval_status'] ?? '');
+                    if ($status === 'denied' || $status === 'cancelled') {
+                        $refCode = $rowGF['ref_code'] ?? '';
                         $stmtDelGF = $con->prepare("DELETE FROM guest_forms WHERE id = ?");
                         $stmtDelGF->bind_param('i', $reservation_id);
                         $stmtDelGF->execute();
                         $stmtDelGF->close();
+                        
+                        // Also delete from reservations
+                        if ($refCode) {
+                             $stmtDelR = $con->prepare("DELETE FROM reservations WHERE ref_code = ?");
+                             $stmtDelR->bind_param('s', $refCode);
+                             $stmtDelR->execute();
+                             $stmtDelR->close();
+                        }
                     }
                 } else {
                     // Legacy reservation path
-                    $stmt = $con->prepare("SELECT id, entry_pass_id, approval_status, status FROM reservations WHERE id = ?");
+                    $stmt = $con->prepare("SELECT id, entry_pass_id, approval_status, status, ref_code FROM reservations WHERE id = ?");
                     $stmt->bind_param('i', $reservation_id);
                     $stmt->execute();
                     $res = $stmt->get_result();
                     if ($res && $row = $res->fetch_assoc()) {
-                        $isDenied = (isset($row['approval_status']) && $row['approval_status'] === 'denied') || (isset($row['status']) && $row['status'] === 'rejected');
+                        $appStatus = strtolower($row['approval_status'] ?? '');
+                        $stStatus = strtolower($row['status'] ?? '');
+                        $isDenied = ($appStatus === 'denied' || $appStatus === 'cancelled' || $stStatus === 'rejected' || $stStatus === 'cancelled');
                         if ($isDenied) {
                             $entryId = intval($row['entry_pass_id'] ?? 0);
+                            $refCode = $row['ref_code'] ?? '';
                             if ($entryId > 0) {
                                 $stmtDelEP = $con->prepare("DELETE FROM entry_passes WHERE id = ?");
                                 $stmtDelEP->bind_param('i', $entryId);
@@ -1250,12 +1324,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             $stmtDelR->bind_param('i', $reservation_id);
                             $stmtDelR->execute();
                             $stmtDelR->close();
+                            
+                            // Also cleanup resident_reservations if exists
+                            if ($refCode) {
+                                $stmtDelRR = $con->prepare("DELETE FROM resident_reservations WHERE ref_code = ?");
+                                $stmtDelRR->bind_param('s', $refCode);
+                                $stmtDelRR->execute();
+                                $stmtDelRR->close();
+                            }
                         }
                     }
                     $stmt->close();
                 }
             }
-            header("Location: admin.php?page=requests");
+            $redirect_page = $_POST['redirect_page'] ?? 'requests';
+            header("Location: admin.php?page=" . $redirect_page);
             exit;
         }
 
@@ -1309,17 +1392,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($action == 'delete_resident_reservation') {
             $rr_id = intval($_POST['rr_id'] ?? 0);
             if ($rr_id > 0) {
-                // Only allow deletion when denied
-                $stmt = $con->prepare("SELECT approval_status FROM reservations WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0) ");
+                // Only allow deletion when denied or cancelled
+                $stmt = $con->prepare("SELECT approval_status, ref_code FROM reservations WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0) ");
                 $stmt->bind_param('i', $rr_id);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 if ($res && $row = $res->fetch_assoc()) {
-                    if (($row['approval_status'] ?? '') === 'denied') {
+                    $status = strtolower($row['approval_status'] ?? '');
+                    if ($status === 'denied' || $status === 'cancelled') {
+                        $refCode = $row['ref_code'] ?? '';
                         $stmtDel = $con->prepare("DELETE FROM reservations WHERE id = ?");
                         $stmtDel->bind_param('i', $rr_id);
                         $stmtDel->execute();
                         $stmtDel->close();
+                        
+                        // Also cleanup resident_reservations
+                        if ($refCode) {
+                            $stmtDelRR = $con->prepare("DELETE FROM resident_reservations WHERE ref_code = ?");
+                            $stmtDelRR->bind_param('s', $refCode);
+                            $stmtDelRR->execute();
+                            $stmtDelRR->close();
+                        }
                     }
                 }
                 $stmt->close();
@@ -2201,6 +2294,7 @@ tr:hover { background-color: #f8fafc; }
     table { min-width: 600px; }
     .content-row { overflow-x: auto; }
 }
+.notif-badge { font-family: 'Poppins', sans-serif; }
 </style>
 </head>
 <body>
@@ -2223,6 +2317,7 @@ tr:hover { background-color: #f8fafc; }
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
+       <a href="?page=cancelled" class="nav-item <?php echo $currentPage == 'cancelled' ? 'active' : ''; ?>" data-page="cancelled"><img src="images/dashboard.svg"><span>Cancelled Requests</span></a>
        <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
      </nav>
     <div class="sidebar-footer">
@@ -2233,15 +2328,15 @@ tr:hover { background-color: #f8fafc; }
   <!-- MAIN CONTENT -->
   <main class="main">
     <header class="top-header">
-      <div class="header-brand"></div>
-      <div class="header-actions">
+      <div class="header-brand">
       <?php 
         $notifPayments = getPendingPaymentCount($con); 
         $notifAwaiting = getAmenityAwaitingPaymentCount($con); 
         $notifReady = getAmenityReadyForApprovalCount($con);
         $notifIncidents = getOpenIncidentCount($con);
         $notifNewReqs = getNewRequestsCount($con);
-        $notifTotal = $notifPayments + $notifAwaiting + $notifReady + $notifIncidents + $notifNewReqs;
+        $notifSystem = getUnreadSystemNotificationsCount($con);
+        $notifTotal = $notifPayments + $notifAwaiting + $notifReady + $notifIncidents + $notifNewReqs + $notifSystem;
         $recent = getRecentNotifications($con);
       ?>
       <div class="notifications">
@@ -2267,6 +2362,8 @@ tr:hover { background-color: #f8fafc; }
           </div>
         </div>
       </div>
+      </div>
+      <div class="header-actions">
       <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
       </div>
     </header>
@@ -2281,6 +2378,7 @@ tr:hover { background-color: #f8fafc; }
         'security' => 'Security Guards',
         'verify' => 'Verify Payment Receipts',
         'residents' => 'Residents',
+        'cancelled' => 'Cancelled Requests',
         'dashboard' => 'Dashboard'
       ];
       $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
@@ -2349,8 +2447,8 @@ tr:hover { background-color: #f8fafc; }
               var html='';
               if(list.length===0){ html+="<div class='notif-item'><div class='notif-meta'>No items</div></div>"; }
               for(var i=0;i<list.length;i++){
-                var it=list[i]||{}; var typeUpper=String(it.type||'').toUpperCase(); var badge=(it.label?String(it.label):typeUpper); var typeLower=String(it.type||'').toLowerCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it);
-                html += "<div class='notif-item' data-type='"+typeLower+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'>"
+                var it=list[i]||{}; var typeUpper=String(it.type||'').toUpperCase(); var badge=(it.label?String(it.label):typeUpper); var typeLower=String(it.type||'').toLowerCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it); var nid=it.id||'';
+                html += "<div class='notif-item' data-id='"+nid+"' data-type='"+typeLower+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'>"
                   + "<a class='notif-item-link' href='"+href+"'>"
                   + "<div class='notif-type'>"+badge+"</div>"
                   + "<div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div>"
@@ -2390,8 +2488,9 @@ tr:hover { background-color: #f8fafc; }
           poll();
           var pollMs = 2000; var timer = setInterval(poll, pollMs);
           document.addEventListener('visibilitychange', function(){ if(document.hidden){ clearInterval(timer); timer = setInterval(poll, 5000); } else { clearInterval(timer); timer = setInterval(poll, pollMs); poll(); } });
-          if(p){ p.addEventListener('click', function(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }); }
-          if(m){ m.addEventListener('click', function(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }); }
+          function dismissItem(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); var nid=item.getAttribute('data-id'); if(nid){ fetch('admin.php?action=dismiss_notification&id='+nid).catch(function(){}); } dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }
+          if(p){ p.addEventListener('click', dismissItem); }
+          if(m){ m.addEventListener('click', dismissItem); }
         })();
       </script>
       <script>
@@ -2980,7 +3079,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
                 echo "<td>" . $dateRange . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
-                $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -2999,8 +3098,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='redirect_page' value='requests'>";
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
-                } elseif ($approval_status == 'denied') {
-                    echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
+                } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
+                    echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                     echo "<input type='hidden' name='redirect_page' value='requests'>";
@@ -3157,7 +3256,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
                   echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
-                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : ($approval_status === 'denied' ? 'badge-rejected' : 'badge-pending');
+                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -3176,8 +3275,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
-                  } elseif ($approval_status == 'denied') {
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this denied reservation? This cannot be undone.\")'>";
+                  } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
@@ -3201,6 +3300,102 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     </div>
 
 
+</section>
+<?php endif; ?>
+
+<!-- CANCELLED REQUESTS -->
+<?php if ($currentPage == 'cancelled'): ?>
+<section class="panel" id="cancelled-panel">
+  <div class="content-row">
+    <div class="card-box">
+      <h3>Cancelled Reservations & Guest Forms</h3>
+      <div class="notice">List of all cancelled requests. You can permanently delete them here.</div>
+      <table class="table table-cancelled">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th>Details</th>
+            <th>Dates</th>
+            <th>Cancelled At</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $hasCancelled = false;
+          
+          // 1. Cancelled Guest Forms
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status = 'cancelled' ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          if ($gf) {
+            while ($row = $gf->fetch_assoc()) {
+               $hasCancelled = true;
+               $name = htmlspecialchars(($row['visitor_first_name']??'') . ' ' . ($row['visitor_last_name']??''));
+               $details = "Role: " . htmlspecialchars($row['purpose']??'Co-owner');
+               if (!empty($row['amenity'])) $details .= "<br>Amenity: " . htmlspecialchars($row['amenity']);
+               $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
+                       (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
+               $cancelledAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
+               
+               echo "<tr>";
+               echo "<td><span class='badge badge-rejected'>Guest Form</span></td>";
+               echo "<td><strong>$name</strong></td>";
+               echo "<td>$details</td>";
+               echo "<td>$date</td>";
+               echo "<td>$cancelledAt</td>";
+               echo "<td>";
+               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this cancelled request?\");'>";
+               echo "<input type='hidden' name='action' value='delete_reservation'>";
+               echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
+               echo "<input type='hidden' name='redirect_page' value='cancelled'>";
+               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
+               echo "</form>";
+               echo "</td>";
+               echo "</tr>";
+            }
+          }
+          
+          // 2. Cancelled Reservations (Residents & Visitors)
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status = 'cancelled' OR r.approval_status = 'cancelled') ORDER BY r.updated_at DESC, r.created_at DESC");
+          if ($res) {
+            while ($row = $res->fetch_assoc()) {
+               $hasCancelled = true;
+               $uType = ucfirst($row['user_type'] ?? 'Visitor');
+               $name = htmlspecialchars(($row['first_name']??'') . ' ' . ($row['last_name']??''));
+               if (empty(trim($name)) && !empty($row['entry_pass_id'])) {
+                   $name = "Visitor (Entry Pass)";
+               }
+               $details = "Amenity: " . htmlspecialchars($row['amenity']??'-');
+               $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
+                       (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
+               $cancelledAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
+               
+               echo "<tr>";
+               echo "<td><span class='badge badge-rejected'>Reservation ($uType)</span></td>";
+               echo "<td><strong>$name</strong></td>";
+               echo "<td>$details</td>";
+               echo "<td>$date</td>";
+               echo "<td>$cancelledAt</td>";
+               echo "<td>";
+               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this cancelled request?\");'>";
+               echo "<input type='hidden' name='action' value='delete_reservation'>";
+               echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
+               echo "<input type='hidden' name='redirect_page' value='cancelled'>";
+               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
+               echo "</form>";
+               echo "</td>";
+               echo "</tr>";
+            }
+          }
+          
+          if (!$hasCancelled) {
+             echo "<tr><td colspan='6' style='text-align:center;'>No cancelled requests found.</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <?php endif; ?>
 

@@ -684,8 +684,8 @@ function ensureReceiptUploadedAtColumn($con) {
     }
 }
 function autoExpireReservations($con) {
-    // Mark reservations expired when past end_date
-    $con->query("UPDATE reservations SET status='expired' WHERE end_date < CURDATE() AND status <> 'expired'");
+    // Mark reservations expired when past end_date, but do not touch cancelled ones
+    $con->query("UPDATE reservations SET status='expired' WHERE end_date < CURDATE() AND status NOT IN ('expired', 'cancelled')");
 }
 
 // Ensure incident-related tables exist to prevent runtime errors

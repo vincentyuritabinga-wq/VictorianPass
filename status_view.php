@@ -159,6 +159,9 @@
       <img src="images/logo.svg" alt="VictorianPass Logo" />
       <button onclick="goBack()" class="qr-btn">Go Back</button>
     </div>
+    <div id="dashboardStatusTitle" style="text-align:center; margin-bottom:15px; display:none;">
+      <h2 style="color:#fff; font-size:1.5rem;"></h2>
+    </div>
     <div id="paymentNotice" style="display:none; margin:10px 0; padding:10px; border:1px solid #e74c3c; border-radius:8px; background:#fdecea; color:#a94442;">
       <div id="paymentNoticeText" style="margin-bottom:8px; font-weight:600;">Payment receipt rejected. Please pay the sufficient amount and re-upload your receipt.</div>
       <a id="paymentNoticeBtn" class="qr-btn" href="#">Go to Downpayment</a>
@@ -217,7 +220,7 @@
       </div>
       <div class="details-body">
         <p>Are you sure you want to cancel this reservation?</p>
-        <p style="font-size:0.9rem;color:#666">Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.</p>
+        <p style="font-size:0.9rem;color:#d9534f;font-weight:bold">Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.</p>
       </div>
       <div style="display:flex; gap:10px; padding: 0 16px 16px 16px; justify-content:flex-end;">
         <button type="button" class="qr-btn" onclick="closeCancelModal()">Keep Reservation</button>
@@ -276,6 +279,22 @@
               }
               statusDiv.textContent = bannerText;
               statusDiv.className = `status-message ${status}`;
+
+              // Update Document Title and Dashboard Header
+              document.title = `${bannerText.replace(/^[✅❌⏳⚠️]\s*/, '')} - VictorianPass`;
+              const dashTitleDiv = document.getElementById('dashboardStatusTitle');
+              if (dashTitleDiv) {
+                 dashTitleDiv.style.display = 'block';
+                 dashTitleDiv.querySelector('h2').textContent = bannerText;
+                 // Set color based on status if needed, but white text on dark background works
+                 if (status === 'cancelled' || status === 'denied' || status === 'expired') {
+                     dashTitleDiv.querySelector('h2').style.color = '#ffcccb';
+                 } else if (status === 'approved') {
+                     dashTitleDiv.querySelector('h2').style.color = '#d4edda';
+                 } else {
+                     dashTitleDiv.querySelector('h2').style.color = '#fff';
+                 }
+              }
 
               statusCard.style.display = 'block';
               setTimeout(() => {
@@ -532,8 +551,19 @@
             d.status = 'cancelled';
             window.statusData = d;
             const statusDiv = document.getElementById('statusResult');
-            statusDiv.textContent = isGuest ? '❌ Cancelled Request' : '❌ Cancelled Reservation';
+            const newBannerText = isGuest ? '❌ Cancelled Request' : '❌ Cancelled Reservation';
+            statusDiv.textContent = newBannerText;
             statusDiv.className = 'status-message cancelled';
+            
+            // Update Document Title and Dashboard Header
+            document.title = `Cancelled ${isGuest ? 'Request' : 'Reservation'} - VictorianPass`;
+            const dashTitleDiv = document.getElementById('dashboardStatusTitle');
+            if (dashTitleDiv) {
+                dashTitleDiv.style.display = 'block';
+                dashTitleDiv.querySelector('h2').textContent = newBannerText;
+                dashTitleDiv.querySelector('h2').style.color = '#ffcccb';
+            }
+            
             const dateDisplay = (d.start_date && d.end_date)
               ? `${d.start_date} → ${d.end_date}`
               : (d.start_date && d.expires_at)

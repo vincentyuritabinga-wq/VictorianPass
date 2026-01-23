@@ -1,6 +1,9 @@
 <?php
 session_start();
 header('Content-Type: application/json');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
 include 'connect.php';
 
 function ensureReservationsUpdatedAtColumn($con){
@@ -36,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'cancel' && $code !== '' && ($con instanceof mysqli)) {
         try {
             // Prefer guest_forms if exists
-            $stmtG = $con->prepare("SELECT id, approval_status FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG = $con->prepare("SELECT id, approval_status, resident_user_id FROM guest_forms WHERE ref_code = ? LIMIT 1");
             $stmtG->bind_param('s', $code);
             $stmtG->execute();
             $resG = $stmtG->get_result();
@@ -47,6 +50,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
+                // Notify admin
+                try {
+                    $msg = "Guest request $code cancelled by resident.";
+                    $stmtN = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, 'Request Cancelled', ?, 'warning', NOW())");
+                    $stmtN->bind_param('s', $msg);
+                    $stmtN->execute();
+                    $stmtN->close();
+                } catch (Throwable $e) {}
+
                 $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU->bind_param('s', $code);
                 $stmtU->execute();
@@ -59,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
             // Try reservations by ref_code
-            $stmtR = $con->prepare("SELECT id, approval_status FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR = $con->prepare("SELECT id, approval_status, user_id, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
             $stmtR->bind_param('s', $code);
             $stmtR->execute();
             $resR = $stmtR->get_result();
@@ -70,6 +82,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
+                // Notify admin
+                try {
+                    $uid = isset($row['user_id']) ? intval($row['user_id']) : null;
+                    $eid = isset($row['entry_pass_id']) ? intval($row['entry_pass_id']) : null;
+                    $msg = "Reservation $code cancelled by user.";
+                    
+                    // User notification removed as per requirement
+                    // $stmtN = $con->prepare("INSERT INTO notifications (user_id, entry_pass_id, title, message, type, created_at) VALUES (?, ?, 'Request Cancelled', ?, 'warning', NOW())");
+                    // $stmtN->bind_param('iis', $uid, $eid, $msg);
+                    // $stmtN->execute();
+                    // $stmtN->close();
+
+                    // Admin notification
+                    $stmtA = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, 'Request Cancelled', ?, 'warning', NOW())");
+                    $stmtA->bind_param('s', $msg);
+                    $stmtA->execute();
+                    $stmtA->close();
+                } catch (Throwable $e) {}
+
                 $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='cancelled', status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
@@ -78,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
             // Fallback: resident_reservations
-            $stmtRR = $con->prepare("SELECT id, approval_status FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR = $con->prepare("SELECT id, approval_status, user_id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
             $stmtRR->bind_param('s', $code);
             $stmtRR->execute();
             $resRR = $stmtRR->get_result();
@@ -89,6 +120,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
                     exit;
                 }
+                // Notify admin
+                try {
+                    $uid = isset($row['user_id']) ? intval($row['user_id']) : null;
+                    $msg = "Amenity request $code cancelled by resident.";
+                    
+                    // User notification removed as per requirement
+                    // $stmtN = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (?, 'Request Cancelled', ?, 'warning', NOW())");
+                    // $stmtN->bind_param('is', $uid, $msg);
+                    // $stmtN->execute();
+                    // $stmtN->close();
+
+                    // Admin notification
+                    $stmtA = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, 'Request Cancelled', ?, 'warning', NOW())");
+                    $stmtA->bind_param('s', $msg);
+                    $stmtA->execute();
+                    $stmtA->close();
+                } catch (Throwable $e) {}
+
                 $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
                 $stmtU3->bind_param('s', $code);
                 $stmtU3->execute();
@@ -104,6 +153,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             error_log('status.php cancel error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Server error.']);
+            exit;
+        }
+    }
+    
+    // Handle delete
+    if ($action === 'delete' && $code !== '' && ($con instanceof mysqli)) {
+        try {
+            // Prefer guest_forms if exists
+            $stmtG = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG->bind_param('s', $code);
+            $stmtG->execute();
+            $resG = $stmtG->get_result();
+            $stmtG->close();
+            if ($resG && $resG->num_rows > 0) {
+                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='deleted' WHERE ref_code = ?");
+                $stmtU->bind_param('s', $code);
+                $stmtU->execute();
+                $stmtU->close();
+                // Also update reservations if linked
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='deleted', status='deleted' WHERE ref_code = ?");
+                $stmtUR->bind_param('s', $code);
+                $stmtUR->execute();
+                $stmtUR->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+            
+            // Try reservations by ref_code
+            $stmtR = $con->prepare("SELECT id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR->bind_param('s', $code);
+            $stmtR->execute();
+            $resR = $stmtR->get_result();
+            $stmtR->close();
+            if ($resR && $resR->num_rows > 0) {
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='deleted', status='deleted' WHERE ref_code = ?");
+                $stmtU2->bind_param('s', $code);
+                $stmtU2->execute();
+                $stmtU2->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            // Fallback: resident_reservations
+            $stmtRR = $con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR->bind_param('s', $code);
+            $stmtRR->execute();
+            $resRR = $stmtRR->get_result();
+            $stmtRR->close();
+            if ($resRR && $resRR->num_rows > 0) {
+                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='deleted' WHERE ref_code = ?");
+                $stmtU3->bind_param('s', $code);
+                $stmtU3->execute();
+                $stmtU3->close();
+                // Also update reservations if linked
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='deleted', status='deleted' WHERE ref_code = ?");
+                $stmtUR2->bind_param('s', $code);
+                $stmtUR2->execute();
+                $stmtUR2->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            echo json_encode(['success' => false, 'message' => 'Request not found.']);
+            exit;
+        } catch (Throwable $e) {
+            error_log('status.php delete error: ' . $e->getMessage());
             echo json_encode(['success' => false, 'message' => 'Server error.']);
             exit;
         }

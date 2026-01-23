@@ -385,7 +385,14 @@ if (!$data) {
 
     <div class="details-header">
         <img src="images/logo.svg" alt="Logo">
-        <div class="title">Request Details</div>
+        <div class="title">
+            Request Details
+            <?php 
+                if(strpos(strtolower($data['status']), 'cancel') !== false) {
+                    echo ' - Cancelled';
+                }
+            ?>
+        </div>
     </div>
 
     <?php 
@@ -394,6 +401,7 @@ if (!$data) {
         $s = strtolower($data['status']);
         if(strpos($s, 'approv')!==false) { $stClass = 'st-approved'; $stLabel = 'Approved'; }
         else if(strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) { $stClass = 'st-denied'; $stLabel = 'Denied'; }
+        else if(strpos($s, 'cancel')!==false) { $stClass = 'st-denied'; $stLabel = 'Cancelled'; }
         else if(strpos($s, 'expire')!==false) { $stClass = 'st-expired'; $stLabel = 'Expired'; }
     ?>
     <div style="text-align:center;">
