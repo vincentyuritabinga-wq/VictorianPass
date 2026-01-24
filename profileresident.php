@@ -925,15 +925,49 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       prevStatuses[ref]='cancelled';
 
       // Move to History Panel
+      var activePanel = document.getElementById('panel-requests');
       var historyPanel = document.getElementById('panel-history');
-      if(historyPanel){
-          var historyList = historyPanel.querySelector('.item-list');
-          if(historyList){
-             var noRecs = historyList.querySelector('div[style*="text-align:center"]');
-             if(noRecs) noRecs.remove();
-             historyList.insertBefore(li, historyList.firstChild);
-             li.style.display = ''; // Ensure visible
+      
+      if(activePanel && historyPanel){
+        var activeList = activePanel.querySelector('.item-list');
+        var historyList = historyPanel.querySelector('.item-list');
+        
+        if(activeList && historyList){
+          // Check if list is now empty and show "No active requests" message if needed
+          var remainingActiveItems = activeList.querySelectorAll('.list-item');
+          
+          // Remove from active list completely
+          li.remove();
+          
+          // If no more items in active list, show empty message
+          if(remainingActiveItems.length === 1){ // Will be 0 after remove
+            var emptyDiv = document.createElement('div');
+            emptyDiv.style.cssText = 'padding:20px; text-align:center; color:#777;';
+            emptyDiv.textContent = 'No active requests.';
+            activeList.appendChild(emptyDiv);
           }
+          
+          // Remove "No history records" message if present
+          var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+          if(noHistoryMsg) noHistoryMsg.remove();
+          
+          // Add to history list at top
+          historyList.insertBefore(li, historyList.firstChild);
+          li.style.display = '';
+          li.classList.remove('expanded');
+          
+          // Switch to History tab
+          var historyNav = document.querySelector('.nav-menu .nav-item[data-section="panel-history"]');
+          if(historyNav){
+            var navItems = document.querySelectorAll('.nav-menu .nav-item[data-section]');
+            navItems.forEach(function(n){ n.classList.remove('active'); });
+            historyNav.classList.add('active');
+            
+            var sections = document.querySelectorAll('.right-panel .panel-section');
+            sections.forEach(function(s){ s.style.display = 'none'; });
+            historyPanel.style.display = 'block';
+          }
+        }
       }
 
       // Update Title immediately
@@ -1653,7 +1687,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
 
   function refreshStatuses(){
-    fetch('profileresident.php?ajax=1&t='+new Date().getTime(),{credentials:'same-origin'})
+    fetch('profileresident.php?ajax=1',{credentials:'same-origin'})
       .then(function(r){return r.json();})
       .then(function(data){
         if(!data||!data.success) return;
@@ -1663,32 +1697,70 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             if(!panel) return;
             var container = panel.querySelector('.item-list');
             if(!container) return;
+            var historyPanel = document.getElementById('panel-history');
+            var historyList = historyPanel ? historyPanel.querySelector('.item-list') : null;
+            
+            // For history panel: DO NOT refresh - history items stay permanently until manually deleted
+            if(panelId === 'panel-history') return;
+            
+            // Track which codes should exist in this panel
+            var codesInResponse={};
+            list.forEach(function(item){
+              codesInResponse[String(item.ref_code||'')]=true;
+            });
             
             list.forEach(function(item){
                 var code = item.ref_code;
-                var li = document.querySelector('.list-item[data-ref-code="'+code+'"]');
+                var li = container.querySelector('.list-item[data-ref-code="'+code+'"]');
                 if(li){
                     // Update Data
                     var oldStatus = prevStatuses[code];
                     var newStatus = item.status;
+                    var newStatusLower = String(newStatus||'').toLowerCase();
                     
-                    // Prevent reverting final states to pending (stale data protection)
-                    var oldS = (oldStatus||'').toLowerCase();
-                    var newS = (newStatus||'').toLowerCase();
-                    if((oldS.indexOf('cancel')!==-1 || oldS.indexOf('denied')!==-1 || oldS.indexOf('reject')!==-1) && newS.indexOf('pending')!==-1){
-                        return;
-                    }
-
                     li.setAttribute('data-status', newStatus);
                     
-                    // Update Visuals
-                    var titleEl = li.querySelector('.item-title');
-                    if(titleEl) titleEl.textContent = item.title;
+                    if(panelId === 'panel-requests' && newStatusLower.indexOf('cancel') !== -1 && historyList){
+                        var safeCode=String(code||'').replace(/"/g,'&quot;');
+                        var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+                        if(existing){
+                            li.remove();
+                        } else {
+                            var titleEl = li.querySelector('.item-title');
+                            if(titleEl && item.title) titleEl.textContent = item.title;
+                            var badge = li.querySelector('.status-badge');
+                            if(badge){
+                                badge.textContent = fmtLabel(newStatus);
+                                badge.className = 'status-badge ' + statusClassFor(newStatus);
+                            }
+                            var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+                            if(noHistoryMsg) noHistoryMsg.remove();
+                            historyList.insertBefore(li, historyList.firstChild);
+                            li.style.display = '';
+                            li.classList.remove('expanded');
+                        }
+                        if(container.querySelectorAll('.list-item').length===0){
+                            var emptyMsg=container.querySelector('div[style*="text-align:center"]');
+                            if(!emptyMsg){
+                                var emptyDiv=document.createElement('div');
+                                emptyDiv.style.cssText='padding:20px; text-align:center; color:#777;';
+                                emptyDiv.textContent='No active requests.';
+                                container.appendChild(emptyDiv);
+                            }
+                        }
+                        return;
+                    }
                     
-                    var badge = li.querySelector('.status-badge');
-                    if(badge){
-                        badge.textContent = fmtLabel(newStatus);
-                        badge.className = 'status-badge ' + statusClassFor(newStatus);
+                    // Update Visuals only if status changed
+                    if(oldStatus !== newStatus){
+                      var titleEl = li.querySelector('.item-title');
+                      if(titleEl) titleEl.textContent = item.title;
+                      
+                      var badge = li.querySelector('.status-badge');
+                      if(badge){
+                          badge.textContent = fmtLabel(newStatus);
+                          badge.className = 'status-badge ' + statusClassFor(newStatus);
+                      }
                     }
                     
                     // Check if needs moving
@@ -1702,9 +1774,15 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                          li.style.display = ''; 
                     }
                     
-                    // Notifications (only for Active items changing status)
+                    // Ensure item stays visible if in response
+                    li.style.display = '';
+                    
+                    // Notifications (only for admin-actioned items: approved or denied)
                     if(oldStatus && oldStatus !== newStatus && panelId === 'panel-requests'){
-                        if(newStatus.toLowerCase().indexOf('cancel') === -1){
+                        var isApproved = newStatusLower.indexOf('approv') !== -1;
+                        var isDenied = newStatusLower.indexOf('denied') !== -1 || newStatusLower.indexOf('reject') !== -1;
+                        
+                        if(isApproved || isDenied){
                             li.classList.add('status-updated');
                             addNotificationEntry(code, newStatus, li);
                             if(notifCountEl){
@@ -1718,10 +1796,66 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     prevStatuses[code] = newStatus;
                 }
             });
+            
+            // Ensure all items in response stay visible
+            var allItems=container.querySelectorAll('.list-item');
+            allItems.forEach(function(item){
+              var code=item.getAttribute('data-ref-code')||'';
+              if(code && codesInResponse[code]){
+                item.style.display='';
+              }
+            });
+        }
+        
+        function moveHistoryItems(items){
+          var activePanel = document.getElementById('panel-requests');
+          var historyPanel = document.getElementById('panel-history');
+          if(!activePanel||!historyPanel) return;
+          var activeList = activePanel.querySelector('.item-list');
+          var historyList = historyPanel.querySelector('.item-list');
+          if(!activeList||!historyList) return;
+          var historyCodes={};
+          items.forEach(function(item){
+            var code=String(item.ref_code||'');
+            if(!code) return;
+            historyCodes[code]=true;
+            var safeCode=code.replace(/"/g,'&quot;');
+            var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+            if(existing) return;
+            var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+            if(!li) return;
+            li.setAttribute('data-status', item.status || 'cancelled');
+            var titleEl = li.querySelector('.item-title');
+            if(titleEl && item.title) titleEl.textContent = item.title;
+            var badge = li.querySelector('.status-badge');
+            if(badge){
+              badge.textContent = fmtLabel(item.status);
+              badge.className = 'status-badge ' + statusClassFor(item.status);
+            }
+            var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+            if(noHistoryMsg) noHistoryMsg.remove();
+            historyList.insertBefore(li, historyList.firstChild);
+            li.style.display = '';
+            li.classList.remove('expanded');
+          });
+          var activeItems=activeList.querySelectorAll('.list-item');
+          activeItems.forEach(function(li){
+            var code=li.getAttribute('data-ref-code')||'';
+            if(code && historyCodes[code]) li.remove();
+          });
+          if(activeList.querySelectorAll('.list-item').length===0){
+            var emptyMsg=activeList.querySelector('div[style*="text-align:center"]');
+            if(!emptyMsg){
+              var emptyDiv=document.createElement('div');
+              emptyDiv.style.cssText='padding:20px; text-align:center; color:#777;';
+              emptyDiv.textContent='No active requests.';
+              activeList.appendChild(emptyDiv);
+            }
+          }
         }
         
         if(data.active) updateAndMove(data.active, 'panel-requests');
-        if(data.history) updateAndMove(data.history, 'panel-history');
+        if(data.history) moveHistoryItems(data.history);
         
         if(notifPanel) renderNotifPanel();
       })["catch"](function(){});

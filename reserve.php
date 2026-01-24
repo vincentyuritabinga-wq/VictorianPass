@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
           if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
           if ($singleDay) {
-            $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
+            $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
             $check1->bind_param("ssss", $amenity, $start, $startTime, $endTime);
             $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
             $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
@@ -199,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $marked = [];
 
               // reservations with time overlap on this date
-              $q1 = $con->prepare("SELECT start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND ? BETWEEN start_date AND end_date");
+              $q1 = $con->prepare("SELECT start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date");
               $q1->bind_param('ss', $amenity, $ds);
               $q1->execute();
               $res1 = $q1->get_result();
@@ -346,7 +346,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   };
   try {
     if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-    $stmt1 = $con->prepare("SELECT start_date, end_date FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved'))");
+    $stmt1 = $con->prepare("SELECT start_date, end_date FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted'))");
     $stmt1->bind_param("s", $amenity); $stmt1->execute(); $collect($stmt1->get_result()); $stmt1->close();
     $stmt2 = $con->prepare("SELECT start_date, end_date FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved')");
     $stmt2->bind_param("s", $amenity); $stmt2->execute(); $collect($stmt2->get_result()); $stmt2->close();
@@ -400,11 +400,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
   header('Content-Type: application/json');
   $amenity = isset($_GET['amenity']) ? trim($_GET['amenity']) : '';
   $date = $_GET['date'] ?? '';
+  $startDate = $_GET['start_date'] ?? $date;
+  $endDate = $_GET['end_date'] ?? $date;
   $times = [];
-  if ($amenity !== '' && $date) {
+  if ($amenity !== '' && ($date || ($startDate && $endDate))) {
+    // Helper function to check overlap
+    $checkOverlap = function($row, $sDate, $eDate) {
+        if (!$row['start_date'] || !$row['end_date']) return false;
+        return max($sDate, $row['start_date']) <= min($eDate, $row['end_date']);
+    };
     try {
       if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-      $stmt1 = $con->prepare("SELECT start_date, end_date, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved'))");
+      $stmt1 = $con->prepare("SELECT start_date, end_date, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted'))");
       $stmt1->bind_param("s", $amenity);
       $stmt1->execute();
       $res1 = $stmt1->get_result();

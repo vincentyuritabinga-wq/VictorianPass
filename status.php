@@ -13,6 +13,32 @@ function ensureReservationsUpdatedAtColumn($con){
 }
 ensureReservationsUpdatedAtColumn($con);
 
+function ensureEnumHasValues($con, $table, $column, $enumValues, $defaultValue){
+    if (!($con instanceof mysqli)) return;
+    $res = $con->query("SHOW COLUMNS FROM $table LIKE '$column'");
+    if (!$res || $res->num_rows === 0) return;
+    $row = $res->fetch_assoc();
+    $type = $row['Type'] ?? '';
+    $needsChange = false;
+    foreach ($enumValues as $val) {
+        if (stripos($type, "'" . $val . "'") === false && stripos($type, $val) === false) {
+            $needsChange = true;
+            break;
+        }
+    }
+    if (!$needsChange) return;
+    $enumList = "'" . implode("','", $enumValues) . "'";
+    $con->query("ALTER TABLE $table MODIFY COLUMN $column ENUM($enumList) DEFAULT '$defaultValue'");
+}
+
+function ensureStatusEnums($con){
+    ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
+}
+ensureStatusEnums($con);
+
 // Ensure scan logging table exists (idempotent)
 if ($con instanceof mysqli) {
   $con->query("CREATE TABLE IF NOT EXISTS entry_scans (

@@ -67,8 +67,8 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .calendar td.today { border: 2px solid #23412e; font-weight: 700; background: rgba(35,65,46,0.08); }
 .calendar td.disabled { color: #ccc; cursor: not-allowed; background: #f9f9f9; opacity: 0.5; font-weight: 400; }
 .calendar td.fully-booked { background: #fee2e2; color: #b30000; border: 1px solid #fecaca; font-weight: 600; }
-.calendar td.partly { background: #fef3c7; color: #b68b00; border: 1px solid #fcd34d; font-weight: 600; }
-.calendar td.partly:hover { background: #fef08a; }
+.calendar td.partly { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; font-weight: 600; }
+.calendar td.partly:hover { background: #fed7aa; }
 .section-header{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 20px}
 .section-header h2{font-size:1.9rem;font-weight:900;color:#111827;letter-spacing:-0.5px}
 .section-header p{color:#4b5563;font-size:1.05rem;font-weight:600}
@@ -749,9 +749,9 @@ input:focus-visible {
 }
 
 .avail-notice.notice-partly {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1.5px solid #fcd34d;
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1.5px solid #fdba74;
 }
 
 .avail-notice.notice-disabled {

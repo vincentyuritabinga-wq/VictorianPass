@@ -64,9 +64,9 @@ if ($stmt) {
              $dateStr .= ' ' . date('h:i A', $sTime) . ' - ' . date('h:i A', $eTime);
         }
         
-        $statusVal = $row['status'] ?? 'pending';
-        if (!empty($row['approval_status'])) {
-            $statusVal = $row['approval_status'];
+        $statusVal = $row['approval_status'] ?? '';
+        if ($statusVal === '' || $statusVal === null) {
+            $statusVal = $row['status'] ?? 'pending';
         }
         
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
@@ -497,10 +497,214 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     return s.charAt(0).toUpperCase()+s.slice(1);
   }
 
-  // Notification Logic (Stubbed for now as per user reqs)
+  // Notification Logic
   var notifCountEl=document.getElementById('notifCount');
   var notifBtn=document.getElementById('notifBtn');
   var notifPanel=document.getElementById('notifPanel');
+  var notifItems=[];
+  
+  function addNotificationEntry(code,status,li){
+    if(!code) return;
+    var key=code+'|'+String(status||'');
+    for(var i=0;i<notifItems.length;i++){ if(notifItems[i].key===key) return; }
+    var type=(li.getAttribute('data-type')||'').toLowerCase();
+    var titleEl=li.querySelector('.item-title');
+    var title=titleEl?titleEl.textContent.trim():(type==='reservation'?'Reservation Schedule':'Request Update');
+    var timeText='';
+    try{ timeText=new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}); }catch(e){ timeText=''; }
+    notifItems.push({
+      key:key,
+      code:code,
+      status:fmtLabel(status),
+      title:title,
+      type:type,
+      time:timeText
+    });
+  }
+  
+  function renderNotifPanel(){
+    if(!notifPanel) return;
+    if(!notifItems.length){
+      notifPanel.innerHTML='<div class="notif-empty">No recent updates</div>';
+      return;
+    }
+    var html='';
+    for(var i=notifItems.length-1;i>=0;i--){
+      var it=notifItems[i]||{};
+      var code=String(it.code||'').replace(/[<>]/g,'');
+      var title=String(it.title||'').replace(/[<>]/g,'');
+      var status=String(it.status||'').replace(/[<>]/g,'');
+      var time=String(it.time||'').replace(/[<>]/g,'');
+      html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">Code: '+code+' • '+status+'</div>';
+      if(time) html+='<div class="notif-item-time">'+time+'</div>';
+      html+='</div></div>';
+    }
+    notifPanel.innerHTML=html;
+  }
+  
+  var prevStatuses={};
+  function refreshStatuses(){
+    fetch('dashboardvisitor.php?ajax=1')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(!data||!data.active||!data.history) return;
+        
+        function fmtLabel(s){
+          s=String(s||'').toLowerCase();
+          return s.charAt(0).toUpperCase()+s.slice(1);
+        }
+        
+        function updateList(items,listId,panelId){
+          var container=document.getElementById(listId);
+          if(!container) return;
+          var historyList=document.getElementById('list-history');
+          var activeList=document.getElementById('list-active');
+          
+          // Track which codes should exist in this list
+          var codesInResponse={};
+          items.forEach(function(item){
+            codesInResponse[String(item.ref_code||'')]=true;
+          });
+          
+          // Update or preserve existing items
+          items.forEach(function(newItem){
+            var code=String(newItem.ref_code||'');
+            if(!code) return;
+            
+            var li=container.querySelector('.list-item[data-ref-code="'+code.replace(/"/g,'&quot;')+'"]');
+            if(!li) return;
+            
+            var oldStatus=li.getAttribute('data-status')||'';
+            var newStatus=newItem.status||'';
+            var newStatusLower=String(newStatus||'').toLowerCase();
+            
+            // Always update the status attribute to keep in sync with server
+            li.setAttribute('data-status',newStatus);
+
+            if(panelId === 'panel-requests' && newStatusLower.indexOf('cancel') !== -1 && historyList && activeList){
+              var safeCode=code.replace(/"/g,'&quot;');
+              var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+              if(existing){
+                li.remove();
+              } else {
+                var titleEl=li.querySelector('.item-title');
+                if(titleEl && newItem.title) titleEl.textContent=newItem.title;
+                var badge=li.querySelector('.status-badge');
+                if(badge){
+                  badge.textContent=fmtLabel(newStatus);
+                  badge.className='status-badge '+statusClassFor(newStatus);
+                }
+                var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+                if(noHistoryMsg) noHistoryMsg.remove();
+                historyList.insertBefore(li, historyList.firstChild);
+                li.style.display='';
+                li.classList.remove('expanded');
+              }
+              if(activeList.querySelectorAll('.list-item').length===0){
+                var emptyMsg=activeList.querySelector('div[style*="text-align:center"]');
+                if(!emptyMsg){
+                  var emptyDiv=document.createElement('div');
+                  emptyDiv.style.cssText='padding:20px; text-align:center; color:#777;';
+                  emptyDiv.textContent='No active requests.';
+                  activeList.appendChild(emptyDiv);
+                }
+              }
+              return;
+            }
+            
+            // Only update badge if status changed (skip for history items - they're permanent)
+            if(oldStatus !== newStatus && panelId !== 'panel-history'){
+              var badge=li.querySelector('.status-badge');
+              if(badge){
+                badge.textContent=fmtLabel(newStatus);
+                badge.className='status-badge '+statusClassFor(newStatus);
+              }
+              
+              // Notifications (only for admin-actioned items: approved or denied)
+              if(oldStatus && panelId === 'panel-requests'){
+                var isApproved=newStatusLower.indexOf('approv')!==-1;
+                var isDenied=newStatusLower.indexOf('denied')!==-1 || newStatusLower.indexOf('reject')!==-1;
+                
+                if(isApproved || isDenied){
+                  li.classList.add('status-updated');
+                  addNotificationEntry(code,newStatus,li);
+                  if(notifCountEl){
+                    var c=parseInt(notifCountEl.textContent||'0')+1;
+                    notifCountEl.textContent=c;
+                    notifCountEl.style.display='inline-block';
+                  }
+                }
+              }
+              
+              prevStatuses[code]=newStatus;
+            }
+          });
+          
+          // For history panel: NEVER hide items - they stay until manually deleted
+          // For active panel: ensure items in response stay visible
+          if(panelId !== 'panel-history'){
+            var allItems=container.querySelectorAll('.list-item');
+            allItems.forEach(function(item){
+              var code=item.getAttribute('data-ref-code')||'';
+              if(code && codesInResponse[code]){
+                item.style.display='';
+              }
+            });
+          }
+        }
+
+        function moveHistoryItems(items){
+          var historyList=document.getElementById('list-history');
+          var activeList=document.getElementById('list-active');
+          if(!historyList||!activeList) return;
+          var historyCodes={};
+          items.forEach(function(item){
+            var code=String(item.ref_code||'');
+            if(!code) return;
+            historyCodes[code]=true;
+            var safeCode=code.replace(/"/g,'&quot;');
+            var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+            if(existing) return;
+            var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
+            if(!li) return;
+            li.setAttribute('data-status', item.status || 'cancelled');
+            var titleEl=li.querySelector('.item-title');
+            if(titleEl && item.title) titleEl.textContent=item.title;
+            var badge=li.querySelector('.status-badge');
+            if(badge){
+              badge.textContent=fmtLabel(item.status);
+              badge.className='status-badge '+statusClassFor(item.status);
+            }
+            var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+            if(noHistoryMsg) noHistoryMsg.remove();
+            historyList.insertBefore(li, historyList.firstChild);
+            li.style.display='';
+            li.classList.remove('expanded');
+          });
+          var activeItems=activeList.querySelectorAll('.list-item');
+          activeItems.forEach(function(li){
+            var code=li.getAttribute('data-ref-code')||'';
+            if(code && historyCodes[code]) li.remove();
+          });
+          if(activeList.querySelectorAll('.list-item').length===0){
+            var emptyMsg=activeList.querySelector('div[style*="text-align:center"]');
+            if(!emptyMsg){
+              var emptyDiv=document.createElement('div');
+              emptyDiv.style.cssText='padding:20px; text-align:center; color:#777;';
+              emptyDiv.textContent='No active requests.';
+              activeList.appendChild(emptyDiv);
+            }
+          }
+        }
+
+        updateList(data.active,'list-active','panel-requests');
+        if(data.history) moveHistoryItems(data.history);
+        
+        if(notifPanel) renderNotifPanel();
+      })["catch"](function(){});
+  }
+  
+  setInterval(refreshStatuses,10000);
   
   // Modal Logic
   var cancelModal=document.getElementById('cancelModal');
@@ -584,16 +788,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       li.setAttribute('data-status','cancelled');
       if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='cancelled';
 
-      // Move to History List
-      var historyList = document.getElementById('list-history');
-      if(historyList){
-         var noRecs = historyList.querySelector('div[style*="text-align:center"]');
-         if(noRecs) noRecs.remove();
-         // Insert at top
-         historyList.insertBefore(li, historyList.firstChild);
-         li.style.display = ''; 
-      }
-
       // Update Title immediately
       var titleEl = li.querySelector('.item-title');
       if (titleEl && titleEl.textContent.indexOf('Cancelled') === -1) {
@@ -616,6 +810,47 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         if(li.classList.contains('expanded')){
           buildExtraContent(li,extraEl);
           extraEl.setAttribute('data-loaded','1');
+        }
+      }
+
+      // Remove from active list and move to history
+      var activeList = document.getElementById('list-active');
+      var historyList = document.getElementById('list-history');
+      
+      if(activeList && historyList){
+        // Check if list is now empty and show "No active requests" message if needed
+        var remainingActiveItems = activeList.querySelectorAll('.list-item');
+        
+        // Remove from active list
+        li.remove();
+        
+        // If no more items in active list, show empty message
+        if(remainingActiveItems.length === 1){ // Will be 0 after remove
+          var emptyDiv = document.createElement('div');
+          emptyDiv.style.cssText = 'padding:20px; text-align:center; color:#777;';
+          emptyDiv.textContent = 'No active requests.';
+          activeList.appendChild(emptyDiv);
+        }
+        
+        // Remove the "No history records" message if present
+        var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+        if(noHistoryMsg) noHistoryMsg.remove();
+        
+        // Add to history list at the top
+        historyList.insertBefore(li, historyList.firstChild);
+        li.style.display = '';
+        li.classList.remove('expanded');
+        
+        // Switch to history tab
+        var historyTab = document.querySelector('.nav-item[data-section="panel-history"]');
+        if(historyTab){
+          var navItems = document.querySelectorAll('.nav-item[data-section]');
+          navItems.forEach(function(n){ n.classList.remove('active'); });
+          historyTab.classList.add('active');
+          
+          var sections = document.querySelectorAll('.panel-section');
+          sections.forEach(function(s){ s.style.display = 'none'; });
+          document.getElementById('panel-history').style.display = 'block';
         }
       }
       
@@ -735,6 +970,15 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       activityModalClose.addEventListener('click', function() {
           activityModal.style.display = 'none';
       });
+  }
+  
+  // Notification button handler
+  if(notifBtn && notifPanel){
+    notifBtn.addEventListener('click',function(e){
+      e.stopPropagation();
+      notifPanel.style.display=(notifPanel.style.display==='block'?'none':'block');
+      if(notifPanel.style.display==='block') renderNotifPanel();
+    });
   }
   
   // Close modals when clicking outside
