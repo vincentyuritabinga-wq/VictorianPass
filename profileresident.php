@@ -32,6 +32,16 @@ if (!$user) {
 // Compose full name for display
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 
+$showReportWait = false;
+$reportWaitMessage = 'Please wait for confirmation. The admin and guard will check the report incident.';
+if (!empty($_SESSION['report_wait_popup'])) {
+  $showReportWait = true;
+  if (!empty($_SESSION['report_wait_message'])) {
+    $reportWaitMessage = $_SESSION['report_wait_message'];
+  }
+  unset($_SESSION['report_wait_popup'], $_SESSION['report_wait_message']);
+}
+
 // Profile Picture Logic
 $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
 if (file_exists('uploads/profiles/user_' . $userId . '.jpg')) {
@@ -289,6 +299,39 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 }
 .field-warning .close-warn:hover {
   color: #555;
+}
+
+.report-wait-content {
+  max-width: 520px;
+  padding: 28px 30px;
+  text-align: center;
+}
+.report-wait-content h3 {
+  margin: 0 0 8px;
+  color: #23412e;
+  font-size: 1.2rem;
+}
+.report-wait-content p {
+  margin: 0 0 18px;
+  color: #555;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.report-wait-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #eef2f0;
+  color: #23412e;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
 }
 
 /* Removed view-details-btn styles as they are now in dashboard.css */
@@ -1946,6 +1989,33 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   setInterval(refreshStatuses,10000);
 })();
 </script>
+
+<div class="modal" id="reportWaitModal" data-show="<?php echo $showReportWait ? '1' : '0'; ?>">
+  <div class="modal-content report-wait-content">
+    <button type="button" class="report-wait-close" aria-label="Close">&times;</button>
+    <h3>Report Submitted</h3>
+    <p><?php echo htmlspecialchars($reportWaitMessage); ?></p>
+    <button type="button" class="btn-confirm report-wait-ok">OK</button>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var reportModal = document.getElementById('reportWaitModal');
+  if (!reportModal) return;
+  var shouldShow = reportModal.getAttribute('data-show') === '1';
+  var closeBtn = reportModal.querySelector('.report-wait-close');
+  var okBtn = reportModal.querySelector('.report-wait-ok');
+  function closeReportModal() { reportModal.style.display = 'none'; }
+  if (shouldShow) { reportModal.style.display = 'flex'; }
+  if (closeBtn) { closeBtn.addEventListener('click', closeReportModal); }
+  if (okBtn) { okBtn.addEventListener('click', closeReportModal); }
+  reportModal.addEventListener('click', function(e) {
+    if (e.target === reportModal) closeReportModal();
+  });
+});
+</script>
+
 <div id="profileModal" class="profile-modal">
   <div class="profile-modal-content">
     <button class="close-profile-modal">&times;</button>

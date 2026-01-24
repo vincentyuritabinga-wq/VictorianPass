@@ -32,6 +32,41 @@ if (!$user) {
 
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 
+$myReports = [];
+if ($con instanceof mysqli) {
+  $con->query("CREATE TABLE IF NOT EXISTS incident_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    complainant VARCHAR(150) NOT NULL,
+    subject VARCHAR(150) NULL,
+    address VARCHAR(255) NOT NULL,
+    nature VARCHAR(255) NULL,
+    other_concern VARCHAR(255) NULL,
+    user_id INT NULL,
+    report_date DATE NULL,
+    status ENUM('new','in_progress','resolved','rejected','cancelled') DEFAULT 'new',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL,
+    escalated_to_admin TINYINT(1) NOT NULL DEFAULT 0,
+    escalated_by_guard_id INT NULL,
+    escalated_at DATETIME NULL,
+    handled_by_guard_id INT NULL,
+    handled_at DATETIME NULL,
+    INDEX idx_status (status),
+    INDEX idx_user_id (user_id),
+    INDEX idx_escalated (escalated_to_admin)
+  ) ENGINE=InnoDB");
+  $stmtM = $con->prepare("SELECT id, subject, address, nature, other_concern, report_date, status, created_at, escalated_to_admin, handled_by_guard_id FROM incident_reports WHERE user_id = ? ORDER BY created_at DESC");
+  if ($stmtM) {
+    $stmtM->bind_param('i', $userId);
+    $stmtM->execute();
+    $resM = $stmtM->get_result();
+    while ($rowM = $resM->fetch_assoc()) {
+      $myReports[] = $rowM;
+    }
+    $stmtM->close();
+  }
+}
+
 // Handle Incident Report Submission
 $reportSuccess = false;
 $reportSuccessMessage = '';
@@ -151,9 +186,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         if ($stmtP) { $stmtP->bind_param('is', $report_id, $p); $stmtP->execute(); $stmtP->close(); }
                     }
                 }
-                $reportSuccess = true;
-                $reportSuccessMessage = 'Your report has been successfully submitted. The Guard will review it shortly.';
-                $reportValues = [];
+                $_SESSION['report_wait_popup'] = true;
+                $_SESSION['report_wait_message'] = 'Please wait for confirmation. The admin and guard will check the report incident.';
+                header('Location: profileresident.php');
+                exit;
             } else {
                 $reportErrors[] = 'Failed to save report database entry.';
             }
@@ -175,33 +211,101 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <link rel="stylesheet" href="css/guestform.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
-  /* Custom styles for Report Incident */
   .explanation-panel {
-      background-color: #f9f9f9;
+      background-color: #f9fafb;
       border-left: 4px solid #23412e;
-      padding: 20px;
-      border-radius: 4px;
-      margin-bottom: 30px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-bottom: 12px;
   }
-  .explanation-panel h3 { margin-top: 0; color: #23412e; font-size: 1.2rem; }
-  .explanation-panel p { color: #555; font-size: 0.95rem; line-height: 1.6; margin-bottom: 15px; }
-  .explanation-links a { color: #23412e; font-weight: 600; margin-right: 20px; text-decoration: none; border-bottom: 1px dashed #23412e; }
+  .explanation-panel h3 { margin: 0 0 6px; color: #23412e; font-size: 1.05rem; }
+  .explanation-panel p { color: #555; font-size: 0.85rem; line-height: 1.4; margin-bottom: 0; }
+  .explanation-links { display: flex; gap: 16px; flex-wrap: wrap; }
+  .explanation-links a { color: #23412e; font-weight: 600; text-decoration: none; border-bottom: 1px dashed #23412e; }
   
-  .report-header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #f0f0f0; }
-  .report-header h2 { margin: 0 0 5px 0; color: #23412e; font-size: 1.5rem; }
-  .report-sub { color: #777; font-size: 0.9rem; margin-bottom: 15px; }
-  .report-title { background: #23412e; color: #fff; display: inline-block; padding: 8px 24px; border-radius: 20px; font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+  .report-header { text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+  .report-header h2 { margin: 0 0 4px; color: #23412e; font-size: 1.15rem; }
+  .report-sub { color: #777; font-size: 0.82rem; margin-bottom: 8px; }
+  .report-title { background: #23412e; color: #fff; display: inline-block; padding: 6px 16px; border-radius: 16px; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.6px; }
 
-  .checkbox-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 5px; }
-  .checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+  .checkbox-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 4px; }
+  .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer; padding: 6px 8px; border-radius: 8px; border: 1px solid #e5e7eb; background: #f8fafc; }
   .checkbox-item input { width: 18px; height: 18px; margin: 0; accent-color: #23412e; }
+  .checkbox-item label { line-height: 1.3; }
 
-  .error-box { background-color: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+  .agreement-group .checkbox-group { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .agreement-group .checkbox-item { align-items: flex-start; padding: 8px 10px; background: #fff; border-color: #e5e7eb; }
+  .agreement-group .checkbox-item input { margin-top: 2px; }
+  .agreement-group .checkbox-item label { font-size: 0.82rem; line-height: 1.3; }
+
+  .error-box { background-color: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
   
-  .entry-form { max-width: 800px; }
-  .top-actions { width: 100%; max-width: 800px; margin-bottom: 20px; }
-  .static-group { margin-bottom: 20px; }
-  .static-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #23412e; }
+  .hero { padding: 10px 2%; min-height: calc(100vh - 72px); }
+  .entry-form { max-width: 920px; padding: 16px 16px; }
+  .top-actions { width: 100%; max-width: 920px; margin-bottom: 8px; }
+  .top-actions .btn-secondary { padding: 8px 12px; font-size: 0.82rem; }
+  .btn-secondary.back-account-btn {
+      background: #facc6b;
+      color: #4b2e12;
+      border-color: #fbbf24;
+  }
+  .btn-secondary.back-account-btn:hover {
+      background: #fbbf24;
+  }
+  .static-group { margin-bottom: 12px; }
+  .static-group label { display: block; margin-bottom: 4px; font-weight: 500; color: #23412e; font-size: 0.85rem; }
+  #reportForm .form-group input,
+  #reportForm .form-group textarea,
+  #reportForm input[type="date"] {
+      padding: 8px 10px;
+      font-size: 0.85rem;
+  }
+  #reportForm textarea { min-height: 64px; }
+  #reportForm .form-row { gap: 10px; }
+  #reportForm .upload-box { padding: 8px; margin-bottom: 8px; font-size: 0.82rem; }
+  #reportForm .upload-hint { font-size: 0.75rem; }
+
+  .modal-content { max-width: 520px; padding: 26px 28px; text-align: left; position: relative; }
+  .modal-content h3 { text-align: center; margin: 0 0 10px; color: #23412e; font-size: 1.2rem; }
+  .modal-content p { margin-bottom: 12px; font-size: 0.92rem; color: #555; line-height: 1.6; }
+  .modal-content .btn.btn-login { width: 100%; margin-top: 16px; padding: 12px 16px; font-size: 1rem; border-radius: 10px; }
+  .modal-content .close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #eef2f0;
+      color: #23412e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+  }
+  .my-reports-content { max-width: 720px; max-height: 70vh; overflow-y: auto; }
+  .my-reports-title { margin: 0 0 6px; color: #23412e; font-size: 1.2rem; text-align: left; }
+  .my-reports-sub { margin: 0 0 14px; color: #6b7280; font-size: 0.92rem; text-align: left; }
+  .my-reports-list { display: flex; flex-direction: column; gap: 14px; }
+  .my-reports-list .list-item { cursor: default; }
+  .my-reports-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.86rem; color: #6b7280; margin-top: 6px; }
+  .my-reports-empty { padding: 16px; text-align: center; color: #777; background: #f8fafc; border: 1px dashed #d1d5db; border-radius: 10px; }
+  .status-approved-guard { background-color: #e0f2fe; color: #0369a1; }
+  .status-approved-admin { background-color: #dcfce7; color: #166534; }
+  @media (max-width: 900px) {
+      .hero { padding: 8px 8px; min-height: auto; }
+      .entry-form { padding: 12px 12px; transform: scale(0.92); transform-origin: top center; }
+      .top-actions { max-width: 100%; }
+      .checkbox-group { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  }
+  @media (max-width: 600px) {
+      .entry-form { padding: 10px; transform: scale(0.85); transform-origin: top center; }
+      .report-title { font-size: 0.68rem; padding: 5px 12px; }
+      .checkbox-group { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -219,8 +323,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </header>
 
     <div class="hero">
-        <div class="top-actions">
+        <div class="top-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
             <button type="button" class="btn-secondary back-account-btn" onclick="window.location.href='profileresident.php'">&#8592; Back to Account</button>
+            <button type="button" class="btn-secondary" onclick="openModal('myReportsModal')">My Reported Incidents</button>
         </div>
 
         <div class="entry-form">
@@ -228,10 +333,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <div class="explanation-panel">
                 <h3>Resident Incident Report</h3>
                 <p>Reporting complaints ensures that every resident’s voice is heard and that community standards are properly maintained. Please be responsible when filing a complaint.</p>
-                <div class="explanation-links">
-                    <a href="#" onclick="alert('Terms and Conditions'); return false;">Terms and Conditions</a>
-                    <a href="#" onclick="alert('Rules and Regulations'); return false;">Rules and Regulations</a>
-                </div>
+                <!--<div class="explanation-links">
+                    <a href="#" onclick="openModal('termsModal'); return false;">Terms and Conditions</a>
+                    <a href="#" onclick="openModal('rulesModal'); return false;">Rules and Regulations</a>
+                </div> -->
             </div>
 
             <?php if (!empty($reportErrors)): ?>
@@ -303,8 +408,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
               </label>
           </div>
 
+          <div class="static-group agreement-group">
+              <label>Confirm Agreements*</label>
+              <div class="checkbox-group">
+                  <div class="checkbox-item" onclick="checkIfRead('terms_agree', event)">
+                      <input type="checkbox" id="terms_agree" name="terms_agree" required disabled>
+                      <label for="terms_agree" style="cursor:pointer;">
+                        I have read and agree to the Terms and Conditions.
+                        <a href="#" onclick="openModal('termsModal'); event.stopPropagation(); return false;" style="text-decoration: underline; color:#23412e; font-weight:600;">Read Terms and Conditions</a>
+                      </label>
+                  </div>
+                  <div class="checkbox-item" onclick="checkIfRead('rules_agree', event)">
+                      <input type="checkbox" id="rules_agree" name="rules_agree" required disabled>
+                      <label for="rules_agree" style="cursor:pointer;">
+                        I have read and agree to the Rules and Regulations.
+                        <a href="#" onclick="openModal('rulesModal'); event.stopPropagation(); return false;" style="text-decoration: underline; color:#23412e; font-weight:600;">Read Rules and Regulations</a>
+                      </label>
+                  </div>
+              </div>
+          </div>
+
           <button type="submit" class="btn btn-login" style="width:100%; margin-top:20px; font-size:1.1rem; padding:15px;">Submit Report</button>
         </form>
+    </div>
+
+    <div class="modal" id="myReportsModal">
+      <div class="modal-content my-reports-content">
+        <span class="close-btn" onclick="closeModal('myReportsModal')">&times;</span>
+        <h3 class="my-reports-title">My Reported Incidents</h3>
+        <p class="my-reports-sub">All incidents you have reported in the system.</p>
+        <?php if (empty($myReports)): ?>
+          <div class="my-reports-empty">No incidents reported yet.</div>
+        <?php else: ?>
+          <div class="my-reports-list">
+            <?php foreach ($myReports as $r): ?>
+              <?php
+                $approvalLabel = 'Pending';
+                $badgeClass = 'status-badge status-pending';
+                if (!empty($r['escalated_to_admin'])) {
+                  $approvalLabel = 'Admin Approved';
+                  $badgeClass = 'status-badge status-approved-admin';
+                } elseif (!empty($r['handled_by_guard_id'])) {
+                  $approvalLabel = 'Guard Approved';
+                  $badgeClass = 'status-badge status-approved-guard';
+                }
+                $rDate = !empty($r['report_date']) ? date('M d, Y', strtotime($r['report_date'])) : date('M d, Y', strtotime($r['created_at']));
+                $natureLabel = $r['nature'] ?: ($r['other_concern'] ?: '-');
+                $subjectLabel = $r['subject'] ?: 'Untitled Report';
+              ?>
+              <div class="list-item">
+                <div class="item-icon"><i class="fa-solid fa-file-lines"></i></div>
+                <div class="item-content">
+                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <div>
+                      <span class="<?php echo $badgeClass; ?>"><?php echo htmlspecialchars($approvalLabel); ?></span>
+                      <span class="item-title"><?php echo htmlspecialchars($subjectLabel); ?></span>
+                    </div>
+                    <div class="item-time"><?php echo htmlspecialchars($rDate); ?></div>
+                  </div>
+                  <div class="my-reports-meta">
+                    <span><strong>Nature:</strong> <?php echo htmlspecialchars($natureLabel); ?></span>
+                    <span><strong>Address:</strong> <?php echo htmlspecialchars($r['address'] ?? '-'); ?></span>
+                  </div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </div>
     </div>
 
 <script>
@@ -332,11 +503,60 @@ function closeModal(id) {
     document.getElementById(id).style.display = "none";
 }
 
+function checkIfRead(type, event) {
+    const checkbox = document.getElementById(type);
+    if (checkbox && checkbox.disabled) {
+        let msg = '';
+        if (type === 'terms_agree') {
+            msg = 'Please read the Terms and Conditions first.';
+        } else {
+            msg = 'Please read the Rules and Regulations first.';
+        }
+        alert(msg);
+    }
+}
+
+function agreeTerms() {
+    const terms = document.getElementById('terms_agree');
+    if (terms) {
+        terms.checked = true;
+        terms.disabled = false;
+    }
+    closeModal('termsModal');
+}
+
+function agreeRules() {
+    const rules = document.getElementById('rules_agree');
+    if (rules) {
+        rules.checked = true;
+        rules.disabled = false;
+    }
+    closeModal('rulesModal');
+}
+
 window.onclick = function(e) {
     if (e.target.className === 'modal') {
         e.target.style.display = "none";
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('reportForm');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        const terms = document.getElementById('terms_agree');
+        const rules = document.getElementById('rules_agree');
+        if (terms && !terms.checked) {
+            e.preventDefault();
+            openModal('termsModal');
+            return;
+        }
+        if (rules && !rules.checked) {
+            e.preventDefault();
+            openModal('rulesModal');
+        }
+    });
+});
 </script>
 
 <!-- Terms Modal -->
@@ -353,6 +573,7 @@ window.onclick = function(e) {
             5. Filing a complaint does not guarantee resolution in favor of the complainant.<br>
             6. All parties involved will be treated fairly during the resolution process.
         </p>
+        <button type="button" class="btn btn-login" onclick="agreeTerms()">Confirm</button>
     </div>
 </div>
 
@@ -368,6 +589,7 @@ window.onclick = function(e) {
             <p><strong>3. QR Code Use</strong><br>QR codes are personal, time-bound, and must not be shared or reused.</p>
             <p><strong>4. Follow Subdivision Policies</strong><br>All users must follow community rules. Misuse of the system may lead to suspension or blacklisting.</p>
         </div>
+        <button type="button" class="btn btn-login" onclick="agreeRules()">Confirm</button>
     </div>
 </div>
 </body>
