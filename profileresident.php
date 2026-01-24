@@ -96,7 +96,7 @@ $activities = [];
 
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.created_at, r.ref_code, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -114,15 +114,22 @@ if ($stmt) {
         if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
         }
-        $guestNameParts = [];
-        if (!empty($row['visitor_first_name'])) { $guestNameParts[] = $row['visitor_first_name']; }
-        if (!empty($row['visitor_middle_name'])) { $guestNameParts[] = $row['visitor_middle_name']; }
-        if (!empty($row['visitor_last_name'])) { $guestNameParts[] = $row['visitor_last_name']; }
-        $guestName = trim(implode(' ', $guestNameParts));
-        if (!empty($row['gf_id'])) {
-            $reservedBy = $guestName !== '' ? ("Resident's Guest - " . $guestName) : "Resident's Guest";
-        } else {
-            $reservedBy = 'Resident';
+        $reservedBy = '';
+        $bookedRole = $row['booked_by_role'] ?? '';
+        $bookedName = trim((string)($row['booked_by_name'] ?? ''));
+        if ($bookedRole === 'guest' || $bookedRole === 'co_owner') {
+            if ($bookedName !== '') {
+                $reservedBy = 'Booked by: ' . $bookedName;
+            }
+        } else if (!empty($row['gf_id'])) {
+            $guestNameParts = [];
+            if (!empty($row['visitor_first_name'])) { $guestNameParts[] = $row['visitor_first_name']; }
+            if (!empty($row['visitor_middle_name'])) { $guestNameParts[] = $row['visitor_middle_name']; }
+            if (!empty($row['visitor_last_name'])) { $guestNameParts[] = $row['visitor_last_name']; }
+            $guestName = trim(implode(' ', $guestNameParts));
+            if ($guestName !== '') {
+                $reservedBy = 'Booked by: ' . $guestName;
+            }
         }
         $activities[] = [
             'type' => 'reservation',
@@ -536,7 +543,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                    </div>
                   <?php if (($act['type'] ?? '') === 'reservation' && !empty($act['reserved_by'])): ?>
                   <div style="font-size:0.8rem; color:#6b7280; margin-left: 48px;" class="item-reserved-by">
-                    Reserved by: <?php echo htmlspecialchars($act['reserved_by']); ?>
+                    <?php echo htmlspecialchars($act['reserved_by']); ?>
                   </div>
                   <?php endif; ?>
                    <div class="item-extra" data-loaded="0"></div>
@@ -584,7 +591,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                    </div>
                   <?php if (($act['type'] ?? '') === 'reservation' && !empty($act['reserved_by'])): ?>
                   <div style="font-size:0.8rem; color:#6b7280; margin-left: 48px;" class="item-reserved-by">
-                    Reserved by: <?php echo htmlspecialchars($act['reserved_by']); ?>
+                    <?php echo htmlspecialchars($act['reserved_by']); ?>
                   </div>
                   <?php endif; ?>
                    <div class="item-extra" data-loaded="0"></div>

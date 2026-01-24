@@ -96,6 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
     $purpose = isset($_POST['purpose']) ? trim($_POST['purpose']) : null;
     $booking_for_post = isset($_POST['booking_for']) ? trim($_POST['booking_for']) : '';
+    $guest_id_post = isset($_POST['guest_id']) ? trim($_POST['guest_id']) : '';
+    $guest_ref_code_post = isset($_POST['guest_ref_code']) ? trim($_POST['guest_ref_code']) : '';
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
       $basePrice = max(1, $hours) * 150;
     } else if ($amenity === 'Clubhouse') {
@@ -321,6 +323,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'user_id' => $user_id,
               'entry_pass_id' => $entry_pass_id,
               'booking_for' => $booking_for,
+              'guest_id' => $guest_id_post,
+              'guest_ref_code' => $guest_ref_code_post,
               'ref_code' => $newRef
             ];
             $generatedCode = $newRef;
@@ -573,7 +577,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <label class="booking-option-card" style="display:flex; align-items:center; padding:16px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:all 0.2s; background:#fff;">
                   <input type="radio" name="initial_booking_for" value="guest" style="margin-right:12px;">
                   <div>
-                      <div style="font-weight:600; color:#111;">Guest / Visitor</div>
+                      <div style="font-weight:600; color:#111;">Guest</div>
                       <div style="font-size:0.9rem; color:#666;">Book for an approved guest</div>
                   </div>
               </label>
@@ -2120,9 +2124,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               refInput.value = selectedRef;
             }
           } else {
-            if (bookingForField) bookingForField.value = 'resident';
-            if (guestIdField) guestIdField.value = '';
-            if (guestRefField) guestRefField.value = '';
+            var currentBF = bookingForField ? bookingForField.value : '';
+            if (currentBF === '' || currentBF === null) {
+              if (bookingForField) bookingForField.value = 'resident';
+              if (guestIdField) guestIdField.value = '';
+              if (guestRefField) guestRefField.value = '';
+            }
           }
           refreshPricingForBookingFor();
         }
@@ -2133,7 +2140,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         // Actually submit the form (bypass modal)
         const f=document.querySelector('form');
         if(f){
-          f.requestSubmit();
+          f.submit();
         }
       });
     }
@@ -2411,6 +2418,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           if(bookingForField) bookingForField.value = 'guest';
           if(guestIdField) guestIdField.value = selected.value;
           if(guestRefField) guestRefField.value = selected.getAttribute('data-ref');
+          const bookingForGuestRadio = document.getElementById('bookingForGuest');
+          if (bookingForGuestRadio) { bookingForGuestRadio.checked = true; }
           refreshPricingForBookingFor();
           
           // Show amenities

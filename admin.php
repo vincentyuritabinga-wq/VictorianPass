@@ -704,6 +704,7 @@ function getResidentOnlyReservations($con) {
               LEFT JOIN users u ON r.user_id = u.id
               LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
+              AND (r.booking_for IS NULL OR r.booking_for = 'resident')
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
               ORDER BY r.created_at DESC";
@@ -816,6 +817,18 @@ function getResidentVisitorRequests($con) {
     return $legacy ?: false;
 }
 
+function getResidentGuestAmenityReservations($con) {
+    $query = "SELECT r.*, u.first_name AS res_first_name, u.last_name AS res_last_name, u.house_number AS res_house_number
+              FROM reservations r
+              LEFT JOIN users u ON r.user_id = u.id
+              WHERE (r.booked_by_role IN ('guest', 'co_owner') OR r.booking_for IN ('guest', 'co_owner'))
+              AND r.amenity IS NOT NULL
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
+              ORDER BY r.created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
 function getVisitorOnlyRequests($con) {
     $legacy = $con->query("SELECT r.*, ep.full_name, ep.middle_name, ep.last_name, ep.sex, ep.birthdate,
                                   ep.contact, ep.email, ep.address, ep.valid_id_path, ep.created_at as entry_created
@@ -842,6 +855,21 @@ function ensureReceiptUploadedAtColumn($con) {
     $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_uploaded_at'");
     if ($check && $check->num_rows === 0) {
         $con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL AFTER receipt_path");
+    }
+}
+function ensureReservationBookerColumns($con){
+    if(!($con instanceof mysqli)) return;
+    $c0 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booking_for'");
+    if(!$c0 || $c0->num_rows===0){
+        @$con->query("ALTER TABLE reservations ADD COLUMN booking_for VARCHAR(50) NULL AFTER user_id");
+    }
+    $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booked_by_role'");
+    if(!$c1 || $c1->num_rows===0){
+        @$con->query("ALTER TABLE reservations ADD COLUMN booked_by_role ENUM('resident','guest','co_owner') NULL AFTER booking_for");
+    }
+    $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booked_by_name'");
+    if(!$c2 || $c2->num_rows===0){
+        @$con->query("ALTER TABLE reservations ADD COLUMN booked_by_name VARCHAR(255) NULL AFTER booked_by_role");
     }
 }
 function autoExpireReservations($con) {
@@ -902,6 +930,7 @@ ensureReservationStatusColumn($con);
 autoExpireReservations($con);
 ensureIncidentTables($con);
 ensureReceiptUploadedAtColumn($con);
+ensureReservationBookerColumns($con);
 // Ensure resident reservations have necessary columns
 function ensureResidentApprovalColumns($con) {
     $check1 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'approved_by'");
@@ -2682,6 +2711,110 @@ tr:hover { background-color: #f8fafc; }
         </tbody>
       </table>
     </div>
+
+    <!-- Resident's Guest Amenity Reservations -->
+    <div class="card-box" style="margin-top: 20px;">
+      <h3>Resident's Guest Amenity Reservation</h3>
+      <table class="table table-reservations">
+        <thead>
+          <tr>
+            <th>Resident</th>
+            <th>Booked By</th>
+            <th>Amenity</th>
+            <th>Dates</th>
+            <th>Request Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+          $guestAmenityRes = getResidentGuestAmenityReservations($con);
+          $hasGAR = false;
+          if ($guestAmenityRes && $guestAmenityRes->num_rows > 0) {
+              while ($gar = $guestAmenityRes->fetch_assoc()) {
+                  $hasGAR = true;
+                  echo "<tr data-ref='" . htmlspecialchars($gar['ref_code'] ?? '') . "' data-id='" . intval($gar['id']) . "' data-source='resident'>";
+                  
+                  // Resident Info
+                  $resName = trim(($gar['res_first_name'] ?? '') . ' ' . ($gar['res_last_name'] ?? ''));
+                  $resHouse = !empty($gar['res_house_number']) ? htmlspecialchars($gar['res_house_number']) : 'N/A';
+                  echo "<td>";
+                  echo "<div style='font-weight:600; color:#333;'>" . htmlspecialchars($resName) . "</div>";
+                  echo "<div style='font-size:0.85rem; color:#666;'>" . $resHouse . "</div>";
+                  echo "</td>";
+
+                  // Booked By
+                  $bookedBy = !empty($gar['booked_by_name']) ? htmlspecialchars($gar['booked_by_name']) : 'Guest';
+                  $roleRaw = $gar['booked_by_role'] ?? '';
+                  $role = !empty($roleRaw) ? ucfirst($roleRaw) : 'Guest';
+                  
+                  // If booked by resident but specifically for a guest
+                  if (($gar['booking_for'] ?? '') === 'guest') {
+                      if ($roleRaw === 'resident') {
+                          $role = 'Resident (for Guest)';
+                      } else if ($roleRaw === 'guest') {
+                          // It is already guest
+                      }
+                  }
+                  
+                  echo "<td>";
+                  echo "<div style='font-weight:600;'>" . $bookedBy . "</div>";
+                  echo "<div style='font-size:0.8rem; color:#666;'>" . $role . "</div>";
+                  echo "</td>";
+
+                  echo "<td>" . htmlspecialchars($gar['amenity'] ?? '-') . "</td>";
+                  
+                  $dateRange = (!empty($gar['start_date']) && !empty($gar['end_date'])) ? (date('M d', strtotime($gar['start_date'])) . ' - ' . date('M d, Y', strtotime($gar['end_date']))) : '<span class=\'muted\'>-</span>';
+                  echo "<td>" . $dateRange . "</td>";
+                  
+                  $approval_status = $gar['approval_status'] ?? 'pending';
+                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
+                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  
+                  echo "<td class='actions'>";
+                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  
+                  if ($approval_status == 'pending') {
+                      $disabled = !isAmenityPaymentVerified($con, $gar['ref_code'] ?? '');
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "</form>";
+
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
+                      echo "</form>";
+                  } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
+                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
+                      echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
+                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "</form>";
+                  } else {
+                      $approvedBy = !empty($gar['approved_by']) ? "by Staff ID " . $gar['approved_by'] : "";
+                      $approvalDate = !empty($gar['approval_date']) ? date('M d, Y', strtotime($gar['approval_date'])) : "";
+                      if ($approval_status === 'approved' && !empty($gar['ref_code'])) {
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                      }
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                  }
+                  echo "</td>";
+                  echo "</tr>";
+              }
+          }
+          if (!$hasGAR) {
+              echo "<tr><td colspan='6' style='text-align:center;'>No resident guest amenity reservations found</td></tr>";
+          }
+          ?>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 <?php endif; ?>
@@ -3726,10 +3859,21 @@ function showResidentReservationDetails(rrId){
       const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
       const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
-      const isResidentGuest = !!d.gf_id;
-      const userType = isResidentGuest ? "Resident's Guest" : ((d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1));
-      const reservedBy = isResidentGuest ? (guestName || "Resident's Guest") : userType;
-      const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
+      
+      const bookedByRole = (d.booked_by_role || '').toLowerCase();
+      const bookedByName = d.booked_by_name || '';
+      const isBookedByGuest = (bookedByRole === 'guest' || bookedByRole === 'co_owner');
+      const isResidentGuest = !!d.gf_id || isBookedByGuest;
+      
+      let userType = ((d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1));
+      if (isResidentGuest) {
+          userType = "Resident's Guest";
+          if (bookedByRole === 'co_owner') userType = "Co-owner";
+      }
+
+      const reservedBy = isBookedByGuest ? (bookedByName || userType) : (isResidentGuest ? (guestName || "Resident's Guest") : userType);
+      const displayName = isBookedByGuest ? (bookedByName || 'Guest') : (isResidentGuest ? (guestName || 'Guest') : residentName);
+      
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
       const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
       

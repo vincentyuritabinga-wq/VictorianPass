@@ -72,17 +72,18 @@ $isResident = false;
 $isVisitor = false;
 
 if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
-  $isLoggedIn = true;
   $uid = (int)$_SESSION['user_id'];
   $userType = $_SESSION['user_type'];
-  
+  $foundUser = false;
   if ($userType === 'resident') {
-    $isResident = true;
     if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
       $stmt->bind_param("i", $uid);
       if ($stmt->execute()) {
         $stmt->bind_result($first, $middle, $last, $house, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
+          $foundUser = true;
+          $isLoggedIn = true;
+          $isResident = true;
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
           $userFirstName = $first;
           $userHouse = $house ?? '';
@@ -96,12 +97,14 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
       $stmt->close();
     }
   } elseif ($userType === 'visitor') {
-    $isVisitor = true;
     if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
       $stmt->bind_param("i", $uid);
       if ($stmt->execute()) {
         $stmt->bind_result($first, $middle, $last, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
+          $foundUser = true;
+          $isLoggedIn = true;
+          $isVisitor = true;
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
           $userFirstName = $first;
           $userHouse = 'Visitor';
@@ -115,17 +118,25 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
       $stmt->close();
     }
   }
-
-  // Profile Picture Logic
-  $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
-  if (file_exists('uploads/profiles/user_' . $uid . '.jpg')) {
-      $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpg';
-  } elseif (file_exists('uploads/profiles/user_' . $uid . '.png')) {
-      $profilePicPath = 'uploads/profiles/user_' . $uid . '.png';
-  } elseif (file_exists('uploads/profiles/user_' . $uid . '.jpeg')) {
-      $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpeg';
+  if ($foundUser) {
+    $profilePicPath = 'images/mainpage/profile\'.jpg';
+    if (file_exists('uploads/profiles/user_' . $uid . '.jpg')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpg';
+    } elseif (file_exists('uploads/profiles/user_' . $uid . '.png')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.png';
+    } elseif (file_exists('uploads/profiles/user_' . $uid . '.jpeg')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpeg';
+    }
+    $profilePicUrl = $profilePicPath . '?t=' . time();
+  } else {
+    unset($_SESSION['user_id']);
+    unset($_SESSION['user_type']);
+    unset($_SESSION['role']);
+    $isLoggedIn = false;
+    $isResident = false;
+    $isVisitor = false;
+    $userType = '';
   }
-  $profilePicUrl = $profilePicPath . '?t=' . time();
 }
 
 // No longer storing downpayment on entry_passes; we link it to reservations via ref_code

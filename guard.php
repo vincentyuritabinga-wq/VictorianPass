@@ -180,50 +180,354 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
 <link rel="icon" type="image/png" href="images/logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <style>
-*{font-family:'Poppins',sans-serif;box-sizing:border-box;}
-:root{--bg-dark:#2b2623;--nav-cream:#f4efe6;--nav-cream-active:#e8dfca;--accent:#23412e;--header-beige:#f7efe3;--card:#ffffff;--muted:#8b918d;--status-rejected:#e74c3c;--status-approved:#27ae60;--shadow:0 8px 18px rgba(0,0,0,0.08)}
-body{margin:0;background:#f3efe9;color:#222;display:flex;min-height:100vh}
-.sidebar{width:280px;background:var(--bg-dark);color:#fff;display:flex;flex-direction:column}
-.sidebar .brand{padding:20px;border-bottom:3px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:12px}
-.sidebar .brand img{height:52px}
-.sidebar .brand .title{display:flex;flex-direction:column}
-.sidebar .brand .title h1{margin:0;font-size:1.05rem;font-weight:700;color:#f4f4f4}
-.sidebar .brand .title p{margin:0;font-size:0.78rem;color:#d6cfc2}
-.nav-list{margin:20px 12px;display:flex;flex-direction:column;gap:12px}
-.nav-item{background:var(--nav-cream);color:var(--accent);padding:14px 18px;border-radius:0 20px 20px 0;font-weight:600;font-size:0.96rem;display:flex;align-items:center;gap:12px;cursor:pointer;transition:transform .12s ease,background-color .12s ease}
-.nav-item img{width:20px;height:20px}
-.nav-item:hover{transform:translateX(4px);background:#efe7d6}
-.nav-item.active{background:var(--nav-cream-active);box-shadow:0 6px 14px rgba(0,0,0,0.06)}
-.sidebar-footer{margin-top:auto;padding:18px;color:#bfb7aa;font-size:0.84rem}
-.sidebar-footer a{color:#bfb7aa;text-decoration:none}
-.main-content{flex:1;padding:20px;display:flex;flex-direction:column;gap:20px;background:linear-gradient(180deg,#f7f3ec 0%,#f3efe9 100%)}
-.header{display:flex;justify-content:space-between;align-items:center;background:var(--header-beige);padding:12px 20px;border-radius:8px;box-shadow:var(--shadow)}
-.header h1{font-size:1.3rem;margin:0;font-weight:700}
-.profile-mini{display:flex;align-items:center;gap:10px}
-.profile-mini img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #fff}
-.dashboard{display:grid;grid-template-columns:2fr 1fr;gap:20px;flex:1}
-.card{background:var(--card);color:#222;border-radius:12px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
-.card-header{background:var(--accent);color:#fff;padding:12px 16px;font-weight:600;font-size:1rem}
-.card-body{padding:12px;flex:1;overflow-y:auto}
-table{width:100%;border-collapse:collapse;font-size:0.85rem}
-th,td{padding:8px 10px;border-bottom:1px solid #f0f0f0;text-align:left}
-th{background:#fbfbfb;color:#6b6b6b;font-weight:600}
-td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
-.action-btn{padding:4px 10px;border:none;border-radius:6px;color:#fff;font-size:0.78rem;cursor:pointer;transition:background .15s ease}
-.action-btn.approve{background:var(--status-approved)}
-.action-btn.approve:hover{background:#219150}
-.action-btn.deny{background:var(--status-rejected)}
-.action-btn.deny:hover{background:#c0392b}
-.section.hidden{display:none}
-.toast{position:fixed;bottom:20px;right:20px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;transition:opacity .3s ease, transform .3s ease}
-.toast.show{opacity:1;transform:translateY(-10px)}
-@media(max-width:900px){body{flex-direction:column}.sidebar{flex-direction:row;width:100%;height:auto;overflow-x:auto}.dashboard{grid-template-columns:1fr}}
-.history-table th:nth-child(1),.history-table td:nth-child(1){width:40%}
-.history-table th:nth-child(2),.history-table td:nth-child(2){width:40%}
-.history-table th:nth-child(3),.history-table td:nth-child(3){width:20%}
+/* Modern Admin Dashboard CSS (Imported from admin.php) */
+:root {
+    /* Color Palette */
+    --primary: #23412e;
+    --primary-dark: #1a3022;
+    --primary-light: #e8f5e9;
+    --accent: #d4af37;
+    
+    --bg-body: #f4f6f8;
+    --bg-surface: #ffffff;
+    --bg-sidebar: #ffffff;
+    
+    --text-main: #2c3e50;
+    --text-secondary: #5a6b7c;
+    --text-muted: #95a5a6;
+    
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+    
+    /* Status Colors */
+    --success: #27ae60;
+    --success-bg: #e8f8f5;
+    --warning: #f39c12;
+    --warning-bg: #fef9e7;
+    --danger: #c0392b;
+    --danger-bg: #fdedec;
+    --info: #2980b9;
+    --info-bg: #ebf5fb;
+    
+    /* Shadows & Transitions */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --transition: all 0.2s ease-in-out;
+    
+    --radius: 8px;
+    --sidebar-width: 260px;
+    --header-height: 60px;
+}
+
+/* Reset & Base */
+* { box-sizing: border-box; }
+body, button, input, select, textarea { font-family: 'Poppins', sans-serif; }
+*:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    overflow-x: hidden;
+    line-height: 1.5;
+}
+
+a { text-decoration: none; color: inherit; transition: var(--transition); }
+ul { list-style: none; padding: 0; margin: 0; }
+h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
+
+/* Layout Structure */
+.app {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 100;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.brand {
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.brand img { width: 32px; height: 32px; }
+.brand .title { display: flex; flex-direction: column; }
+.brand h1 { font-size: 1rem; color: var(--primary); line-height: 1.2; }
+.brand p { font-size: 0.75rem; color: var(--text-secondary); margin: 0; }
+
+.nav-list {
+    padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.nav-item {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.nav-item:hover, .nav-item.active {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.nav-item.active {
+    border-left: 4px solid var(--primary);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding-left: 12px;
+}
+
+.nav-item img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    filter: grayscale(100%) opacity(0.7);
+    transition: var(--transition);
+}
+
+.nav-item:hover img, .nav-item.active img {
+    filter: none;
+    opacity: 1;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding: 20px;
+    border-top: 1px solid var(--border-light);
+}
+
+.sidebar-footer a {
+    color: var(--danger);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+.sidebar-footer a:hover { opacity: 0.8; }
+
+/* Main Content Area */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--bg-body);
+}
+
+/* Top Header */
+.top-header {
+    height: auto;
+    min-height: var(--header-height);
+    padding: 10px 30px;
+    background: radial-gradient(circle at top left, #3a332f 0%, #2b2623 55%, #211b18 100%);
+    border-bottom: 1px solid #1a1512;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    color: #fff;
+    box-shadow: var(--shadow-md);
+}
+
+.header-brand, .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.avatar:hover { border-color: var(--accent); }
+
+/* Page Header */
+.page-header {
+    padding: 20px 30px 10px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.page-header h2 { font-size: 1.5rem; color: var(--text-main); }
+
+/* Dashboard Widgets & Panels */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    padding: 0 30px;
+    margin-bottom: 30px;
+}
+
+.panel, .card, .card-box {
+    background: var(--bg-surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    margin: 0 30px 30px 30px;
+    overflow-x: auto;
+}
+
+.panel h3, .card-header, .card-box h3 {
+    margin: 0 0 20px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 15px;
+    background: transparent;
+}
+
+.panel .card-box {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+}
+
+/* Tables */
+table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 800px; }
+th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; vertical-align: middle; }
+th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: #f8fafc;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.6px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover { background-color: #f8fafc; }
+
+/* Buttons */
+.action-btn, .btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    line-height: 1;
+    color: #fff;
+}
+.action-btn.approve, .btn-approve { background: var(--success); }
+.action-btn.deny, .btn-reject { background: var(--danger); }
+.action-btn:hover { filter: brightness(92%); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+/* Guard Specific Adapters */
+.section.hidden { display: none; }
+.dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; padding: 0 30px; margin-bottom: 30px; }
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg-surface);
+    border-left: 5px solid var(--primary);
+    box-shadow: var(--shadow-lg);
+    border-radius: 8px;
+    padding: 16px;
+    width: min(96vw, 380px);
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(20px);
+    color: var(--text-main);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* Responsive */
+@media(max-width:900px){
+    .app { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; overflow-x: auto; flex-direction: row; }
+    .dashboard { grid-template-columns: 1fr; }
+    .nav-list { flex-direction: row; }
+}
+.dashboard .panel { margin: 0; }
+
+.scan-search {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 8px 15px;
+    width: 100%;
+    outline: none;
+    transition: var(--transition);
+    color: var(--text-main);
+}
+.scan-search:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
+}
+.profile-mini {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 100%;
+}
+.profile-mini img {
+    margin: 0;
+    display: block;
+}
+.profile-mini span {
+    font-weight: 500;
+    line-height: 1;
+    display: block;
+}
 </style>
 </head>
 <body>
+<div class="app">
 <aside class="sidebar">
   <div class="brand">
     <img src="images/logo.svg" alt="VictorianPass logo">
@@ -242,102 +546,106 @@ td img.proof-thumb{width:60px;height:40px;object-fit:cover;border-radius:6px;bor
     <a href="logout.php">Log Out</a>
   </div>
 </aside>
-<div class="main-content">
-  <div class="header">
-    <h1 id="page-title">Welcome, <?php echo htmlspecialchars($surname); ?></h1>
-    <div class="profile-mini">
-      <img src="images/logo.svg" alt="Guard">
-      <span><?php echo htmlspecialchars($surname); ?></span>
+<main class="main">
+  <header class="top-header">
+    <div class="header-brand">
+       <!-- Placeholder for future header items -->
     </div>
+    <div class="header-actions">
+      <div class="profile-mini">
+        <img src="images/logo.svg" alt="Guard" class="avatar">
+        <span style="color:white; margin-top: 2px;"><?php echo htmlspecialchars($surname); ?></span>
+      </div>
+    </div>
+  </header>
+  <div class="page-header">
+    <h2 id="page-title">Welcome, <?php echo htmlspecialchars($surname); ?></h2>
   </div>
   <div id="dashboardSection" class="dashboard section">
-    <div class="card">
-      <div class="card-header">Today's Entry</div>
-      <div class="card-body">
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-          <input id="scanCode" type="text" placeholder="Scan or enter code" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px">
-          <button class="action-btn approve" onclick="scanCode()">Scan</button>
-          <button class="action-btn" onclick="openStatusCard()" style="background:#23412e">Open QR Card</button>
+    <div class="panel">
+      <h3>Today's Entry</h3>
+      <div style="display:flex; gap:15px; align-items:center; margin-bottom:25px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:250px;">
+             <input id="scanCode" type="text" class="scan-search" placeholder="Scan or enter code...">
         </div>
-        <table id="entryTable">
-          <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th></tr>
-          <tr id="emptyRow"><td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
-        </table>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-approve" onclick="scanCode()">Scan</button>
+            <button class="btn" onclick="openStatusCard()" style="background:#23412e;color:#fff">Open QR Card</button>
+        </div>
       </div>
+      <div class="content-row">
+      <table id="entryTable">
+        <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th></tr>
+        <tr id="emptyRow"><td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
+      </table>
     </div>
-    <div class="card">
-      <div class="card-header">Restricted</div>
-      <div class="card-body">
-        <table>
-          <tr><th>IP</th><th>Image</th><th>Name</th><th>Status</th></tr>
-          <tr id="restrictedEmpty"><td colspan="4" style="text-align:center;color:#6b6b6b">No restricted entries</td></tr>
-        </table>
-      </div>
+    </div>
+    <div class="panel">
+      <h3>Restricted</h3>
+      <table>
+        <tr><th>IP</th><th>Image</th><th>Name</th><th>Status</th></tr>
+        <tr id="restrictedEmpty"><td colspan="4" style="text-align:center;color:#6b6b6b">No restricted entries</td></tr>
+      </table>
     </div>
   </div>
   <div id="entriesSection" class="section hidden">
-    <div class="card">
-      <div class="card-header">Today's Entry (Detailed)</div>
-      <div class="card-body">
-        <table id="todayEntries" class="history-table">
-          <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th><th>Scanned At</th></tr>
-          <tbody id="todayEntriesBody">
-            <tr id="todayEmpty"><td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="panel">
+      <h3>Today's Entry (Detailed)</h3>
+      <table id="todayEntries" class="history-table">
+        <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th><th>Scanned At</th></tr>
+        <tbody id="todayEntriesBody">
+          <tr id="todayEmpty"><td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
   <div id="restrictedSection" class="section hidden">
-    <div class="card">
-      <div class="card-header">Manage Reported Incidents</div>
-      <div class="card-body">
-        <table id="incidentTable">
-          <thead>
-            <tr><th>Report ID</th><th>Resident Name</th><th>Description</th><th>Report Date</th><th>Action</th></tr>
-          </thead>
-          <tbody id="incidentTableBody">
-            <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="panel">
+      <h3>Manage Reported Incidents</h3>
+      <table id="incidentTable">
+        <thead>
+          <tr><th>Report ID</th><th>Resident Name</th><th>Description</th><th>Report Date</th><th>Action</th></tr>
+        </thead>
+        <tbody id="incidentTableBody">
+          <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
   <div id="notificationsSection" class="section hidden">
-    <div class="card">
-      <div class="card-header">Notifications</div>
-      <div class="card-body">All notifications will appear here.</div>
+    <div class="panel">
+      <h3>Notifications</h3>
+      <div>All notifications will appear here.</div>
     </div>
   </div>
   <div class="section" id="historySection">
-    <div class="card">
-      <div class="card-header">Your Login History</div>
-      <div class="card-body">
-        <div style="margin-bottom:10px">
-          <strong>Current Login:</strong>
-          <span>
-            <?php echo $currentLogin ? htmlspecialchars($currentLogin['login_time']) : '—'; ?>
-          </span>
-          <strong style="margin-left:16px">Current Logout:</strong>
-          <span>
-            <?php echo ($currentLogin && $currentLogin['logout_time']) ? htmlspecialchars($currentLogin['logout_time']) : 'Pending'; ?>
-          </span>
-        </div>
-        <table class="history-table">
-          <tr><th>Login Time</th><th>Logout Time</th><th>Status</th></tr>
-          <?php if (count($history) === 0) { ?>
-            <tr><td colspan="3" style="text-align:center;color:#6b6b6b">No records</td></tr>
-          <?php } else { foreach ($history as $h) { $st = ($h['logout_time'] ? 'Completed' : 'Pending'); ?>
-            <tr>
-              <td><?php echo htmlspecialchars($h['login_time']); ?></td>
-              <td><?php echo htmlspecialchars($h['logout_time'] ?? ''); ?></td>
-              <td><?php echo htmlspecialchars($st); ?></td>
-            </tr>
-          <?php } } ?>
-        </table>
+    <div class="panel">
+      <h3>Your Login History</h3>
+      <div style="margin-bottom:10px">
+        <strong>Current Login:</strong>
+        <span>
+          <?php echo $currentLogin ? htmlspecialchars($currentLogin['login_time']) : '—'; ?>
+        </span>
+        <strong style="margin-left:16px">Current Logout:</strong>
+        <span>
+          <?php echo ($currentLogin && $currentLogin['logout_time']) ? htmlspecialchars($currentLogin['logout_time']) : 'Pending'; ?>
+        </span>
       </div>
+      <table class="history-table">
+        <tr><th>Login Time</th><th>Logout Time</th><th>Status</th></tr>
+        <?php if (count($history) === 0) { ?>
+          <tr><td colspan="3" style="text-align:center;color:#6b6b6b">No records</td></tr>
+        <?php } else { foreach ($history as $h) { $st = ($h['logout_time'] ? 'Completed' : 'Pending'); ?>
+          <tr>
+            <td><?php echo htmlspecialchars($h['login_time']); ?></td>
+            <td><?php echo htmlspecialchars($h['logout_time'] ?? ''); ?></td>
+            <td><?php echo htmlspecialchars($st); ?></td>
+          </tr>
+        <?php } } ?>
+      </table>
     </div>
   </div>
+</main>
 </div>
 <div id="toast" class="toast"></div>
 <script>
@@ -370,8 +678,8 @@ function renderIncidents(rows){
     const dstr = dt ? dt.toLocaleDateString() : '';
     tr.innerHTML = `<td>${r.id}</td><td>${(r.resident_name||'-')}</td><td>${desc||'-'}</td><td>${dstr}</td>
       <td>
-        <button class="action-btn handle-btn" data-id="${r.id}" style="background:#23412e">Handle Locally</button>
-        <button class="action-btn approve escalate-btn" data-id="${r.id}">Escalate to Admin</button>
+        <button class="btn handle-btn" data-id="${r.id}" style="background:#23412e;color:#fff">Handle Locally</button>
+        <button class="btn btn-approve escalate-btn" data-id="${r.id}">Escalate to Admin</button>
       </td>`;
     tbody.appendChild(tr);
     if(isNew){ showToast('New resident incident reported'); }

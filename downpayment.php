@@ -36,6 +36,18 @@ function vp_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTT
 function ensureReservationsCommonColumns($con){ if(!($con instanceof mysqli)) return; $cols=['downpayment','receipt_path','payment_status','account_type','booking_for','receipt_uploaded_at']; foreach($cols as $col){ $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'"); if(!$c || $c->num_rows===0){ if($col==='downpayment'){ @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL"); } else if($col==='receipt_path'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL"); } else if($col==='payment_status'){ @$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL"); } else if($col==='account_type'){ @$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL"); } else if($col==='booking_for'){ @$con->query("ALTER TABLE reservations ADD COLUMN booking_for ENUM('resident','guest') NULL"); } else if($col==='receipt_uploaded_at'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL"); } } } }
 ensureReservationsCommonColumns($con);
 
+function ensureReservationBookerColumns($con){
+    if(!($con instanceof mysqli)) return;
+    $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booked_by_role'");
+    if(!$c1 || $c1->num_rows===0){
+        @$con->query("ALTER TABLE reservations ADD COLUMN booked_by_role ENUM('resident','guest','co_owner') NULL AFTER booking_for");
+    }
+    $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booked_by_name'");
+    if(!$c2 || $c2->num_rows===0){
+        @$con->query("ALTER TABLE reservations ADD COLUMN booked_by_name VARCHAR(255) NULL AFTER booked_by_role");
+    }
+}
+ensureReservationBookerColumns($con);
 // Pull pending reservation context
 $continue = isset($_GET['continue']) ? $_GET['continue'] : 'reserve';
 // capture ref_code from URL once, then remove from address bar
@@ -118,19 +130,73 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       $entry_pass_id_post = isset($pending['entry_pass_id']) ? intval($pending['entry_pass_id']) : ($entry_pass_id_post_form ?: null);
       $booking_for = isset($pending['booking_for']) ? trim($pending['booking_for']) : '';
       if ($booking_for === '') { $booking_for = null; }
+      $guest_id = isset($pending['guest_id']) ? trim($pending['guest_id']) : '';
+      $guest_ref_code = isset($pending['guest_ref_code']) ? trim($pending['guest_ref_code']) : '';
+      $booked_by_role = null;
+      $booked_by_name = null;
+      if ($booking_for === 'guest') {
+        $booked_by_role = 'guest';
+        try {
+          if ($con instanceof mysqli) {
+            if ($guest_id !== '') {
+              $stmtG = $con->prepare("SELECT visitor_first_name, visitor_middle_name, visitor_last_name FROM guest_forms WHERE id = ? LIMIT 1");
+              $gid = intval($guest_id);
+              $stmtG->bind_param('i', $gid);
+              $stmtG->execute();
+              $resG = $stmtG->get_result();
+              if ($resG && ($rwG = $resG->fetch_assoc())) {
+                $parts = [];
+                if (!empty($rwG['visitor_first_name'])) $parts[] = $rwG['visitor_first_name'];
+                if (!empty($rwG['visitor_middle_name'])) $parts[] = $rwG['visitor_middle_name'];
+                if (!empty($rwG['visitor_last_name'])) $parts[] = $rwG['visitor_last_name'];
+                $booked_by_name = trim(implode(' ', $parts));
+              }
+              $stmtG->close();
+            } else if ($guest_ref_code !== '') {
+              $stmtG = $con->prepare("SELECT visitor_first_name, visitor_middle_name, visitor_last_name FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtG->bind_param('s', $guest_ref_code);
+              $stmtG->execute();
+              $resG = $stmtG->get_result();
+              if ($resG && ($rwG = $resG->fetch_assoc())) {
+                $parts = [];
+                if (!empty($rwG['visitor_first_name'])) $parts[] = $rwG['visitor_first_name'];
+                if (!empty($rwG['visitor_middle_name'])) $parts[] = $rwG['visitor_middle_name'];
+                if (!empty($rwG['visitor_last_name'])) $parts[] = $rwG['visitor_last_name'];
+                $booked_by_name = trim(implode(' ', $parts));
+              }
+              $stmtG->close();
+            } else if (!empty($ref_code)) {
+              $stmtG = $con->prepare("SELECT visitor_first_name, visitor_middle_name, visitor_last_name FROM guest_forms WHERE ref_code = ? LIMIT 1");
+              $stmtG->bind_param('s', $ref_code);
+              $stmtG->execute();
+              $resG = $stmtG->get_result();
+              if ($resG && ($rwG = $resG->fetch_assoc())) {
+                $parts = [];
+                if (!empty($rwG['visitor_first_name'])) $parts[] = $rwG['visitor_first_name'];
+                if (!empty($rwG['visitor_middle_name'])) $parts[] = $rwG['visitor_middle_name'];
+                if (!empty($rwG['visitor_last_name'])) $parts[] = $rwG['visitor_last_name'];
+                $booked_by_name = trim(implode(' ', $parts));
+              }
+              $stmtG->close();
+            }
+          }
+        } catch (Throwable $_) { /* ignore */ }
+      } else if ($booking_for === 'co_owner') {
+        $booked_by_role = 'co_owner';
+      }
       $uid = ($user_id && $user_id>0) ? $user_id : null;
       if(empty($msg)){
         $acct = ($continue_post === 'reserve_resident') ? 'resident' : 'visitor';
         $hadLegacy = false;
         if($con instanceof mysqli){ $chk=$con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1"); $chk->bind_param('s',$ref_code); $chk->execute(); $cr=$chk->get_result(); $hadLegacy = ($cr && $cr->num_rows>0); $chk->close(); }
-        $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), booking_for = COALESCE(?, booking_for), account_type = COALESCE(account_type, ?), payment_status='submitted', approval_status='pending', receipt_uploaded_at = COALESCE(receipt_uploaded_at, NOW()) WHERE ref_code = ?");
-        $stmt->bind_param('sssssiddsiisss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $acct, $ref_code);
+        $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), booking_for = COALESCE(?, booking_for), booked_by_role = COALESCE(?, booked_by_role), booked_by_name = COALESCE(?, booked_by_name), account_type = COALESCE(account_type, ?), payment_status='submitted', approval_status='pending', receipt_uploaded_at = COALESCE(receipt_uploaded_at, NOW()) WHERE ref_code = ?");
+        $stmt->bind_param('sssssiddsiisssss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct, $ref_code);
         $stmt->execute();
         $affected = $stmt->affected_rows;
         $stmt->close();
         if ($affected === 0) {
-          $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, user_id, entry_pass_id, booking_for, account_type, payment_status, approval_status, receipt_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending', NOW())");
-          $ins->bind_param('ssssssiddsiiss', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $acct);
+          $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, user_id, entry_pass_id, booking_for, booked_by_role, booked_by_name, account_type, payment_status, approval_status, receipt_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending', NOW())");
+          $ins->bind_param('ssssssiddsiissss', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct);
           $ins->execute();
           $ins->close();
         }
