@@ -96,7 +96,7 @@ $activities = [];
 
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, start_time, end_time, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.created_at, r.ref_code, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -114,6 +114,16 @@ if ($stmt) {
         if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
         }
+        $guestNameParts = [];
+        if (!empty($row['visitor_first_name'])) { $guestNameParts[] = $row['visitor_first_name']; }
+        if (!empty($row['visitor_middle_name'])) { $guestNameParts[] = $row['visitor_middle_name']; }
+        if (!empty($row['visitor_last_name'])) { $guestNameParts[] = $row['visitor_last_name']; }
+        $guestName = trim(implode(' ', $guestNameParts));
+        if (!empty($row['gf_id'])) {
+            $reservedBy = $guestName !== '' ? ("Resident's Guest - " . $guestName) : "Resident's Guest";
+        } else {
+            $reservedBy = 'Resident';
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
@@ -121,7 +131,8 @@ if ($stmt) {
             'status' => $statusVal ?? 'pending',
             'date' => $row['created_at'],
             'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
-            'ref_code' => $row['ref_code'] ?? 'RES'
+            'ref_code' => $row['ref_code'] ?? 'RES',
+            'reserved_by' => $reservedBy
         ];
     }
     $stmt->close();
@@ -505,7 +516,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucfirst($act['status']);
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -523,6 +534,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
                    </div>
+                  <?php if (($act['type'] ?? '') === 'reservation' && !empty($act['reserved_by'])): ?>
+                  <div style="font-size:0.8rem; color:#6b7280; margin-left: 48px;" class="item-reserved-by">
+                    Reserved by: <?php echo htmlspecialchars($act['reserved_by']); ?>
+                  </div>
+                  <?php endif; ?>
                    <div class="item-extra" data-loaded="0"></div>
                  </div>
               </div>
@@ -548,7 +564,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucfirst($act['status']);
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -566,6 +582,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
                    </div>
+                  <?php if (($act['type'] ?? '') === 'reservation' && !empty($act['reserved_by'])): ?>
+                  <div style="font-size:0.8rem; color:#6b7280; margin-left: 48px;" class="item-reserved-by">
+                    Reserved by: <?php echo htmlspecialchars($act['reserved_by']); ?>
+                  </div>
+                  <?php endif; ?>
                    <div class="item-extra" data-loaded="0"></div>
                  </div>
               </div>
@@ -1063,6 +1084,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var status=li.getAttribute('data-status')||'';
     var ref=li.getAttribute('data-ref-code')||'';
     var label=fmtLabel(status);
+    var reservedBy=li.getAttribute('data-reserved-by')||'';
     var statusNote='';
     var s=status.toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
@@ -1089,16 +1111,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(titleEl){ summaryParts.push(titleEl.textContent.trim()); }
     if(detailsEl){ summaryParts.push(detailsEl.textContent.replace(/^\s*-\s*/,'').trim()); }
     if(refSpan){ summaryParts.push('Code: '+refSpan.textContent.trim()); }
+    if(reservedBy && type==='reservation'){ summaryParts.push('Reserved by: '+reservedBy); }
     var summaryText=summaryParts.join(' • ');
     var canCancel=(type==='reservation'||type==='guest_form')&&(s.indexOf('pending')!==-1||s===''||s==='new');
     var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
     var html='';
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
+      var qrSrcForDownload = '';
       if(type!=='guest_form' && isApproved && ref){
         var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
         var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
+        qrSrcForDownload = qrSrc;
         html+='<div class="item-extra-title">Entry QR Pass</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
@@ -1114,7 +1139,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       
       html+='<div class="item-actions">';
       if(type==='guest_form' && isApproved){
-         html+='<button type="button" class="item-extra-link" onclick="document.querySelector(\'[data-section=panel-my-guests]\').click()">Go to My Guests</button>';
+         html+='<button type="button" class="item-extra-link view-details-btn" onclick="document.querySelector(\'[data-section=panel-my-guests]\').click()">Go to My Guests</button>';
       }
       if(canCancel && ref){
         var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
@@ -1124,10 +1149,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
          html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
       }
       if(type!=='guest_form' && isApproved && ref){
-        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
-        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
-      }
-      if(!(type!=='guest_form' && isApproved && ref)){
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+      } else {
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
       }
       html+='</div>';
@@ -1171,6 +1195,31 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       viewBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openActivityModal(ref);
+      });
+    }
+    var downloadBtn=extra.querySelector('.download-qr-btn');
+    if(downloadBtn){
+      downloadBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        var url = downloadBtn.getAttribute('data-qr') || '';
+        if(!url){
+          var img = extra.querySelector('.item-extra-qr');
+          if(img) url = img.src || '';
+        }
+        if(!url) return;
+        fetch(url)
+          .then(function(resp){ return resp.blob(); })
+          .then(function(blob){
+            var objectUrl = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = 'QR_' + (ref || 'pass') + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(objectUrl);
+          })
+          .catch(function(){});
       });
     }
   }
@@ -1714,6 +1763,23 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 var code = item.ref_code;
                 var li = container.querySelector('.list-item[data-ref-code="'+code+'"]');
                 if(li){
+                    var reservedBy = item.reserved_by || '';
+                    li.setAttribute('data-reserved-by', reservedBy);
+                    var reservedEl = li.querySelector('.item-reserved-by');
+                    if(item.type === 'reservation' && reservedBy){
+                      if(!reservedEl){
+                        reservedEl = document.createElement('div');
+                        reservedEl.className = 'item-reserved-by';
+                        reservedEl.style.cssText = 'font-size:0.8rem; color:#6b7280; margin-left: 48px;';
+                        var refWrap = li.querySelector('.item-ref');
+                        if(refWrap && refWrap.parentNode) refWrap.parentNode.insertBefore(reservedEl, refWrap.nextSibling);
+                      }
+                      reservedEl.textContent = 'Reserved by: ' + reservedBy;
+                      reservedEl.style.display = '';
+                    } else if(reservedEl) {
+                      reservedEl.style.display = 'none';
+                    }
+
                     // Update Data
                     var oldStatus = prevStatuses[code];
                     var newStatus = item.status;
@@ -1826,6 +1892,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
             if(!li) return;
             li.setAttribute('data-status', item.status || 'cancelled');
+            var reservedBy = item.reserved_by || '';
+            li.setAttribute('data-reserved-by', reservedBy);
+            var reservedEl = li.querySelector('.item-reserved-by');
+            if(item.type === 'reservation' && reservedBy){
+              if(!reservedEl){
+                reservedEl = document.createElement('div');
+                reservedEl.className = 'item-reserved-by';
+                reservedEl.style.cssText = 'font-size:0.8rem; color:#6b7280; margin-left: 48px;';
+                var refWrap = li.querySelector('.item-ref');
+                if(refWrap && refWrap.parentNode) refWrap.parentNode.insertBefore(reservedEl, refWrap.nextSibling);
+              }
+              reservedEl.textContent = 'Reserved by: ' + reservedBy;
+              reservedEl.style.display = '';
+            } else if(reservedEl) {
+              reservedEl.style.display = 'none';
+            }
             var titleEl = li.querySelector('.item-title');
             if(titleEl && item.title) titleEl.textContent = item.title;
             var badge = li.querySelector('.status-badge');

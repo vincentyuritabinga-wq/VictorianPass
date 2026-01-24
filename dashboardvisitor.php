@@ -24,6 +24,8 @@ if ($con) {
 }
 $firstName = $user_data['first_name'] ?? 'Visitor';
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
+$birthdate = $user_data['birthdate'] ?? '';
+$birthdateDisplay = $birthdate ? date('M d, Y', strtotime($birthdate)) : '';
 
 // Profile Picture Logic
 $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
@@ -364,6 +366,50 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button type="button" class="cancel-modal-keep">Keep Reservation</button>
         <button type="button" class="cancel-modal-confirm">Confirm Cancel</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="profileModal" class="profile-modal">
+  <div class="profile-modal-content">
+    <button class="close-profile-modal">&times;</button>
+    <div class="profile-header">
+      <div class="profile-icon-large">
+        <img src="<?php echo $profilePicUrl; ?>" alt="Profile" id="profileModalImg">
+        <label for="profileUpload" class="profile-edit-overlay" title="Change Profile Picture">
+           <i class="fa-solid fa-camera"></i>
+        </label>
+        <input type="file" id="profileUpload" accept="image/*" style="display:none">
+      </div>
+      <div class="profile-title">
+        <h3><?php echo htmlspecialchars($fullName); ?></h3>
+        <span class="profile-role">Visitor</span>
+      </div>
+    </div>
+    <div class="profile-details">
+      <div class="detail-row">
+        <div class="detail-label">Name</div>
+        <div class="detail-value"><?php echo htmlspecialchars($fullName); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Email</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['email'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Contact Number</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['phone'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Sex</div>
+        <div class="detail-value"><?php echo htmlspecialchars($user_data['sex'] ?? ''); ?></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Birthdate</div>
+        <div class="detail-value"><?php echo htmlspecialchars($birthdateDisplay); ?></div>
+      </div>
+    </div>
+    <div class="profile-actions">
+       <a href="logout.php" class="btn-logout-modal">Log Out</a>
     </div>
   </div>
 </div>
@@ -1035,9 +1081,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     
     var html='';
     html+='<div class="item-extra-section">';
+    var qrSrcForDownload = '';
     if(isApproved && ref){
         var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
+        qrSrcForDownload = qrSrc;
         html+='<div class="item-extra-title">Entry QR Pass</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
@@ -1061,12 +1109,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     
     if(isApproved && ref){
-        var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
-        html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+    } else {
+        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
     }
-    
-    // Always show View Details
-    html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
     html+='</div>';
     html+='</div></div></div>';
     
@@ -1081,9 +1128,93 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     
     var viewBtn = extra.querySelector('.view-details-btn');
     if(viewBtn) viewBtn.addEventListener('click', function(){ window.openActivityModal(ref); });
+
+    var downloadBtn = extra.querySelector('.download-qr-btn');
+    if(downloadBtn) downloadBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var url = downloadBtn.getAttribute('data-qr') || '';
+        if(!url){
+          var img = extra.querySelector('.item-extra-qr');
+          if(img) url = img.src || '';
+        }
+        if(!url) return;
+        fetch(url)
+          .then(function(resp){ return resp.blob(); })
+          .then(function(blob){
+            var objectUrl = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = 'QR_' + (ref || 'pass') + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(objectUrl);
+          })
+          .catch(function(){});
+    });
   }
 
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var profileModal = document.getElementById("profileModal");
+    var profileTrigger = document.getElementById("profileTrigger");
+    var profileClose = document.getElementsByClassName("close-profile-modal")[0];
+
+    if(profileTrigger && profileModal) {
+        profileTrigger.onclick = function(e) {
+            e.preventDefault();
+            profileModal.style.display = "block";
+        };
+    }
+
+    if(profileClose && profileModal) {
+        profileClose.onclick = function() {
+            profileModal.style.display = "none";
+        };
+    }
+
+    window.addEventListener('click', function(event) {
+        if (event.target == profileModal) {
+            profileModal.style.display = "none";
+        }
+    });
+
+    var profileUpload = document.getElementById('profileUpload');
+    if(profileUpload) {
+        profileUpload.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                var formData = new FormData();
+                formData.append('profile_pic', this.files[0]);
+
+                var img = document.getElementById('profileModalImg');
+                img.style.opacity = '0.5';
+
+                fetch('upload_profile_pic.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    img.style.opacity = '1';
+                    if (data.success) {
+                        if(img) img.src = data.new_url;
+                        var headerImg = document.getElementById('headerProfileImg');
+                        if(headerImg) headerImg.src = data.new_url;
+                    } else {
+                        alert(data.message || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    img.style.opacity = '1';
+                    console.error('Error:', error);
+                    alert('An error occurred during upload.');
+                });
+            }
+        });
+    }
+});
 </script>
 </body>
 </html>

@@ -113,6 +113,7 @@ if ($resGF && $resGF->num_rows > 0) {
         'is_visitor' => true,
         'is_resident' => false,
         'is_guest' => true,
+        'reserved_by' => "Resident's Guest",
         'resident_name' => trim(((string)($row['res_first_name'] ?? '')) . ' ' . ((string)($row['res_last_name'] ?? ''))),
         'verification' => $verificationLink
     ];
@@ -120,7 +121,7 @@ if ($resGF && $resGF->num_rows > 0) {
 
 // 2. Try Reservations (with Entry Pass or User)
 if (!$data) {
-    $stmt = $con->prepare("SELECT r.*, e.full_name AS ep_full_name, e.middle_name AS ep_middle_name, e.last_name AS ep_last_name, e.sex AS ep_sex, e.birthdate AS ep_birthdate, e.contact AS ep_contact, e.email AS ep_email, e.address AS ep_address, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.address AS user_address, u.sex AS user_sex, u.birthdate AS user_birthdate FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
+    $stmt = $con->prepare("SELECT r.*, e.full_name AS ep_full_name, e.middle_name AS ep_middle_name, e.last_name AS ep_last_name, e.sex AS ep_sex, e.birthdate AS ep_birthdate, e.contact AS ep_contact, e.email AS ep_email, e.address AS ep_address, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.address AS user_address, u.sex AS user_sex, u.birthdate AS user_birthdate, gf.id AS gf_id FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.ref_code = ?");
     $stmt->bind_param('s', $code);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -193,6 +194,7 @@ if (!$data) {
             'has_reservation' => $hasReservation,
             'is_visitor' => $isVisitor,
             'is_resident' => $isResident,
+            'reserved_by' => (!empty($row['gf_id']) ? "Resident's Guest" : ($isResident ? 'Resident' : ($isVisitor ? 'Visitor' : ''))),
             'verification' => $verificationLink
         ];
     }
@@ -249,6 +251,7 @@ if (!$data) {
             'has_reservation' => true,
             'is_visitor' => false,
             'is_resident' => true,
+            'reserved_by' => 'Resident',
             'verification' => $verificationLink
         ];
     }
@@ -415,6 +418,12 @@ if (!$data) {
             <span class="info-label">Amenity Type</span>
             <span class="info-value"><?php echo htmlspecialchars($data['amenity']); ?></span>
         </div>
+        <?php if(!empty($data['reserved_by'])): ?>
+        <div class="info-row">
+            <span class="info-label">Reserved By</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['reserved_by']); ?></span>
+        </div>
+        <?php endif; ?>
         
         <?php if(!empty($data['publish'])): ?>
         <div class="info-row">

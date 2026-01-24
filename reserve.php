@@ -48,13 +48,14 @@ ensureReservationTimeAndDownpayment($con);
 // Ensure common columns used by upsert exist (payment_status, account_type, receipt_path)
 function ensureReservationCommonColumns($con){
   if (!($con instanceof mysqli)) { return; }
-  $cols=['payment_status','account_type','receipt_path'];
+  $cols=['payment_status','account_type','receipt_path','booking_for'];
   foreach($cols as $col){
     $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'");
     if(!$c || $c->num_rows===0){
       if($col==='payment_status'){@$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL");}
       else if($col==='account_type'){@$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL");}
       else if($col==='receipt_path'){@$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL");}
+      else if($col==='booking_for'){@$con->query("ALTER TABLE reservations ADD COLUMN booking_for ENUM('resident','guest') NULL");}
     }
   }
 }
@@ -94,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $hours = intval($_POST['hours'] ?? 0);
     $downpayment = isset($_POST['downpayment']) ? floatval($_POST['downpayment']) : null;
     $purpose = isset($_POST['purpose']) ? trim($_POST['purpose']) : null;
+    $booking_for_post = isset($_POST['booking_for']) ? trim($_POST['booking_for']) : '';
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
       $price = max(1, $hours) * 150;
     } else if ($amenity === 'Clubhouse') {
@@ -124,6 +126,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($guestResidentId) { $entry_pass_id = NULL; }
     $user_id = $guestResidentId ?: (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : NULL);
     $acct = ($guestResidentId || (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && (empty($entry_pass_id)))) ? 'resident' : 'visitor';
+    $booking_for = $booking_for_post;
+    if ($booking_for === '') {
+      if ($guestResidentId) {
+        $booking_for = 'guest';
+      } else if ($acct === 'resident') {
+        $booking_for = 'resident';
+      }
+    }
+    if ($booking_for === '') { $booking_for = null; }
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -305,6 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'downpayment' => $downpayment,
               'user_id' => $user_id,
               'entry_pass_id' => $entry_pass_id,
+              'booking_for' => $booking_for,
               'ref_code' => $newRef
             ];
             $generatedCode = $newRef;

@@ -225,9 +225,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
                                     r.price, r.downpayment, r.payment_status,
-                                    u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
+                                    u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
+                                    gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
+                                    gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
                              FROM reservations r
                              LEFT JOIN users u ON r.user_id = u.id
+                             LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code
                              WHERE r.id = ? LIMIT 1");
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -244,9 +247,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
 // Handle AJAX request for standard amenity reservation details
 if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && isset($_GET['id'])) {
     $reservation_id = intval($_GET['id']);
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
+                     gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
+                     gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
+              LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code
               WHERE r.id = ? AND (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)";
     $stmt = $con->prepare($query);
     $stmt->bind_param('i', $reservation_id);
@@ -263,9 +269,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && is
 // Handle AJAX request for resident amenity reservation details
 if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_details' && isset($_GET['id'])) {
     $rr_id = intval($_GET['id']);
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
+                     gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
+                     gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
+              LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code
               WHERE r.id = ? AND (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)";
     $stmt = $con->prepare($query);
     $stmt->bind_param('i', $rr_id);
@@ -288,9 +297,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $requests = [];
     $receipts = [];
     $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
-    if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
-    if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
     if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 8");
@@ -298,18 +307,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
         $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
         $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
         $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
-        $requests[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+        $label = ($uType === 'visitor') ? 'Visitor' : 'Resident';
+        $requests[] = ['type'=>'request','label'=>$label,'source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
     } }
     $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) ORDER BY r.created_at DESC LIMIT 8");
-    if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($legacy){ while($row=$legacy->fetch_assoc()){ $requests[] = ['type'=>'request','label'=>'Visitor','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     // Include escalated incident reports for admin notifications
     $ir = $con->query("SELECT id, status, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 8");
-    if($ir){ while($row=$ir->fetch_assoc()){ $requests[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($ir){ while($row=$ir->fetch_assoc()){ $requests[] = ['type'=>'incident','label'=>'Incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     
     // Fetch system notifications (cancellations, etc.)
     $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 8");
     if($notifs){ while($row=$notifs->fetch_assoc()){ 
-        $requests[] = ['id'=>$row['id'], 'type'=>'notification','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+        $requests[] = ['id'=>$row['id'], 'type'=>'notification','label'=>'System','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
     } }
 
     $items = array_merge($receipts, $requests);
@@ -674,9 +684,11 @@ function getReservations($con) {
 
 // Resident amenity reservations (resident_reservations table)
 function getResidentReservations($con) {
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type,
+                     gf.id AS gf_id
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
+              LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
@@ -686,9 +698,11 @@ function getResidentReservations($con) {
 }
 
 function getResidentOnlyReservations($con) {
-    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type
+    $query = "SELECT r.*, u.first_name, u.middle_name, u.last_name, u.house_number, u.email, u.phone, u.user_type,
+                     gf.id AS gf_id
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
+              LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
@@ -1519,6 +1533,7 @@ $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
 /* Reset & Base */
 * { box-sizing: border-box; }
+body, button, input, select, textarea { font-family: 'Poppins', sans-serif; }
 *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 body {
@@ -2150,61 +2165,75 @@ tr:hover { background-color: #f8fafc; }
 .modal-content table{ width: 100%; border-collapse: collapse; }
 .modal-content td{ padding: 6px 0; }
 
-.notif-item {
-    padding: 15px 20px;
+.modal .notif-item {
+    padding: 22px 26px;
     border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: flex-start;
-    gap: 15px;
+    gap: 20px;
     position: relative;
     transition: var(--transition);
 }
-.notif-item:hover { background-color: var(--bg-body); }
-.notif-item:last-child { border-bottom: none; }
+.modal .notif-item:hover { background-color: var(--bg-body); }
+.modal .notif-item:last-child { border-bottom: none; }
 
-.notif-item-link {
+.modal .notif-item-link {
     flex: 1;
     display: flex;
-    gap: 12px;
+    gap: 18px;
     text-decoration: none;
     color: inherit;
     align-items: flex-start;
+    min-width: 0;
 }
 
-.notif-type {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
+.modal .notif-type {
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: none;
     background: var(--primary-light);
     color: var(--primary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    height: fit-content;
-    white-space: nowrap;
+    padding: 8px 12px;
+    border-radius: 6px;
+    height: auto;
+    white-space: normal;
+    width: 140px;
+    min-height: 44px;
+    text-align: center;
+    line-height: 1.25;
+    word-break: break-word;
     margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.notif-meta {
+.modal .notif-meta {
     flex: 1;
-    font-size: 0.9rem;
-    line-height: 1.4;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
-.notif-meta strong { color: var(--text-main); display: block; margin-bottom: 2px; }
-.notif-meta div { color: var(--text-secondary); font-size: 0.85rem; }
+.modal .notif-meta strong { color: var(--text-main); display: block; margin-bottom: 0; }
+.modal .notif-meta div { color: var(--text-secondary); font-size: 0.88rem; word-break: break-word; }
 
-.notif-dismiss {
+.modal .notif-dismiss {
     background: transparent;
     border: none;
     color: var(--text-muted);
     font-size: 0.8rem;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 8px 12px;
     opacity: 0;
     transition: var(--transition);
-    align-self: center;
+    align-self: flex-start;
+    position: static;
 }
-.notif-item:hover .notif-dismiss { opacity: 1; }
-.notif-dismiss:hover { color: var(--danger); text-decoration: underline; }
+.modal .notif-item:hover .notif-dismiss { opacity: 1; }
+.modal .notif-dismiss:hover { color: var(--danger); text-decoration: underline; }
 
 /* Action Buttons */
 .btn {
@@ -2464,7 +2493,7 @@ tr:hover { background-color: #f8fafc; }
           }
           function pollNotifications(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(function(data){ renderNotif(data); }).catch(function(){}); }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''); if(type==='payment') return '?page=verify'; if(type==='resident_guest') return '?page=resident_guest_forms'; if(type==='amenity'||type==='approval') return (src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); if(type==='request') return (src==='resident'? '?page=requests' : '?page=visitor_requests'); if(type==='incident') return '?page=report'; return '?page=dashboard'; }
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard'; if(type==='payment') base='?page=verify'; else if(type==='resident_guest') base='?page=resident_guest_forms'; else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests'); else if(type==='incident') base='?page=report'; var ref=it.ref?String(it.ref):''; if(ref){ base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref); } return base; }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
@@ -2508,6 +2537,7 @@ tr:hover { background-color: #f8fafc; }
                 if(id && src){
                   var n = parseInt(id,10);
                   if(src==='resident'){ if(typeof showResidentReservationDetails==='function'){ showResidentReservationDetails(n); } }
+                  else if(src==='visitor'){ if(typeof showResidentReservationDetails==='function'){ showResidentReservationDetails(n); } }
                   else if(src==='guest_form'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'guest_form'); } }
                   else if(src==='reservation'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'reservation'); } }
                 }
@@ -2666,6 +2696,7 @@ tr:hover { background-color: #f8fafc; }
         <thead>
           <tr>
             <th>Name</th>
+            <th>Reference Code</th>
             <th>Type</th>
             <th>House #</th>
             <th>Amenity</th>
@@ -2684,8 +2715,10 @@ tr:hover { background-color: #f8fafc; }
                   echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                   $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                  echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                   
-                  $uType = ucfirst($rr['user_type'] ?? 'Resident');
+                  $isResidentGuest = !empty($rr['gf_id']);
+                  $uType = $isResidentGuest ? "Resident's Guest" : ucfirst($rr['user_type'] ?? 'Resident');
                   $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
@@ -2733,7 +2766,7 @@ tr:hover { background-color: #f8fafc; }
               }
           }
           if (!$hasRR) {
-              echo "<tr><td colspan='7' style='text-align:center;'>No reservations found</td></tr>";
+              echo "<tr><td colspan='8' style='text-align:center;'>No reservations found</td></tr>";
           }
           ?>
         </tbody>
@@ -2830,7 +2863,7 @@ tr:hover { background-color: #f8fafc; }
                                   ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC");
         if ($resList && $resList->num_rows > 0) {
           while ($row = $resList->fetch_assoc()) {
-            echo '<tr>';
+            echo '<tr data-ref="' . htmlspecialchars($row['ref_code'] ?? '') . '">';
             $userType = 'Resident';
             if (!empty($row['user_type'])) {
                 $userType = ucfirst($row['user_type']);
@@ -3051,6 +3084,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
       <thead>
         <tr>
           <th>Name</th>
+          <th>Reference Code</th>
           <th>Type</th>
           <th>House #</th>
           <th>Amenity</th>
@@ -3069,9 +3103,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                 $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                 echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                 
-                $uType = ucfirst($rr['user_type'] ?? 'Resident');
-                $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved'; // Reuse badges for color distinction
+                $isResidentGuest = !empty($rr['gf_id']);
+                $uType = $isResidentGuest ? "Resident's Guest" : ucfirst($rr['user_type'] ?? 'Resident');
+                $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                 echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
@@ -3115,7 +3151,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             }
         }
         if (!$hasRR) {
-            echo "<tr><td colspan='7' style='text-align:center;'>No amenity requests found</td></tr>";
+            echo "<tr><td colspan='8' style='text-align:center;'>No amenity requests found</td></tr>";
         }
         ?>
       </tbody>
@@ -3228,8 +3264,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
         <thead>
           <tr>
             <th>Name</th>
+            <th>Reference Code</th>
             <th>Type</th>
-            <th>House #</th>
             <th>Amenity</th>
             <th>Dates</th>
             <th>Request Status</th>
@@ -3246,12 +3282,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='visitor'>";
                   $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
+                  echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                   
                   $uType = ucfirst($rr['user_type'] ?? 'Visitor');
                   $uTypeClass = 'badge-pending'; 
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
-                  echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
                   echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
                   $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
                   echo "<td>" . $dateRange . "</td>";
@@ -3603,21 +3639,36 @@ function showReservationDetails(reservationId){
     .then(data => {
       if(!data.success){ alert('Error loading reservation details: ' + (data.message||'Unknown error')); return; }
       const d = data.details || {};
-      const whoLabel = (String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident';
-      const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const isResidentGuest = !!d.gf_id;
+      const whoLabel = isResidentGuest ? "Resident's Guest" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
+      const reservedBy = isResidentGuest ? (guestName || "Resident's Guest") : whoLabel;
+      const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
+      const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
+      const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
       const content = `
         <div style="display: flex; flex-direction: column; gap: 20px;">
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">${whoLabel}</h4>
-            ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
+            ${displayName?`<p><strong>Name:</strong> ${displayName}</p>`:''}
+            ${(!isResidentGuest && d.house_number)?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
+            ${displayEmail?`<p><strong>Email:</strong> ${displayEmail}</p>`:''}
+            ${displayPhone?`<p><strong>Phone:</strong> ${displayPhone}</p>`:''}
+          </div>
+          ${isResidentGuest ? `
+          <div>
+            <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
+            ${residentName?`<p><strong>Name:</strong> ${residentName}</p>`:''}
             ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
-          </div>
+          </div>` : ''}
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
             ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
             ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
+            ${reservedBy?`<p><strong>Reserved By:</strong> ${reservedBy}</p>`:''}
             ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
             ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
             ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
@@ -3673,8 +3724,14 @@ function showResidentReservationDetails(rrId){
       const d = data.details || {};
       const ps = ((d.payment_status||'pending')+'').toLowerCase();
       const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
-      const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
-      const userType = (d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1);
+      const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const isResidentGuest = !!d.gf_id;
+      const userType = isResidentGuest ? "Resident's Guest" : ((d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1));
+      const reservedBy = isResidentGuest ? (guestName || "Resident's Guest") : userType;
+      const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
+      const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
+      const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
       
       // Dynamic Title Update
       const modalTitle = document.querySelector('#residentReservationModal h3');
@@ -3684,15 +3741,24 @@ function showResidentReservationDetails(rrId){
           <div style="display: flex; flex-direction: column; gap: 20px;">
             <div>
               <h4 style="color:#23412e;margin-bottom:10px;">${userType}</h4>
-              ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
+              ${displayName?`<p><strong>Name:</strong> ${displayName}</p>`:''}
+              ${(!isResidentGuest && d.house_number)?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
+              ${displayEmail?`<p><strong>Email:</strong> ${displayEmail}</p>`:''}
+              ${displayPhone?`<p><strong>Phone:</strong> ${displayPhone}</p>`:''}
+            </div>
+            ${isResidentGuest ? `
+            <div>
+              <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
+              ${residentName?`<p><strong>Name:</strong> ${residentName}</p>`:''}
               ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
               ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
               ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
-            </div>
+            </div>` : ''}
             <div>
               <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
               ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
               ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
+              ${reservedBy?`<p><strong>Reserved By:</strong> ${reservedBy}</p>`:''}
               ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
               ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
               ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
