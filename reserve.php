@@ -97,13 +97,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $purpose = isset($_POST['purpose']) ? trim($_POST['purpose']) : null;
     $booking_for_post = isset($_POST['booking_for']) ? trim($_POST['booking_for']) : '';
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
-      $price = max(1, $hours) * 150;
+      $basePrice = max(1, $hours) * 150;
     } else if ($amenity === 'Clubhouse') {
-      $price = max(1, $hours) * 200;
+      $basePrice = max(1, $hours) * 200;
     } else if ($amenity === 'Pool') {
-      $price = max(1, $persons) * 175;
+      $basePrice = max(1, $persons) * 175;
     } else {
-      $price = 0;
+      $basePrice = 0;
     }
     $entry_pass_id = (isset($_POST['entry_pass_id']) && $_POST['entry_pass_id'] !== '') ? intval($_POST['entry_pass_id']) : ((isset($_GET['entry_pass_id']) && $_GET['entry_pass_id'] !== '') ? intval($_GET['entry_pass_id']) : NULL);
     $ref_code = isset($_POST['ref_code']) ? $_POST['ref_code'] : (isset($_GET['ref_code']) ? $_GET['ref_code'] : '');
@@ -135,6 +135,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
     if ($booking_for === '') { $booking_for = null; }
+    $price = $basePrice;
+    if ($acct === 'resident' && $booking_for === 'resident') {
+      $price = round($basePrice * 0.5, 2);
+    }
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -1197,7 +1201,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     const priceEl=document.getElementById('amenityDescPrice');
     if(priceEl){
-      if(info.priceLabel){ priceEl.textContent=info.priceLabel; priceEl.style.display='block'; }
+      const label=getAmenityPriceLabel(info.value);
+      if(label){ priceEl.textContent=label; priceEl.style.display='block'; }
       else { priceEl.textContent=''; priceEl.style.display='none'; }
     }
     const capEl=document.getElementById('amenityDescCapacity');
@@ -1215,7 +1220,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     const pPrice=document.getElementById('amenityPreviewPrice');
     if(pPrice){
-      if(info.priceLabel){ pPrice.textContent=info.priceLabel; pPrice.style.display='block'; }
+      const label=getAmenityPriceLabel(info.value);
+      if(label){ pPrice.textContent=label; pPrice.style.display='block'; }
       else { pPrice.textContent=''; pPrice.style.display='none'; }
     }
     const pImg=document.getElementById('amenityPreviewImg');
@@ -1252,7 +1258,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       }
     }catch(_){}
     if(info.days){ inner+=`<p class="inline-meta"><strong>Availability:</strong> ${info.days}</p>`; }
-    if(info.priceLabel){ inner+=`<p class="inline-meta"><strong>Rate:</strong> ${info.priceLabel}</p>`; }
+    const rateLabel=getAmenityPriceLabel(info.value);
+    if(rateLabel){ inner+=`<p class="inline-meta"><strong>Rate:</strong> ${rateLabel}</p>`; }
     if(Number.isFinite(info.capacity)){ inner+=`<p class="inline-meta"><strong>Capacity:</strong> ${info.capacity} guests</p>`; }
     body.innerHTML=inner;
     panel.appendChild(body);
@@ -1431,14 +1438,59 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court' || amen==='Clubhouse' || amen==='Pool' || amen==='Community Pool'; }
   function isPersonBasedAmenity(amen){ return amen==='Pool'; }
+  function isResidentSelfBooking(){
+    const field=document.getElementById('bookingForField');
+    return field && field.value === 'resident';
+  }
+  function getBaseAmenityPrice(amen, persons, hours){
+    if(amen==='Basketball Court' || amen==='Tennis Court'){ return hours>0 ? (hours * 150) : 0; }
+    if(amen==='Clubhouse'){ return hours>0 ? (hours * 200) : 0; }
+    if(amen==='Pool'){ return Math.max(1,persons) * 175; }
+    return 0;
+  }
+  function getEffectiveAmenityPrice(amen, persons, hours){
+    const base=getBaseAmenityPrice(amen, persons, hours);
+    return isResidentSelfBooking() ? (base * 0.5) : base;
+  }
+  function formatPesoAmount(val){
+    const rounded=Math.round(val*100)/100;
+    return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2);
+  }
+  function getAmenityPriceLabel(amen){
+    if(!amen) return '';
+    if(amen==='Pool'){
+      const rate=isResidentSelfBooking()?87.5:175;
+      return `₱${formatPesoAmount(rate)} per person per session`;
+    }
+    if(amen==='Clubhouse'){
+      const rate=isResidentSelfBooking()?100:200;
+      return `₱${formatPesoAmount(rate)} per hour (minimum 3 hours)`;
+    }
+    if(amen==='Basketball Court' || amen==='Tennis Court'){
+      const rate=isResidentSelfBooking()?75:150;
+      return `₱${formatPesoAmount(rate)} per hour`;
+    }
+    return '';
+  }
+  function refreshPricingForBookingFor(){
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+    updateBookingSummary();
+    const amen=document.getElementById('amenityField')?.value||'';
+    const key = amen==='Pool' ? 'pool' : amen==='Clubhouse' ? 'clubhouse' : amen==='Basketball Court' ? 'basketball' : amen==='Tennis Court' ? 'tennis' : '';
+    if(key){
+      updateAmenityDescription(key);
+      const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
+      if(card && card.getAttribute('data-details-visible')==='true'){
+        showInlineAmenityDetails(key);
+      }
+    }
+  }
   function updateDisplayedPrice(){
     const amen=document.getElementById('amenityField').value;
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
-    let base=0;
-    if(amen==='Basketball Court' || amen==='Tennis Court'){ base = hours>0 ? (hours * 150) : 0; }
-    else if(amen==='Clubhouse'){ base = hours>0 ? (hours * 200) : 0; }
-    else { base = Math.max(1,persons) * 175; }
+    const base=getEffectiveAmenityPrice(amen, persons, hours);
     const dpPercent=0.5;
     const downpayment=(base*dpPercent);
     const priceEl=document.getElementById('price'); if(priceEl){ priceEl.textContent = '₱' + base.toFixed(2); }
@@ -1450,10 +1502,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const amen=document.getElementById('amenityField').value;
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
-    let base=0;
-    if(amen==='Basketball Court' || amen==='Tennis Court'){ base = hours>0 ? (hours * 150) : 0; }
-    else if(amen==='Clubhouse'){ base = hours>0 ? (hours * 200) : 0; }
-    else { base = Math.max(1,persons) * 175; }
+    const base=getEffectiveAmenityPrice(amen, persons, hours);
     const dpPercent=0.5;
     const downpayment=(base*dpPercent);
     dp.value = downpayment.toFixed(2);
@@ -1942,10 +1991,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(dpVal!=='' && !isNaN(Number(dpVal))){ if(Number(dpVal)<0){ setFieldWarning('downpaymentInput','Downpayment cannot be negative.'); verifyAllowed=false; } }
       if(dpVal!=='' && !isNaN(Number(dpVal))){
         const dpNum=Number(dpVal);
-        let basePrice=0;
-        if(amen==='Clubhouse'){ basePrice = hours>0 ? (hours*200) : 0; }
-        else if(amen==='Basketball Court' || amen==='Tennis Court'){ basePrice = hours>0 ? (hours*150) : 0; }
-        else { basePrice = Math.max(1,persons)*175; }
+        let basePrice=getEffectiveAmenityPrice(amen, persons, hours);
         if(dpNum>basePrice){ setFieldWarning('downpaymentInput','Downpayment cannot exceed total price.'); verifyAllowed=false; }
       }
       if(isPersonBasedAmenity(amen) && persons<1){ setFieldWarning('personsInput','Persons must be at least 1.'); verifyAllowed=false; }
@@ -1963,10 +2009,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
       if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
-        let basePriceForSummary=0;
-        if(amenVal==='Clubhouse'){ basePriceForSummary = hours>0 ? (hours*200) : 0; }
-        else if(amenVal==='Basketball Court' || amenVal==='Tennis Court'){ basePriceForSummary = hours>0 ? (hours*150) : 0; }
-        else { basePriceForSummary = Math.max(1,persons)*175; }
+        let basePriceForSummary=getEffectiveAmenityPrice(amenVal, persons, hours);
         const priceTxt = '₱'+basePriceForSummary.toFixed(2);
         const hoursRaw = document.getElementById('hoursInput').value||'';
         const hoursVal = hoursRaw ? parseInt(hoursRaw,10) : null;
@@ -2081,6 +2124,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             if (guestIdField) guestIdField.value = '';
             if (guestRefField) guestRefField.value = '';
           }
+          refreshPricingForBookingFor();
         }
         window.__verifyConfirmed=true;
         try{ document.getElementById('clientConfirmed').value='1'; }catch(_){}
@@ -2207,6 +2251,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const key = amenName==='Pool' ? 'pool' : amenName==='Clubhouse' ? 'clubhouse' : amenName==='Basketball Court' ? 'basketball' : amenName==='Tennis Court' ? 'tennis' : '';
       document.querySelectorAll('.amenity-card').forEach(c=>c.classList.remove('selected'));
       const card=document.querySelector(`.amenity-card[data-key="${key}"]`); if(card){ card.classList.add('selected'); }
+      refreshPricingForBookingFor();
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
@@ -2264,8 +2309,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           guestWrap.style.display = 'none';
         }
       }
-      if (rRadio) rRadio.addEventListener('change', updateGuestWrap);
-      if (gRadio) gRadio.addEventListener('change', updateGuestWrap);
+      if (rRadio) rRadio.addEventListener('change', function(){
+        updateGuestWrap();
+        const bookingForField=document.getElementById('bookingForField');
+        if(bookingForField) bookingForField.value='resident';
+        refreshPricingForBookingFor();
+      });
+      if (gRadio) gRadio.addEventListener('change', function(){
+        updateGuestWrap();
+        const bookingForField=document.getElementById('bookingForField');
+        if(bookingForField) bookingForField.value='guest';
+        refreshPricingForBookingFor();
+      });
       updateGuestWrap();
     }
   });
@@ -2311,6 +2366,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           if(bookingForField) bookingForField.value = 'resident';
           if(guestIdField) guestIdField.value = '';
           if(guestRefField) guestRefField.value = '';
+          refreshPricingForBookingFor();
           
           // Show amenities
           if(amenitiesHeader) amenitiesHeader.style.display = '';
@@ -2324,6 +2380,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           // Guest selected
           if(guestListSection) guestListSection.style.display = 'block';
           if(bookingForField) bookingForField.value = ''; // wait for guest selection
+          refreshPricingForBookingFor();
           
           // Hide amenities until guest confirmed
           if(amenitiesHeader) amenitiesHeader.style.display = 'none';
@@ -2354,6 +2411,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           if(bookingForField) bookingForField.value = 'guest';
           if(guestIdField) guestIdField.value = selected.value;
           if(guestRefField) guestRefField.value = selected.getAttribute('data-ref');
+          refreshPricingForBookingFor();
           
           // Show amenities
           if(amenitiesHeader) amenitiesHeader.style.display = '';
