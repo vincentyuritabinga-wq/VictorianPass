@@ -196,7 +196,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $_SESSION['user_id'] = $newUserId;
       $_SESSION['user_type'] = $user_type;
       
-      $redirect = ($user_type === 'resident') ? 'profileresident.php' : 'mainpage.php';
+      $redirect = ($user_type === 'resident') ? 'profileresident.php' : 'dashboardvisitor.php';
 
       if (isset($_POST['ajax']) && $_POST['ajax'] === '1') {
         echo json_encode(['success' => true, 'redirect' => $redirect]);
