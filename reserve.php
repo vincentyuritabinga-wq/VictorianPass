@@ -416,12 +416,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       $stmt1->execute();
       $res1 = $stmt1->get_result();
       while ($row = $res1->fetch_assoc()) {
-        if (!$row['start_date'] || !$row['end_date']) continue;
-        if ($date >= $row['start_date'] && $date <= $row['end_date']) {
+        if ($checkOverlap($row, $startDate, $endDate)) {
           $st = $row['start_time'] ?: '00:00:00';
           $et = $row['end_time'] ?: '23:59:59';
           $has = (!empty($row['start_time']) && !empty($row['end_time']));
-          $times[] = ['start' => $st, 'end' => $et, 'has_time' => $has];
+          $times[] = [
+            'start' => $st, 
+            'end' => $et, 
+            'has_time' => $has,
+            'start_date' => $row['start_date'],
+            'end_date' => $row['end_date']
+          ];
         }
       }
       $stmt1->close();
@@ -436,12 +441,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       $stmt2->execute();
       $res2 = $stmt2->get_result();
       while ($row = $res2->fetch_assoc()) {
-        if (!$row['start_date'] || !$row['end_date']) continue;
-        if ($date >= $row['start_date'] && $date <= $row['end_date']) {
+        if ($checkOverlap($row, $startDate, $endDate)) {
           $st = $row['start_time'] ?: '00:00:00';
           $et = $row['end_time'] ?: '23:59:59';
           $has = (!empty($row['start_time']) && !empty($row['end_time']));
-          $times[] = ['start' => $st, 'end' => $et, 'has_time' => $has];
+          $times[] = [
+            'start' => $st, 
+            'end' => $et, 
+            'has_time' => $has,
+            'start_date' => $row['start_date'],
+            'end_date' => $row['end_date']
+          ];
         }
       }
       $stmt2->close();
@@ -456,12 +466,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
       $stmt3->execute();
       $res3 = $stmt3->get_result();
       while ($row = $res3->fetch_assoc()) {
-        if (!$row['start_date'] || !$row['end_date']) continue;
-        if ($date >= $row['start_date'] && $date <= $row['end_date']) {
+        if ($checkOverlap($row, $startDate, $endDate)) {
           $st = $row['start_time'] ?: '00:00:00';
           $et = $row['end_time'] ?: '23:59:59';
           $has = (!empty($row['start_time']) && !empty($row['end_time']));
-          $times[] = ['start' => $st, 'end' => $et, 'has_time' => $has];
+          $times[] = [
+            'start' => $st, 
+            'end' => $et, 
+            'has_time' => $has,
+            'start_date' => $row['start_date'],
+            'end_date' => $row['end_date']
+          ];
         }
       }
       $stmt3->close();
@@ -935,29 +950,64 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     try{
       const amen=document.getElementById('amenityField').value;
       if(!amen){ return; }
-      const hrsInput=document.getElementById('hoursInput');
-      const hours = isHourBasedAmenity(amen) ? Math.max(1, parseInt(hrsInput?.value||'1',10)) : 1;
       const cells=Array.from(document.querySelectorAll('.calendar td')).filter(c=>c.hasAttribute('data-date'));
+      if(cells.length === 0) return;
+      
+      const startDs = cells[0].getAttribute('data-date');
+      const endDs = cells[cells.length-1].getAttribute('data-date');
+
+      // Batch fetch booked times
+      const res = await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(amen)}&start_date=${startDs}&end_date=${endDs}`);
+      const data = await res.json();
+      const allBooked = data.times || [];
+      
+      const hrsRange=getAmenityHours(amen);
+      const minH=parseInt(hrsRange.min.split(':')[0],10);
+      const maxH=parseInt(hrsRange.max.split(':')[0],10);
+      const totalHours=Math.max(0,maxH-minH);
+
       for(const cell of cells){
         const ds=cell.getAttribute('data-date');
         if(!ds) continue;
         if(ds < todayStr){ cell.classList.add('disabled'); cell.title='Past date — cannot be booked.'; continue; }
+        
         cell.classList.remove('disabled','partly','available');
-        const booked=await fetchBookedTimesFor(ds);
-        const slots=generateTimeSlots(amen);
-        const hrsRange=getAmenityHours(amen);
-        const minH=parseInt(hrsRange.min.split(':')[0],10);
-        const maxH=parseInt(hrsRange.max.split(':')[0],10);
-        const totalHours=Math.max(0,maxH-minH);
+        
+        // Filter for this day
+        const dayBooked = allBooked.filter(t => {
+            if (!t.start_date || !t.end_date) return false;
+            return ds >= t.start_date && ds <= t.end_date;
+        });
+
         let reservedHours=0; const marked={};
-        (booked||[]).forEach(t=>{
-          if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return;
-          const bS=parseInt(String(t.start).split(':')[0],10);
-          const bE=parseInt(String(t.end).split(':')[0],10);
+        dayBooked.forEach(t=>{
+          
+          let bS=0, bE=24;
+          if (t.has_time) {
+              bS=parseInt(String(t.start).split(':')[0],10);
+              bE=parseInt(String(t.end).split(':')[0],10);
+          }
+          
+          // Handle multi-day time clamping
+          if (t.start_date !== t.end_date) {
+             if (ds === t.start_date) {
+                 // On start date, use start time -> end of day
+                 bE = 24;
+             } else if (ds === t.end_date) {
+                 // On end date, use start of day -> end time
+                 bS = 0;
+             } else {
+                 // Middle days are full days
+                 bS = 0;
+                 bE = 24;
+             }
+          }
+
           for(let h=bS; h<bE; h++){
             if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
           }
         });
+        
         if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.classList.add('fully-booked'); cell.title='Fully Booked — no time slots available for this date.'; }
         else if(reservedHours>0){ cell.classList.add('partly'); cell.title='Partially Booked — some time slots are unavailable.'; }
         else { cell.classList.add('available'); cell.title=''; }
@@ -1367,7 +1417,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   async function fetchBookedTimesFor(date){ if(!document.getElementById('amenityField').value) return []; try{ const res=await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(selectedAmenity)}&date=${encodeURIComponent(date)}`); const data=await res.json(); return data.times||[]; }catch(_){ return []; } }
 
-  function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court' || amen==='Clubhouse'; }
+  function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court' || amen==='Clubhouse' || amen==='Pool' || amen==='Community Pool'; }
   function isPersonBasedAmenity(amen){ return amen==='Pool'; }
   function updateDisplayedPrice(){
     const amen=document.getElementById('amenityField').value;
@@ -1881,12 +1931,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(dpVal!=='' && !isNaN(Number(dpVal))){
         const dpNum=Number(dpVal);
         let basePrice=0;
-        if(isHourBasedAmenity(amen)){
-          if(amen==='Clubhouse'){ basePrice = hours>0 ? (hours*200) : 0; }
-          else if(amen==='Basketball Court' || amen==='Tennis Court'){ basePrice = hours>0 ? (hours*150) : 0; }
-        } else if(isPersonBasedAmenity(amen)){
-          basePrice = Math.max(1,persons)*175;
-        }
+        if(amen==='Clubhouse'){ basePrice = hours>0 ? (hours*200) : 0; }
+        else if(amen==='Basketball Court' || amen==='Tennis Court'){ basePrice = hours>0 ? (hours*150) : 0; }
+        else { basePrice = Math.max(1,persons)*175; }
         if(dpNum>basePrice){ setFieldWarning('downpaymentInput','Downpayment cannot exceed total price.'); verifyAllowed=false; }
       }
       if(isPersonBasedAmenity(amen) && persons<1){ setFieldWarning('personsInput','Persons must be at least 1.'); verifyAllowed=false; }
@@ -1905,12 +1952,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
         let basePriceForSummary=0;
-        if(isHourBasedAmenity(amenVal)){
-          if(amenVal==='Clubhouse'){ basePriceForSummary = hours>0 ? (hours*200) : 0; }
-          else if(amenVal==='Basketball Court' || amenVal==='Tennis Court'){ basePriceForSummary = hours>0 ? (hours*150) : 0; }
-        } else if(isPersonBasedAmenity(amenVal)){
-          basePriceForSummary = Math.max(1,persons)*175;
-        }
+        if(amenVal==='Clubhouse'){ basePriceForSummary = hours>0 ? (hours*200) : 0; }
+        else if(amenVal==='Basketball Court' || amenVal==='Tennis Court'){ basePriceForSummary = hours>0 ? (hours*150) : 0; }
+        else { basePriceForSummary = Math.max(1,persons)*175; }
         const priceTxt = '₱'+basePriceForSummary.toFixed(2);
         const hoursRaw = document.getElementById('hoursInput').value||'';
         const hoursVal = hoursRaw ? parseInt(hoursRaw,10) : null;
