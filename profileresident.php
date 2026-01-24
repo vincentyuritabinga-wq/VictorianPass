@@ -1111,6 +1111,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
+      
+      html+='<div class="item-actions">';
       if(type==='guest_form' && isApproved){
          html+='<button type="button" class="item-extra-link" onclick="document.querySelector(\'[data-section=panel-my-guests]\').click()">Go to My Guests</button>';
       }
@@ -1119,18 +1121,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
       }
       if(canDelete && ref){
-         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="margin-top:10px; padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
+         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
       }
       if(type!=='guest_form' && isApproved && ref){
         var qrViewLink=basePath+'/qr_view.php?code='+encodeURIComponent(ref);
         html+='<a class="item-extra-link" href="'+qrViewLink+'" target="_blank">Open full QR pass</a>';
       }
-      if(type!=='guest_form' && isApproved && ref){
-        html+='</div></div></div>';
-      }else{
+      if(!(type!=='guest_form' && isApproved && ref)){
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
-        html+='</div></div></div>';
       }
+      html+='</div>';
+      html+='</div></div></div>';
     }else if(type==='report'){
       html+='<div class="item-extra-section">';
       html+='<div class="item-extra-title">Incident Status</div>';

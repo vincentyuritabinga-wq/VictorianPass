@@ -347,6 +347,51 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
     .field-warning-inline .warn-icon{ width:14px; height:14px; font-size:0.7rem; }
     
+    /* Role Selector Styles */
+    .role-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: #f0fdf4;
+      padding: 5px;
+      border-radius: 8px;
+      border: 1px solid #dcfce7;
+    }
+    .role-option {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      color: #166534;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+    .role-option:hover {
+      background: rgba(22, 101, 52, 0.05);
+    }
+    .role-option.active {
+      background: #fff;
+      color: #15803d;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      border-color: #bbf7d0;
+    }
+    .role-option .role-title {
+      font-size: 1rem;
+      font-weight: 600;
+      display: block;
+    }
+    .role-option .role-desc {
+      font-size: 0.75rem;
+      font-weight: 400;
+      opacity: 0.8;
+      display: block;
+    }
+
     /* Center Modal Styles */
     .center-modal {
       display: none;
@@ -436,6 +481,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <form class="signup-form" id="signupForm" method="POST" action="signup.php" enctype="multipart/form-data" novalidate <?php if ($registration_success) echo 'style="display:none"'; ?>>
         <input type="hidden" id="terms_agreed" name="terms_agreed" value="0">
+        
+        <!-- Role Selector -->
+        <input type="hidden" id="isVisitor" name="is_visitor" value="0">
+        <div class="role-selector">
+          <div class="role-option active" id="optResident" data-value="0">
+            <span class="role-title">Resident</span>
+            <span class="role-desc">I live in this subdivision</span>
+          </div>
+          <div class="role-option" id="optVisitor" data-value="1">
+            <span class="role-title">Visitor</span>
+            <span class="role-desc">I am going to reserve amenities</span>
+          </div>
+        </div>
         <div class="form-row">
           <div class="input-wrap">
             <input type="text" name="first_name" id="first_name" placeholder="First Name*" required>
@@ -459,10 +517,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="email" name="email" id="email" placeholder="Email*" required>
         </div>
 
-        <div style="margin-bottom: 15px; display: flex; align-items: center;">
-            <input type="checkbox" id="isVisitor" name="is_visitor" value="1" style="width:auto; transform: scale(1.2); margin-right: 8px; cursor: pointer;">
-            <label for="isVisitor" style="font-weight: 600; color: #23412e; font-size: 1rem; cursor: pointer; position: static; margin: 0;">I am a Visitor</label>
-        </div>
+
 
         <!-- House verification section -->
         <div class="form-row homeowner" style="align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid #eee; padding: 10px; border-radius: 8px; background: #fafafa;">
@@ -470,6 +525,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div style="display: flex; align-items: center; gap: 8px;">
               <img src="images/signuppage/location.svg" alt="Location" style="width: 20px;">
               <span style="font-weight: 600; color: #23412e; font-size: 1.1rem;">House Number</span>
+            </div>
+            <div style="font-size: 0.8rem; color: #555; margin-top: 4px; font-weight: 500;">
+              Please include your house number to complete your resident registration.
             </div>
           </div>
           
@@ -1111,10 +1169,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       */
 
       function updateFormMode() {
-        const isVisitorCheckbox = document.getElementById('isVisitor');
-        const isVis = isVisitorCheckbox && isVisitorCheckbox.checked;
+        const isVisitorInput = document.getElementById('isVisitor');
+        let isVis = false;
+        if (isVisitorInput.type === 'checkbox') {
+            isVis = isVisitorInput.checked;
+        } else {
+            isVis = isVisitorInput.value === '1';
+        }
+
         const idWrap = document.getElementById('visitorIdWrap');
         
+        // Update Selector UI
+        const optRes = document.getElementById('optResident');
+        const optVis = document.getElementById('optVisitor');
+        if(optRes && optVis) {
+            if(isVis) {
+                optRes.classList.remove('active');
+                optVis.classList.add('active');
+            } else {
+                optRes.classList.add('active');
+                optVis.classList.remove('active');
+            }
+        }
+
         if (isVis) {
             // Visitor Mode
             if (homeownerRow) homeownerRow.style.display = 'none';
@@ -1131,6 +1208,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if (addressField) addressField.required = true;
         }
+      }
+
+      // Attach listeners to role options
+      const optRes = document.getElementById('optResident');
+      const optVis = document.getElementById('optVisitor');
+      
+      if(optRes && optVis) {
+          optRes.addEventListener('click', function() {
+              const inp = document.getElementById('isVisitor');
+              if(inp) inp.value = '0';
+              updateFormMode();
+          });
+          optVis.addEventListener('click', function() {
+              const inp = document.getElementById('isVisitor');
+              if(inp) inp.value = '1';
+              updateFormMode();
+          });
       }
 
       const isVisitorCheckbox = document.getElementById('isVisitor');
@@ -1274,7 +1368,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             valid = false;
           }
 
-          if (!isVisitor || !isVisitor.checked) {
+          let isVisVal = false;
+          if (isVisitor) {
+             isVisVal = (isVisitor.type === 'checkbox') ? isVisitor.checked : (isVisitor.value === '1');
+          }
+          if (!isVisVal) {
             if (houseHidden && !houseHidden.value.trim()) {
               setWarning('houseHidden', 'Please enter your House Number.');
               valid = false;
@@ -1286,6 +1384,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           } else {
             setWarning('houseHidden', '');
             if (addressField) setWarning('addressField', '');
+
+            const validIdInp = document.getElementById('valid_id');
+            if (validIdInp && !validIdInp.value) {
+                setWarning('valid_id', 'Please upload a Valid ID.');
+                valid = false;
+            } else {
+                setWarning('valid_id', '');
+            }
           }
 
           // Terms: show inline warning and block submit until agreed

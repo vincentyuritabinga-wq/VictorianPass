@@ -678,8 +678,8 @@ function getResidentReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL
-              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
-              AND (r.status IS NULL OR r.status != 'cancelled')
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -690,8 +690,8 @@ function getResidentOnlyReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
-              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
-              AND (r.status IS NULL OR r.status != 'cancelled')
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -702,8 +702,8 @@ function getVisitorAccountReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
-              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') 
-              AND (r.status IS NULL OR r.status != 'cancelled')
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -717,7 +717,7 @@ function getGuestAmenityReservations($con) {
               FROM guest_forms gf
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.amenity IS NOT NULL
-              AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
+              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed'))
               ORDER BY gf.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -763,8 +763,8 @@ function getVisitorRequests($con) {
               FROM reservations r 
               JOIN entry_passes ep ON r.entry_pass_id = ep.id 
               WHERE r.entry_pass_id IS NOT NULL 
-              AND (r.approval_status IS NULL OR r.approval_status != 'cancelled')
-              AND (r.status IS NULL OR r.status != 'cancelled')
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     if ($result) {
@@ -784,7 +784,7 @@ function getResidentVisitorRequests($con) {
               LEFT JOIN reservations r ON r.ref_code = gf.ref_code
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.resident_user_id IS NOT NULL
-              AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
+              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed'))
               ORDER BY gf.created_at DESC";
     $res = $con->query($query);
     if ($res && $res->num_rows > 0) return $res;
@@ -796,8 +796,8 @@ function getResidentVisitorRequests($con) {
                            JOIN entry_passes ep ON r.entry_pass_id = ep.id
                            LEFT JOIN users u ON r.user_id = u.id
                            WHERE r.entry_pass_id IS NOT NULL AND r.user_id IS NOT NULL
-                           AND (r.approval_status IS NULL OR r.approval_status != 'cancelled')
-                           AND (r.status IS NULL OR r.status != 'cancelled')
+                           AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
+                           AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
                            ORDER BY r.created_at DESC");
     return $legacy ?: false;
 }
@@ -2317,8 +2317,8 @@ tr:hover { background-color: #f8fafc; }
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
-       <a href="?page=cancelled" class="nav-item <?php echo $currentPage == 'cancelled' ? 'active' : ''; ?>" data-page="cancelled"><img src="images/dashboard.svg"><span>Cancelled Requests</span></a>
-       <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
+    <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><img src="images/dashboard.svg"><span>Archived Requests</span></a>
+    <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
      </nav>
     <div class="sidebar-footer">
       <a href="?logout=1" class="text-muted-link">Log Out</a>
@@ -3303,51 +3303,55 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 </section>
 <?php endif; ?>
 
-<!-- CANCELLED REQUESTS -->
-<?php if ($currentPage == 'cancelled'): ?>
-<section class="panel" id="cancelled-panel">
+<!-- ARCHIVED REQUESTS -->
+<?php if ($currentPage == 'history'): ?>
+<section class="panel" id="history-panel">
   <div class="content-row">
     <div class="card-box">
-      <h3>Cancelled Reservations & Guest Forms</h3>
-      <div class="notice">List of all cancelled requests. You can permanently delete them here.</div>
-      <table class="table table-cancelled">
+      <h3>Archived Requests (Cancelled & Completed)</h3>
+      <div class="notice">List of all cancelled and completed requests. You can permanently delete them here.</div>
+      <table class="table table-history">
         <thead>
           <tr>
-            <th>Type</th>
+            <th>Type & Status</th>
             <th>Name</th>
             <th>Details</th>
             <th>Dates</th>
-            <th>Cancelled At</th>
+            <th>Updated At</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <?php
-          $hasCancelled = false;
+          $hasArchived = false;
           
-          // 1. Cancelled Guest Forms
-          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status = 'cancelled' ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          // 1. Archived Guest Forms
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed') ORDER BY gf.updated_at DESC, gf.created_at DESC");
           if ($gf) {
             while ($row = $gf->fetch_assoc()) {
-               $hasCancelled = true;
+               $hasArchived = true;
+               $status = strtolower($row['approval_status'] ?? '');
+               $badgeClass = ($status === 'completed') ? 'badge-success' : 'badge-rejected';
+               $statusLabel = ucfirst($status);
+               
                $name = htmlspecialchars(($row['visitor_first_name']??'') . ' ' . ($row['visitor_last_name']??''));
                $details = "Role: " . htmlspecialchars($row['purpose']??'Co-owner');
                if (!empty($row['amenity'])) $details .= "<br>Amenity: " . htmlspecialchars($row['amenity']);
                $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
                        (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
-               $cancelledAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
+               $updatedAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
                
                echo "<tr>";
-               echo "<td><span class='badge badge-rejected'>Guest Form</span></td>";
+               echo "<td><div style='display:flex;flex-direction:column;gap:4px;'><span class='badge' style='background:#ccc;color:#333'>Guest Form</span><span class='badge $badgeClass'>$statusLabel</span></div></td>";
                echo "<td><strong>$name</strong></td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
-               echo "<td>$cancelledAt</td>";
+               echo "<td>$updatedAt</td>";
                echo "<td>";
-               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this cancelled request?\");'>";
+               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this archived request?\");'>";
                echo "<input type='hidden' name='action' value='delete_reservation'>";
                echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
-               echo "<input type='hidden' name='redirect_page' value='cancelled'>";
+               echo "<input type='hidden' name='redirect_page' value='history'>";
                echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
                echo "</form>";
                echo "</td>";
@@ -3355,11 +3359,20 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             }
           }
           
-          // 2. Cancelled Reservations (Residents & Visitors)
-          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status = 'cancelled' OR r.approval_status = 'cancelled') ORDER BY r.updated_at DESC, r.created_at DESC");
+          // 2. Archived Reservations
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired') OR r.approval_status IN ('cancelled', 'completed', 'expired')) ORDER BY r.updated_at DESC, r.created_at DESC");
           if ($res) {
             while ($row = $res->fetch_assoc()) {
-               $hasCancelled = true;
+               $hasArchived = true;
+               $status = 'cancelled';
+               $s = strtolower($row['status']??'');
+               $as = strtolower($row['approval_status']??'');
+               if ($s === 'completed' || $as === 'completed') { $status = 'completed'; }
+               elseif ($s === 'expired' || $as === 'expired') { $status = 'expired'; }
+               
+               $badgeClass = ($status === 'completed') ? 'badge-success' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
+               $statusLabel = ucfirst($status);
+
                $uType = ucfirst($row['user_type'] ?? 'Visitor');
                $name = htmlspecialchars(($row['first_name']??'') . ' ' . ($row['last_name']??''));
                if (empty(trim($name)) && !empty($row['entry_pass_id'])) {
@@ -3368,19 +3381,19 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                $details = "Amenity: " . htmlspecialchars($row['amenity']??'-');
                $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
                        (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
-               $cancelledAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
+               $updatedAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
                
                echo "<tr>";
-               echo "<td><span class='badge badge-rejected'>Reservation ($uType)</span></td>";
+               echo "<td><div style='display:flex;flex-direction:column;gap:4px;'><span class='badge' style='background:#ccc;color:#333'>Reservation ($uType)</span><span class='badge $badgeClass'>$statusLabel</span></div></td>";
                echo "<td><strong>$name</strong></td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
-               echo "<td>$cancelledAt</td>";
+               echo "<td>$updatedAt</td>";
                echo "<td>";
-               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this cancelled request?\");'>";
+               echo "<form method='post' onsubmit='return confirm(\"Permanently delete this archived request?\");'>";
                echo "<input type='hidden' name='action' value='delete_reservation'>";
                echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
-               echo "<input type='hidden' name='redirect_page' value='cancelled'>";
+               echo "<input type='hidden' name='redirect_page' value='history'>";
                echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
                echo "</form>";
                echo "</td>";
@@ -3388,8 +3401,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             }
           }
           
-          if (!$hasCancelled) {
-             echo "<tr><td colspan='6' style='text-align:center;'>No cancelled requests found.</td></tr>";
+          if (!$hasArchived) {
+             echo "<tr><td colspan='6' style='text-align:center;'>No archived requests found.</td></tr>";
           }
           ?>
         </tbody>

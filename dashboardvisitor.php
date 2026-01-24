@@ -1052,11 +1052,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
+    html+='<div class="item-actions">';
     if(canCancel && ref){
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
     }
     if(canDelete && ref){
-         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="margin-top:10px; padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
+         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
     }
     
     if(isApproved && ref){
@@ -1066,6 +1067,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     
     // Always show View Details
     html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+    html+='</div>';
     html+='</div></div></div>';
     
     extra.innerHTML=html;

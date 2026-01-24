@@ -84,6 +84,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
         $stmt->bind_result($first, $middle, $last, $house, $email, $phone, $address, $sex, $birthdate);
         if ($stmt->fetch()) {
           $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userFirstName = $first;
           $userHouse = $house ?? '';
           $userEmail = $email ?? '';
           $userPhone = $phone ?? '';
