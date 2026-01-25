@@ -228,25 +228,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   
 </head>
 <body>
-  <?php if (!empty($flash) && !(isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident')) { ?>
-    <div class="flash-overlay" id="flashNotice">
-      <div class="flash-modal">
-        <div class="title">!!!</div>
-        <div class="text"><?php echo htmlspecialchars($flash); ?></div>
-        
-        <button type="button" class="flash-close" id="flashCloseBtn">Close</button>
-      </div>
-    </div>
-    <script>
-      (function(){
-        var ov=document.getElementById('flashNotice');
-        var btn=document.getElementById('flashCloseBtn');
-        function close(){ if(ov) ov.style.display='none'; }
-        if(btn) btn.addEventListener('click', close);
-        if(ov) ov.addEventListener('click', function(e){ if(e.target===ov) close(); });
-      })();
-    </script>
-  <?php } ?>
   <!-- HEADER -->
   <header class="navbar">
     <div class="logo">

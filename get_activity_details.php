@@ -113,8 +113,13 @@ if ($resGF && $resGF->num_rows > 0) {
         'is_visitor' => true,
         'is_resident' => false,
         'is_guest' => true,
-        'reserved_by' => "Resident's Guest",
+        'reserved_by' => "Resident’s Guest",
         'resident_name' => trim(((string)($row['res_first_name'] ?? '')) . ' ' . ((string)($row['res_last_name'] ?? ''))),
+        'resident_contact' => $row['res_phone'] ?? '',
+        'resident_email' => $row['res_email'] ?? '',
+        'resident_house_number' => $row['res_house_number'] ?? '',
+        'guest_name' => $fullName,
+        'is_resident_guest' => true,
         'verification' => $verificationLink
     ];
 }
@@ -140,6 +145,16 @@ if (!$data) {
         $isResident = !empty($row['user_id']) && $uType !== 'visitor';
         $hasReservation = !empty($row['amenity']);
         
+        $bookedRole = strtolower(trim($row['booked_by_role'] ?? ''));
+        $bookedName = trim((string)($row['booked_by_name'] ?? ''));
+        $residentFullName = trim(implode(' ', array_filter([
+            $row['first_name'] ?? '',
+            $row['middle_name'] ?? '',
+            $row['last_name'] ?? ''
+        ], function($v){ return $v !== null && $v !== ''; })));
+        $residentEmail = $row['email'] ?? '';
+        $residentContact = $row['phone'] ?? '';
+
         if ($hasEntryPass) {
             $displayName = trim(implode(' ', array_filter([
                 $row['ep_full_name'] ?? '',
@@ -164,6 +179,15 @@ if (!$data) {
             $address = $row['user_address'] ?? (($row['house_number'] ?? '') ? ('Block ' . $row['house_number']) : '');
             $email = $row['email'] ?? '';
             $createdAt = $row['created_at'] ?? '';
+        }
+        $isResidentGuest = (!$hasEntryPass && ($bookedRole === 'guest' || $bookedRole === 'co_owner') && $bookedName !== '');
+        if ($isResidentGuest) {
+            $displayName = $bookedName;
+            $contact = '';
+            $email = '';
+            $sex = '';
+            $birthdate = '';
+            $address = '';
         }
         $publishDate = !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : '';
         $expireDate = !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ($expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : '');
@@ -194,7 +218,13 @@ if (!$data) {
             'has_reservation' => $hasReservation,
             'is_visitor' => $isVisitor,
             'is_resident' => $isResident,
-            'reserved_by' => (!empty($row['gf_id']) ? "Resident's Guest" : ($isResident ? 'Resident' : ($isVisitor ? 'Visitor' : ''))),
+            'reserved_by' => (!empty($row['gf_id']) || $isResidentGuest ? "Resident’s Guest" : ($isResident ? 'Resident' : ($isVisitor ? 'Visitor' : ''))),
+            'resident_name' => $residentFullName,
+            'resident_contact' => $residentContact,
+            'resident_email' => $residentEmail,
+            'resident_house_number' => $row['house_number'] ?? '',
+            'guest_name' => $displayName,
+            'is_resident_guest' => $isResidentGuest,
             'verification' => $verificationLink
         ];
     }
@@ -252,6 +282,11 @@ if (!$data) {
             'is_visitor' => false,
             'is_resident' => true,
             'reserved_by' => 'Resident',
+            'resident_name' => $fullName !== '' ? $fullName : 'Resident',
+            'resident_contact' => $phone,
+            'resident_email' => $email,
+            'guest_name' => '',
+            'is_resident_guest' => false,
             'verification' => $verificationLink
         ];
     }
@@ -483,10 +518,40 @@ if (!$data) {
     </div>
     <?php endif; ?>
 
+    <?php if (!empty($data['is_resident_guest'])): ?>
+    <div class="section-title">Resident Owner Information</div>
+    <div class="info-grid">
+        <?php if (!empty($data['resident_name'])): ?>
+        <div class="info-row">
+            <span class="info-label">Resident Name</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['resident_name']); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($data['resident_contact'])): ?>
+        <div class="info-row">
+            <span class="info-label">Resident Contact</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['resident_contact']); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($data['resident_email'])): ?>
+        <div class="info-row">
+            <span class="info-label">Resident Email</span>
+            <span class="info-value" style="font-size:0.85rem;"><?php echo htmlspecialchars($data['resident_email']); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($data['resident_house_number'])): ?>
+        <div class="info-row">
+            <span class="info-label">House Number</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['resident_house_number']); ?></span>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <div class="section-title">Personal Information</div>
     <div class="info-grid">
         <div class="info-row">
-            <span class="info-label">Name</span>
+            <span class="info-label"><?php echo !empty($data['is_resident_guest']) ? 'Guest Name' : 'Name'; ?></span>
             <span class="info-value"><?php echo htmlspecialchars($data['name']); ?></span>
         </div>
         <?php if(!empty($data['contact'])): ?>

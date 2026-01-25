@@ -2,6 +2,11 @@
 session_start();
 include("connect.php");  
 
+$loginError = '';
+$loginErrorMessage = '';
+$loginSuccessMessage = '';
+$loginRedirect = '';
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['vp_account']) && isset($_POST['password'])) {
         $email = trim($_POST['vp_account']);
@@ -14,6 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt_staff->execute();
         $result_staff = $stmt_staff->get_result();
 
+        $skipUserCheck = false;
         if ($result_staff->num_rows > 0) {
             $row = $result_staff->fetch_assoc();
 
@@ -22,9 +28,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['role']  = $row['role'];
                 $_SESSION['staff_id'] = $row['id'];
 
-                echo "<script>alert('Login successful!');</script>";
                 if ($row['role'] === "admin") {
-                    echo "<script>window.location.href='admin.php';</script>";
+                    $loginSuccessMessage = 'Login successful!';
+                    $loginRedirect = 'admin.php';
                 } elseif ($row['role'] === "guard") {
                     $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
                     $stmtLog = $con->prepare("INSERT INTO login_history (staff_id) VALUES (?)");
@@ -39,53 +45,57 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $s = preg_replace('/[^a-zA-Z]/', '', $s);
                     $s = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
                     $_SESSION['guard_surname'] = $s;
-                    echo "<script>window.location.href='guard.php';</script>";
+                    $loginSuccessMessage = 'Login successful!';
+                    $loginRedirect = 'guard.php';
                 }
-                exit();
+                $skipUserCheck = true;
             } else {
-                echo "<script>alert('Incorrect password!'); window.history.back();</script>";
-                exit();
+                $loginError = 'invalid_password';
+                $loginErrorMessage = 'Incorrect password.';
+                $skipUserCheck = true;
             }
         }
         $stmt_staff->close();
 
         // ✅ Step 2: Check if account exists in users (resident/visitor)
-        $sql_user = "SELECT * FROM users WHERE email = ?";
-        $stmt_user = $con->prepare($sql_user);
-        $stmt_user->bind_param("s", $email);
-        $stmt_user->execute();
-        $result_user = $stmt_user->get_result();
+        if (!$skipUserCheck) {
+            $sql_user = "SELECT * FROM users WHERE email = ?";
+            $stmt_user = $con->prepare($sql_user);
+            $stmt_user->bind_param("s", $email);
+            $stmt_user->execute();
+            $result_user = $stmt_user->get_result();
 
-        if ($result_user->num_rows > 0) {
-            $row = $result_user->fetch_assoc();
+            if ($result_user->num_rows > 0) {
+                $row = $result_user->fetch_assoc();
 
-            if (password_verify($password, $row['password'])) {
-                $_SESSION['user_id']   = $row['id'];
-                $_SESSION['email']     = $row['email'];
-                $_SESSION['user_type'] = $row['user_type'];
-                // Keep a generic role key for parts of the site that expect it
-                $_SESSION['role']      = $row['user_type'];
+                if (password_verify($password, $row['password'])) {
+                    $_SESSION['user_id']   = $row['id'];
+                    $_SESSION['email']     = $row['email'];
+                    $_SESSION['user_type'] = $row['user_type'];
+                    // Keep a generic role key for parts of the site that expect it
+                    $_SESSION['role']      = $row['user_type'];
 
-                echo "<script>alert('Login successful!');</script>";
-                if ($row['user_type'] === 'resident') {
-                    echo "<script>window.location.href='profileresident.php';</script>";
+                    if ($row['user_type'] === 'resident') {
+                        $loginSuccessMessage = 'Login successful!';
+                        $loginRedirect = 'profileresident.php';
+                    } else {
+                        $loginSuccessMessage = 'Login successful!';
+                        $loginRedirect = 'mainpage.php';
+                    }
                 } else {
-                    echo "<script>window.location.href='mainpage.php';</script>";
+                    $loginError = 'invalid_password';
+                    $loginErrorMessage = 'Incorrect password.';
                 }
-                exit();
             } else {
-                echo "<script>alert('Incorrect password!'); window.history.back();</script>";
-                exit();
+                $loginError = 'account_not_found';
+                $loginErrorMessage = 'This account doesn’t exist';
             }
-        } else {
-            echo "<script>alert('Account not found! Please register first.'); window.history.back();</script>";
-            exit();
+            $stmt_user->close();
         }
-        $stmt_user->close();
 
     } else {
-        echo "<script>alert('Please enter both email and password!'); window.history.back();</script>";
-        exit();
+        $loginError = 'missing_fields';
+        $loginErrorMessage = 'Please enter both email and password.';
     }
 }
 ?>
@@ -118,6 +128,63 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     body {
       display: flex;
       min-height: 100vh;
+    }
+
+    .login-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+    }
+    .login-modal .modal-content {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px 24px;
+      width: 90%;
+      max-width: 380px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    }
+    .login-modal .modal-close {
+      position: absolute;
+      right: 12px;
+      top: 10px;
+      background: transparent;
+      border: 0;
+      font-size: 22px;
+      cursor: pointer;
+      color: #666;
+    }
+    .login-modal .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #c0392b;
+      margin-bottom: 10px;
+    }
+    .login-modal .modal-message {
+      color: #444;
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+    }
+    .login-modal .modal-btn {
+      border: 0;
+      background: #c0392b;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      width: 100%;
+    }
+    .login-modal.success .modal-title {
+      color: #1e8f3e;
+    }
+    .login-modal.success .modal-btn {
+      background: #1e8f3e;
     }
 
     .login-wrapper {
@@ -332,6 +399,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
   </div>
 
+  <div id="loginErrorModal" class="login-modal">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeLoginError()">&times;</button>
+      <div class="modal-title">Error</div>
+      <div class="modal-message" id="loginErrorMessage"></div>
+      <button type="button" class="modal-btn" onclick="closeLoginError()">OK</button>
+    </div>
+  </div>
+  <div id="loginSuccessModal" class="login-modal success">
+    <div class="modal-content">
+      <button type="button" class="modal-close" onclick="closeLoginSuccess()">&times;</button>
+      <div class="modal-title">Success</div>
+      <div class="modal-message" id="loginSuccessMessage"></div>
+      <button type="button" class="modal-btn" onclick="closeLoginSuccess()">Continue</button>
+    </div>
+  </div>
+
   <script>
     function togglePassword(id, el) {
       const input = document.getElementById(id);
@@ -343,6 +427,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         el.textContent = "👁️";
       }
     }
+
+    function openLoginError(message) {
+      const modal = document.getElementById('loginErrorModal');
+      const msg = document.getElementById('loginErrorMessage');
+      if (msg) msg.textContent = message;
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeLoginError() {
+      const modal = document.getElementById('loginErrorModal');
+      if (modal) modal.style.display = 'none';
+    }
+    function openLoginSuccess(message) {
+      const modal = document.getElementById('loginSuccessModal');
+      const msg = document.getElementById('loginSuccessMessage');
+      if (msg) msg.textContent = message;
+      if (modal) modal.style.display = 'flex';
+    }
+    function closeLoginSuccess() {
+      const modal = document.getElementById('loginSuccessModal');
+      if (modal) modal.style.display = 'none';
+      if (window._loginRedirect) {
+        window.location.href = window._loginRedirect;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const errMsg = "<?php echo htmlspecialchars($loginErrorMessage, ENT_QUOTES); ?>";
+      if (errMsg) {
+        openLoginError(errMsg);
+      }
+      const successMsg = "<?php echo htmlspecialchars($loginSuccessMessage, ENT_QUOTES); ?>";
+      const redirectTo = "<?php echo htmlspecialchars($loginRedirect, ENT_QUOTES); ?>";
+      if (successMsg) {
+        window._loginRedirect = redirectTo || '';
+        openLoginSuccess(successMsg);
+      }
+    });
   </script>
 </body>
 </html>

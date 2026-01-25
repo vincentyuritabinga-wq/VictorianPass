@@ -538,7 +538,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <label for="valid_id" style="display:block; margin-bottom:5px; font-weight:600; color:#23412e;">Upload Valid ID (Required for Visitors)</label>
           
           <div id="fileUploadContainer">
-            <input type="file" name="valid_id" id="valid_id" accept="image/*,.pdf" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%;">
+            <label class="upload-box">
+              <input type="file" name="valid_id" id="valid_id" accept="image/*,.pdf" hidden>
+              <img src="images/mainpage/upload.svg" alt="Upload">
+              <p>Upload Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
+            </label>
           </div>
 
           <div id="filePreviewContainer" style="display:none; margin-top: 10px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; align-items: center; justify-content: space-between; background: #fafafa;">

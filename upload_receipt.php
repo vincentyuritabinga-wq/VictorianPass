@@ -52,8 +52,8 @@ if (!move_uploaded_file($file['tmp_name'], $filePath)) {
     exit;
 }
 
-// Update database with receipt path
-$stmt = $con->prepare("UPDATE reservations SET receipt_path = ? WHERE ref_code = ?");
+// Update database with receipt path and reset payment verification
+$stmt = $con->prepare("UPDATE reservations SET receipt_path = ?, payment_status = 'pending', verified_by = NULL, verification_date = NULL, receipt_uploaded_at = NOW() WHERE ref_code = ?");
 $stmt->bind_param('ss', $filePath, $ref_code);
 
 if ($stmt->execute()) {

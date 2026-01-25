@@ -111,7 +111,7 @@ ensureDownpaymentColumn($con);
 // Handle AJAX request for user details (admin resident profile)
 if (isset($_GET['action']) && $_GET['action'] == 'get_user_details' && isset($_GET['id'])) {
     $user_id = intval($_GET['id']);
-    $stmt = $con->prepare("SELECT id, first_name, middle_name, last_name, email, phone, sex, birthdate, house_number, address, created_at, user_type, IFNULL(status,'active') as status FROM users WHERE id = ?");
+    $stmt = $con->prepare("SELECT id, first_name, middle_name, last_name, email, phone, sex, birthdate, house_number, address, valid_id_path, created_at, user_type, IFNULL(status,'active') as status FROM users WHERE id = ?");
     $stmt->bind_param('i', $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -400,39 +400,34 @@ if (isset($_POST['incident_delete']) && isset($_POST['report_id'])) {
     exit;
 }
 
-// Handle resident account actions (delete/deactivate/activate)
 if (isset($_POST['user_action']) && isset($_POST['user_id'])) {
     $uid = intval($_POST['user_id']);
     $action = $_POST['user_action'];
+    $redirectPage = $_POST['redirect_page'] ?? 'residents';
 
-    // Ensure users table has status column
-    $check = $con->query("SHOW COLUMNS FROM users LIKE 'status'");
-    if ($check && $check->num_rows === 0) {
-        $con->query("ALTER TABLE users ADD COLUMN status ENUM('active','disabled') NOT NULL DEFAULT 'active'");
-    }
+    ensureUsersStatusColumn($con);
 
-    if ($action === 'deactivate_user') {
+    if ($action === 'suspend_user' || $action === 'deactivate_user') {
         $stmt = $con->prepare("UPDATE users SET status='disabled' WHERE id = ?");
         $stmt->bind_param('i', $uid);
-        $ok = $stmt->execute();
+        $stmt->execute();
         $stmt->close();
-        if ($ok) {
-            echo "<script>alert('User has been deactivated.'); window.location.href='admin.php?page=residents';</script>";
-        } else {
-            echo "<script>alert('Failed to deactivate user.'); window.location.href='admin.php?page=residents';</script>";
-        }
+        $msg = 'Your account has been suspended. Please contact the admin for assistance.';
+        notifyUser($con, $uid, 'Account Suspended', $msg, 'warning');
+        header("Location: admin.php?page=" . $redirectPage);
         exit;
     }
     if ($action === 'activate_user') {
         $stmt = $con->prepare("UPDATE users SET status='active' WHERE id = ?");
         $stmt->bind_param('i', $uid);
-        $ok = $stmt->execute();
+        $stmt->execute();
         $stmt->close();
-        echo "<script>alert('User has been reactivated.'); window.location.href='admin.php?page=residents';</script>";
+        $msg = 'Your account has been activated. You can now access your account.';
+        notifyUser($con, $uid, 'Account Activated', $msg, 'success');
+        header("Location: admin.php?page=" . $redirectPage);
         exit;
     }
     if ($action === 'delete_user') {
-        // Safely unlink reservations before deleting user
         $con->begin_transaction();
         try {
             $stmt1 = $con->prepare("UPDATE reservations SET user_id = NULL WHERE user_id = ?");
@@ -446,11 +441,10 @@ if (isset($_POST['user_action']) && isset($_POST['user_id'])) {
             $stmt2->close();
             
             $con->commit();
-            echo "<script>alert('User account deleted.'); window.location.href='admin.php?page=residents';</script>";
         } catch (Exception $e) {
             $con->rollback();
-            echo "<script>alert('Failed to delete user: " . htmlspecialchars($e->getMessage()) . "'); window.location.href='admin.php?page=residents';</script>";
         }
+        header("Location: admin.php?page=" . $redirectPage);
         exit;
     }
 }
@@ -651,6 +645,12 @@ function getRecentNotifications($con){
 // Functions to get data for different sections
 function getPendingResidents($con) {
     $query = "SELECT * FROM users WHERE user_type = 'resident' AND status = 'pending' ORDER BY created_at DESC";
+    $result = $con->query($query);
+    return $result ?: false;
+}
+
+function getPendingVisitors($con) {
+    $query = "SELECT * FROM users WHERE user_type = 'visitor' AND status = 'pending' ORDER BY created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
 }
@@ -977,6 +977,16 @@ function ensureNotificationsTable($con) {
 }
 ensureNotificationsTable($con);
 
+function notifyUser($con, $userId, $title, $message, $type = 'info') {
+    if (!$userId) { return; }
+    try {
+        $stmt = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (?, ?, ?, ?, NOW())");
+        $stmt->bind_param('isss', $userId, $title, $message, $type);
+        $stmt->execute();
+        $stmt->close();
+    } catch (Throwable $e) {}
+}
+
 // Ensure new guest_forms table and its QR column exist
 function ensureGuestFormsTable($con) {
     $con->query("CREATE TABLE IF NOT EXISTS guest_forms (
@@ -1227,6 +1237,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($approval_status === 'approved') {
                     generateQrForGuestForm($con, $reservation_id);
                 }
+                $notifUserId = null;
+                $notifRef = null;
+                $notifAmenity = null;
+                $stmtNotif = $con->prepare("SELECT resident_user_id, ref_code, amenity FROM guest_forms WHERE id = ? LIMIT 1");
+                $stmtNotif->bind_param('i', $reservation_id);
+                $stmtNotif->execute();
+                $resNotif = $stmtNotif->get_result();
+                if ($resNotif && ($rowN = $resNotif->fetch_assoc())) {
+                    $notifUserId = intval($rowN['resident_user_id'] ?? 0);
+                    $notifRef = $rowN['ref_code'] ?? null;
+                    $notifAmenity = $rowN['amenity'] ?? null;
+                }
+                $stmtNotif->close();
+                if ($notifUserId) {
+                    $title = ($approval_status === 'approved') ? 'Request Approved' : 'Request Denied';
+                    $msg = ($approval_status === 'approved') ? 'Your request has been approved.' : 'Your request has been denied.';
+                    if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
+                    if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
+                    notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
+                }
             } else {
                 // Legacy: Update reservation approval status
                 // Load details for conflict check
@@ -1288,6 +1318,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($approval_status === 'approved') {
                     generateQrForReservation($con, $reservation_id);
                 }
+                $notifUserId = null;
+                $notifRef = null;
+                $notifAmenity = null;
+                $stmtNotif = $con->prepare("SELECT user_id, ref_code, amenity FROM reservations WHERE id = ? LIMIT 1");
+                $stmtNotif->bind_param('i', $reservation_id);
+                $stmtNotif->execute();
+                $resNotif = $stmtNotif->get_result();
+                if ($resNotif && ($rowN = $resNotif->fetch_assoc())) {
+                    $notifUserId = intval($rowN['user_id'] ?? 0);
+                    $notifRef = $rowN['ref_code'] ?? null;
+                    $notifAmenity = $rowN['amenity'] ?? null;
+                }
+                $stmtNotif->close();
+                if ($notifUserId) {
+                    $title = ($approval_status === 'approved') ? 'Reservation Approved' : 'Reservation Denied';
+                    $msg = ($approval_status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been denied.';
+                    if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
+                    if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
+                    notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
+                }
             }
 
             $redir = isset($_POST['redirect_page']) ? preg_replace('/[^a-z_]/', '', $_POST['redirect_page']) : 'visitor_requests';
@@ -1309,6 +1359,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Generate QR code upon approval
             if ($status === 'approved') {
                 generateQrForReservation($con, intval($reservation_id));
+            }
+            $notifUserId = null;
+            $notifRef = null;
+            $notifAmenity = null;
+            $stmtNotif = $con->prepare("SELECT user_id, ref_code, amenity FROM reservations WHERE id = ? LIMIT 1");
+            $stmtNotif->bind_param('i', $reservation_id);
+            $stmtNotif->execute();
+            $resNotif = $stmtNotif->get_result();
+            if ($resNotif && ($rowN = $resNotif->fetch_assoc())) {
+                $notifUserId = intval($rowN['user_id'] ?? 0);
+                $notifRef = $rowN['ref_code'] ?? null;
+                $notifAmenity = $rowN['amenity'] ?? null;
+            }
+            $stmtNotif->close();
+            if ($notifUserId) {
+                $title = ($status === 'approved') ? 'Reservation Approved' : 'Reservation Rejected';
+                $msg = ($status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been rejected.';
+                if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
+                if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
+                notifyUser($con, $notifUserId, $title, $msg, ($status === 'approved' ? 'success' : 'error'));
             }
             
             // Redirect to prevent form resubmission
@@ -1395,6 +1465,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $stmt->bind_param('si', $new_status, $user_id);
                 $stmt->execute();
                 $stmt->close();
+                if ($action == 'deny_user') {
+                    $msg = 'Your account has been denied and suspended. Please log out.';
+                    notifyUser($con, $user_id, 'Account Denied', $msg, 'error');
+                } else {
+                    $msg = 'Your account has been approved. You can now log in.';
+                    notifyUser($con, $user_id, 'Account Approved', $msg, 'success');
+                }
             }
             // Redirect back to the same page
             $redirect_page = $_POST['redirect_page'] ?? 'dashboard';
@@ -1422,6 +1499,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 if ($approval_status === 'approved') {
                     generateQrForReservation($con, $rr_id);
+                }
+                $notifUserId = null;
+                $notifRef = null;
+                $notifAmenity = null;
+                $stmtNotif = $con->prepare("SELECT user_id, ref_code, amenity FROM reservations WHERE id = ? LIMIT 1");
+                $stmtNotif->bind_param('i', $rr_id);
+                $stmtNotif->execute();
+                $resNotif = $stmtNotif->get_result();
+                if ($resNotif && ($rowN = $resNotif->fetch_assoc())) {
+                    $notifUserId = intval($rowN['user_id'] ?? 0);
+                    $notifRef = $rowN['ref_code'] ?? null;
+                    $notifAmenity = $rowN['amenity'] ?? null;
+                }
+                $stmtNotif->close();
+                if ($notifUserId) {
+                    $title = ($approval_status === 'approved') ? 'Reservation Approved' : 'Reservation Denied';
+                    $msg = ($approval_status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been denied.';
+                    if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
+                    if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
+                    notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
                 }
             }
             $redirect_page = $_POST['redirect_page'] ?? 'requests';
@@ -1477,14 +1574,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("sii", $payment_status, $staff_id, $reservation_id);
             $stmt->execute();
             
-            $refCode = null; $entryId = null; $amenityName = null;
-            $stmtInfo = $con->prepare("SELECT ref_code, entry_pass_id, amenity, approval_status FROM reservations WHERE id = ? LIMIT 1");
+            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null;
+            $stmtInfo = $con->prepare("SELECT ref_code, entry_pass_id, amenity, approval_status, user_id FROM reservations WHERE id = ? LIMIT 1");
             $stmtInfo->bind_param('i', $reservation_id);
             $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
             $approvedNow=false; $approvalStatusRes=null;
-            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; }
+            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); }
             $stmtInfo->close();
             if ($payment_status === 'verified' && $refCode) {
+            }
+            if ($notifUserId) {
+                $title = ($payment_status === 'verified') ? 'Payment Verified' : 'Payment Rejected';
+                $msg = ($payment_status === 'verified') ? 'Your payment has been verified.' : 'Your payment proof was rejected. Please update your proof of payment.';
+                if (!empty($refCode)) { $msg .= ' Code: ' . $refCode . '.'; }
+                if (!empty($amenityName)) { $msg .= ' Amenity: ' . $amenityName . '.'; }
+                notifyUser($con, $notifUserId, $title, $msg, ($payment_status === 'verified' ? 'success' : 'error'));
             }
             $redirect = 'admin.php?page=verify';
             if ($payment_status === 'verified' && !empty($refCode)) {
@@ -2518,6 +2622,7 @@ tr:hover { background-color: #f8fafc; }
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
+       <a href="?page=visitors" class="nav-item <?php echo $currentPage == 'visitors' ? 'active' : ''; ?>" data-page="visitors"><img src="images/dashboard.svg"><span>Visitors</span></a>
     <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><img src="images/dashboard.svg"><span>Archived Requests</span></a>
     <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
      </nav>
@@ -2709,7 +2814,7 @@ tr:hover { background-color: #f8fafc; }
                 if(id && src){
                   var n = parseInt(id,10);
                   if(src==='resident'){ if(typeof showResidentReservationDetails==='function'){ showResidentReservationDetails(n); } }
-                  else if(src==='visitor'){ if(typeof showResidentReservationDetails==='function'){ showResidentReservationDetails(n); } }
+                  else if(src==='visitor'){ if(typeof showReservationDetails==='function'){ showReservationDetails(n,'visitor'); } }
                   else if(src==='guest_form'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'guest_form'); } }
                   else if(src==='reservation'){ if(typeof showVisitorDetails==='function'){ showVisitorDetails(n,'reservation'); } }
                 }
@@ -3064,8 +3169,7 @@ tr:hover { background-color: #f8fafc; }
       <tr>
         <th>Name</th>
         <th>House Number</th>
-        <th>Email</th>
-        <th>Phone</th>
+        <th>Status</th>
         <th>Registered On</th>
         <th>Actions</th>
       </tr>
@@ -3078,26 +3182,81 @@ tr:hover { background-color: #f8fafc; }
               echo "<tr>";
               echo "<td>" . $resident['first_name'] . " " . $resident['last_name'] . "</td>";
               echo "<td>" . $resident['house_number'] . "</td>";
-              echo "<td>" . $resident['email'] . "</td>";
-              echo "<td>" . $resident['phone'] . "</td>";
+              $status = strtolower($resident['status'] ?? 'active');
+              $statusLabel = ucfirst($status);
+              $statusClass = ($status === 'active') ? 'badge-approved' : (($status === 'pending') ? 'badge-pending' : 'badge-rejected');
+              echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
-              // View Details button
-              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ")' style='margin-right:6px;'>View Details</button>";
-
-              
-
-              // Delete button
+              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'>View Details</button>";
+              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
+              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+              echo "<input type='hidden' name='user_action' value='suspend_user'>";
+              echo "<input type='hidden' name='redirect_page' value='residents'>";
+              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+              echo "</form>";
               echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
               echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='delete_user'>";
-              echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+              echo "<input type='hidden' name='redirect_page' value='residents'>";
+              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
               echo "</form>";
               echo "</td>";
               echo "</tr>";
           }
       } else {
-          echo "<tr><td colspan='6' style='text-align:center;'>No residents found</td></tr>";
+          echo "<tr><td colspan='5' style='text-align:center;'>No residents found</td></tr>";
+      }
+      ?>
+    </tbody>
+  </table>
+</section>
+<?php endif; ?>
+
+<?php if ($currentPage == 'visitors'): ?>
+<section class="panel" id="visitors-panel">
+  <h3>Registered Visitors</h3>
+  <table class="table table-residents">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Registered On</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php
+      $visitors = getVisitors($con);
+      if ($visitors && $visitors->num_rows > 0) {
+          while ($visitor = $visitors->fetch_assoc()) {
+              echo "<tr>";
+              $fullName = trim(($visitor['first_name'] ?? '') . ' ' . ($visitor['last_name'] ?? ''));
+              echo "<td>" . ($fullName !== '' ? $fullName : 'Visitor') . "</td>";
+              $status = strtolower($visitor['status'] ?? 'active');
+              $statusLabel = ucfirst($status);
+              $statusClass = ($status === 'active') ? 'badge-approved' : (($status === 'pending') ? 'badge-pending' : 'badge-rejected');
+              echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
+              echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
+              echo "<td class='actions'>";
+              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'>View Details</button>";
+              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
+              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+              echo "<input type='hidden' name='user_action' value='suspend_user'>";
+              echo "<input type='hidden' name='redirect_page' value='visitors'>";
+              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+              echo "</form>";
+              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
+              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+              echo "<input type='hidden' name='user_action' value='delete_user'>";
+              echo "<input type='hidden' name='redirect_page' value='visitors'>";
+              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+              echo "</form>";
+              echo "</td>";
+              echo "</tr>";
+          }
+      } else {
+          echo "<tr><td colspan='4' style='text-align:center;'>No visitors found</td></tr>";
       }
       ?>
     </tbody>
@@ -3302,60 +3461,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <section class="panel" id="requests-panel">
   <div class="content-row">
   
-  <!-- Pending Resident Accounts -->
-  <div class="card-box mb-20">
-    <h3>Pending Resident Accounts</h3>
-    <table class="table table-pending-residents">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>House Number</th>
-          <th>Email</th>
-          <th>Phone</th>
-          <th>Registered On</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php
-        $pendingRes = getPendingResidents($con);
-        if ($pendingRes && $pendingRes->num_rows > 0) {
-            while ($pr = $pendingRes->fetch_assoc()) {
-                echo "<tr>";
-                echo "<td>" . $pr['first_name'] . " " . $pr['last_name'] . "</td>";
-                echo "<td>" . htmlspecialchars($pr['house_number']) . "</td>";
-                echo "<td>" . htmlspecialchars($pr['email']) . "</td>";
-                echo "<td>" . htmlspecialchars($pr['phone']) . "</td>";
-                echo "<td>" . date('M d, Y', strtotime($pr['created_at'])) . "</td>";
-                echo "<td class='actions'>";
-                
-                // Approve button
-                echo "<form method='post' style='display:inline;'>";
-                echo "<input type='hidden' name='user_id' value='" . intval($pr['id']) . "'>";
-                echo "<input type='hidden' name='action' value='approve_user'>";
-                echo "<input type='hidden' name='redirect_page' value='requests'>";
-                echo "<button type='submit' class='btn btn-approve' style='margin-right:5px;'>Approve</button>";
-                echo "</form>";
-
-                // Deny button
-                echo "<form method='post' style='display:inline;'>";
-                echo "<input type='hidden' name='user_id' value='" . intval($pr['id']) . "'>";
-                echo "<input type='hidden' name='action' value='deny_user'>";
-                echo "<input type='hidden' name='redirect_page' value='requests'>";
-                echo "<button type='submit' class='btn btn-reject'>Deny</button>";
-                echo "</form>";
-                
-                echo "</td>";
-                echo "</tr>";
-            }
-        } else {
-            echo "<tr><td colspan='6' style='text-align:center;'>No pending resident accounts</td></tr>";
-        }
-        ?>
-      </tbody>
-    </table>
-  </div>
-
   <!-- Resident Amenity Requests (from resident_reservations) -->
   <div class="card-box">
     <h3>Resident Amenity Requests</h3>
@@ -3397,7 +3502,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                 echo "<td class='actions'>";
-                echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button><br>";
                 if ($approval_status == 'pending') {
                     $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                     echo "<form method='post' style='display:inline;'>";
@@ -3574,7 +3679,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button><br>";
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -3961,7 +4066,7 @@ window.onclick = function(event) {
 </div>
 
 <script>
-function showReservationDetails(reservationId){
+function showReservationDetails(reservationId, expectedType){
   var c = document.getElementById('reservationDetailsContent');
   if(c){ c.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>'; }
   var m = document.getElementById('reservationModal');
@@ -3971,10 +4076,20 @@ function showReservationDetails(reservationId){
     .then(data => {
       if(!data.success){ alert('Error loading reservation details: ' + (data.message||'Unknown error')); return; }
       const d = data.details || {};
+      var userType = (d.user_type || '').toString().toLowerCase();
+      if (expectedType && userType !== expectedType) {
+        if(c){ c.innerHTML = '<div style="padding:20px;text-align:center;color:red;">This reservation is not a ' + expectedType + ' account.</div>'; }
+        return;
+      }
       const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const isResidentGuest = !!d.gf_id;
       const whoLabel = isResidentGuest ? "Resident’s Guest Amenity Booking" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
+      var modalTitle = document.querySelector('#reservationModal h3');
+      if (modalTitle) {
+        var titleBase = isResidentGuest ? "Resident’s Guest Amenity Booking" : (userType === 'visitor' ? 'Visitor Reservation' : 'Resident Reservation');
+        modalTitle.textContent = titleBase + ' Details';
+      }
       const reservedBy = isResidentGuest ? (guestName || "Resident’s Guest") : whoLabel;
       const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
@@ -4183,13 +4298,13 @@ window.addEventListener('click', function(event){
 <div id="userModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeUserModal()">&times;</span>
-    <h3>Resident Profile</h3>
+    <h3>User Profile</h3>
     <div id="userDetailsContent"></div>
   </div>
   </div>
 
 <script>
-function showUserDetails(userId){
+function showUserDetails(userId, expectedType){
   document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
   document.getElementById('userModal').style.display = 'flex';
   
@@ -4201,6 +4316,18 @@ function showUserDetails(userId){
         return; 
       }
       const d = data.details || {};
+      var userType = (d.user_type || '').toString().toLowerCase();
+      if (expectedType && userType && userType !== expectedType) {
+        document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;color:red;">This user is not a ' + expectedType + ' account.</div>';
+        return;
+      }
+      var modalTitle = document.querySelector('#userModal h3');
+      if (modalTitle) {
+        var titleText = 'User Profile';
+        if (userType === 'resident') titleText = 'Resident Profile';
+        if (userType === 'visitor') titleText = 'Visitor Profile';
+        modalTitle.textContent = titleText;
+      }
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const content = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -4211,6 +4338,7 @@ function showUserDetails(userId){
             ${d.birthdate?`<p><strong>Birthdate:</strong> ${new Date(d.birthdate).toLocaleDateString()}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
+            ${d.valid_id_path?`<p><strong>Valid ID:</strong> <a href="${d.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>`:''}
           </div>
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">Residence</h4>

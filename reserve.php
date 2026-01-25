@@ -1969,7 +1969,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   if(formEl){
     let submitting = false;
     formEl.addEventListener('submit', async function(e){
-      if(submitting){ e.preventDefault(); return; }
+      e.preventDefault();
+      if(submitting){ return; }
       persistForm();
       let verifyAllowed=true;
       const gateEl=document.getElementById('submitAllowed');
@@ -2010,9 +2011,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const amenVal=document.getElementById('amenityField').value;
       if(!amenVal || !s || !eD || !st || !et){ verifyAllowed=false; }
       if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
-      if(!verifyAllowed){ e.preventDefault(); showToast('Please complete all fields accurately before proceeding.','warning'); return; }
+      if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
-        e.preventDefault();
         let basePriceForSummary=getEffectiveAmenityPrice(amenVal, persons, hours);
         const priceTxt = '₱'+basePriceForSummary.toFixed(2);
         const hoursRaw = document.getElementById('hoursInput').value||'';
@@ -2043,8 +2043,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
         const summary = [
           ['Amenity', amenVal||'-'],
-          ['Start', s||'-'],
-          ['End', eD||'-'],
+          ['Start Date', s||'-'],
+          ['End Date', eD||'-'],
           ['Time', timeDisplay || '-'],
           ['Persons', String(personsVal)],
           ['Total Price', priceTxt],
@@ -2056,7 +2056,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       } else {
         window.__verifyConfirmed=false;
         submitting=true;
-        // let the browser perform the natural form submission
+        formEl.submit();
       }
     });
     formEl.addEventListener('keydown',function(e){
@@ -2071,7 +2071,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     });
   }
   (function(){
-    const btn=document.getElementById('submitBtn');
     const vm=document.getElementById('verifyModal');
     const cBtn=document.getElementById('verifyCancelBtn');
     const pBtn=document.getElementById('verifyConfirmBtn');
@@ -2136,19 +2135,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         window.__verifyConfirmed=true;
         try{ document.getElementById('clientConfirmed').value='1'; }catch(_){}
         if(vm){ vm.style.display='none'; }
-        showToast('Details confirmed. Redirecting to payment…','success');
-        // Actually submit the form (bypass modal)
+        showToast('Details confirmed.','success');
         const f=document.querySelector('form');
         if(f){
-          f.submit();
-        }
-      });
-    }
-    if(btn){
-      btn.addEventListener('click', function(e){
-        const f=document.querySelector('form');
-        if(f){
-          e.preventDefault();
           f.requestSubmit();
         }
       });

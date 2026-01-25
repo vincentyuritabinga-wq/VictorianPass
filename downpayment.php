@@ -220,27 +220,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       $_SESSION['pending_reservation'] = null;
       if(empty($msg)){
         $msg = 'Receipt uploaded. Payment submitted for review.';
-        if (($continue_post ?? $continue) === 'reserve_resident') {
-          $isGuestFlow = false;
-          try {
-            if ($con instanceof mysqli) {
-              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
-              $stmtGF->bind_param('s', $ref_code);
-              $stmtGF->execute();
-              $resGF = $stmtGF->get_result();
-              $isGuestFlow = ($resGF && $resGF->num_rows > 0);
-              $stmtGF->close();
-            }
-          } catch (Throwable $_) { $isGuestFlow = false; }
-          if ($isGuestFlow) {
-            $_SESSION['flash_notice'] = 'Reservation for your guest submitted — Status Code: ' . $ref_code . '. Share this code with your guest so they can check their status via the Check Status page.';
-          } else {
-            $_SESSION['flash_notice'] = 'Your reservation has been submitted. Please wait for confirmation.';
-          }
-        } else {
-          $_SESSION['flash_notice'] = 'Please wait for confirmation. You can view the status of your request on your dashboard.';
-          $_SESSION['flash_ref_code'] = $ref_code;
-        }
+        $_SESSION['flash_notice'] = 'Request submitted, waiting for approval';
+        unset($_SESSION['flash_ref_code']);
       }
       // Resolve recipient name/email
       $full_name = '';
@@ -304,7 +285,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     if (($continue_post ?? $continue) === 'reserve_resident') {
       header('Location: profileresident.php');
     } else {
-      header('Location: mainpage.php');
+      header('Location: dashboardvisitor.php');
     }
     exit;
 }

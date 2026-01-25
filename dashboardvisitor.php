@@ -26,6 +26,10 @@ $firstName = $user_data['first_name'] ?? 'Visitor';
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 $birthdate = $user_data['birthdate'] ?? '';
 $birthdateDisplay = $birthdate ? date('M d, Y', strtotime($birthdate)) : '';
+$flashNotice = $_SESSION['flash_notice'] ?? '';
+if ($flashNotice !== '') {
+    unset($_SESSION['flash_notice'], $_SESSION['flash_ref_code']);
+}
 
 // Profile Picture Logic
 $profilePicPath = 'images/mainpage/profile\'.jpg'; // Default
@@ -38,11 +42,70 @@ if (file_exists('uploads/profiles/user_' . $user_id . '.jpg')) {
 }
 $profilePicUrl = $profilePicPath . '?t=' . time();
 
+function ensureNotificationsTable($con) {
+    if (!($con instanceof mysqli)) { return; }
+    $con->query("CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL COMMENT 'For residents',
+        entry_pass_id INT NULL COMMENT 'For visitors',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+        INDEX idx_user_id (user_id),
+        INDEX idx_is_read (is_read)
+    ) ENGINE=InnoDB");
+}
+
+function getUserNotifications($con, $userId, $limit = 20) {
+    $items = [];
+    if (!($con instanceof mysqli) || !$userId) { return $items; }
+    $stmt = $con->prepare("SELECT id, title, message, type, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?");
+    if (!$stmt) { return $items; }
+    $stmt->bind_param('ii', $userId, $limit);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($res && ($row = $res->fetch_assoc())) {
+        $items[] = $row;
+    }
+    $stmt->close();
+    return $items;
+}
+
+function getUserUnreadNotificationCount($con, $userId) {
+    if (!($con instanceof mysqli) || !$userId) { return 0; }
+    $stmt = $con->prepare("SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND is_read = 0");
+    if (!$stmt) { return 0; }
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $count = 0;
+    if ($res && ($row = $res->fetch_assoc())) { $count = intval($row['c']); }
+    $stmt->close();
+    return $count;
+}
+
+ensureNotificationsTable($con);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'mark_notifications_read') {
+    header('Content-Type: application/json');
+    if ($con instanceof mysqli) {
+        $stmt = $con->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ?");
+        if ($stmt) {
+            $stmt->bind_param('i', $user_id);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 // Fetch Activities
 $activities = [];
 
 // Reservations
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -99,7 +162,8 @@ if ($stmt) {
             'status' => $statusVal,
             'date' => $row['created_at'],
             'event_timestamp' => $eventTs,
-            'ref_code' => $row['ref_code'] ?? 'RES'
+            'ref_code' => $row['ref_code'] ?? 'RES',
+            'payment_status' => $row['payment_status'] ?? null
         ];
     }
     $stmt->close();
@@ -144,10 +208,14 @@ foreach ($activities as $act) {
 
 if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     header('Content-Type: application/json');
+    $notifications = getUserNotifications($con, $user_id, 20);
+    $unreadCount = getUserUnreadNotificationCount($con, $user_id);
     echo json_encode([
         'success' => true, 
         'active' => $activeActivities, 
-        'history' => $historyActivities
+        'history' => $historyActivities,
+        'notifications' => $notifications,
+        'unread_count' => $unreadCount
     ]);
     exit;
 }
@@ -202,9 +270,33 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       padding: 30px;
       flex: 1;
   }
+  #submitNoticeModal { display: flex; align-items: center; justify-content: center; }
+  #submitNoticeModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; height: auto; min-height: unset; }
+  #submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #eef2f0; color: #23412e; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
 <body>
+<?php if ($flashNotice !== '') { ?>
+  <div id="submitNoticeModal" class="modal" style="display:flex;">
+    <div class="modal-content" style="max-width:420px;text-align:center;padding:24px;">
+      <span class="close" id="submitNoticeClose">&times;</span>
+      <div style="font-size:1.1rem;font-weight:700;color:#23412e;margin-bottom:6px;">Request submitted</div>
+      <div style="color:#555;"><?php echo htmlspecialchars($flashNotice); ?></div>
+      <button type="button" id="submitNoticeBtn" style="margin-top:18px;background:#23412e;color:#fff;border:none;border-radius:8px;padding:10px 16px;cursor:pointer;font-weight:600;">Close</button>
+    </div>
+  </div>
+  <script>
+    (function(){
+      var modal=document.getElementById('submitNoticeModal');
+      var closeBtn=document.getElementById('submitNoticeClose');
+      var okBtn=document.getElementById('submitNoticeBtn');
+      function close(){ if(modal) modal.style.display='none'; }
+      if(closeBtn) closeBtn.addEventListener('click', close);
+      if(okBtn) okBtn.addEventListener('click', close);
+      if(modal) modal.addEventListener('click', function(e){ if(e.target===modal) close(); });
+    })();
+  </script>
+<?php } ?>
 
 <div class="app-container">
   <!-- SIDEBAR -->
@@ -272,7 +364,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucfirst($act['status']);
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -317,7 +409,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucfirst($act['status']);
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -564,28 +656,44 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       status:fmtLabel(status),
       title:title,
       type:type,
-      time:timeText
+      time:timeText,
+      message:'Code: '+code+' • '+fmtLabel(status)
     });
   }
   
   function renderNotifPanel(){
     if(!notifPanel) return;
+    var header='<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">&times;</button></div>';
     if(!notifItems.length){
-      notifPanel.innerHTML='<div class="notif-empty">No recent updates</div>';
-      return;
+      notifPanel.innerHTML=header+'<div class="notif-panel-body"><div class="notif-empty">No recent updates</div></div>';
+    } else {
+      var html='';
+      for(var i=notifItems.length-1;i>=0;i--){
+        var it=notifItems[i]||{};
+        var code=String(it.code||'').replace(/[<>]/g,'');
+        var title=String(it.title||'').replace(/[<>]/g,'');
+        var status=String(it.status||'').replace(/[<>]/g,'');
+        var message=String(it.message||'').replace(/[<>]/g,'');
+        var time=String(it.created_at||it.time||'').replace(/[<>]/g,'');
+        var subText=message || ('Code: '+code+' • '+status);
+        html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+subText+'</div>';
+        if(time) html+='<div class="notif-item-time">'+time+'</div>';
+        html+='</div></div>';
+      }
+      notifPanel.innerHTML=header+'<div class="notif-panel-body">'+html+'</div>';
     }
-    var html='';
-    for(var i=notifItems.length-1;i>=0;i--){
-      var it=notifItems[i]||{};
-      var code=String(it.code||'').replace(/[<>]/g,'');
-      var title=String(it.title||'').replace(/[<>]/g,'');
-      var status=String(it.status||'').replace(/[<>]/g,'');
-      var time=String(it.time||'').replace(/[<>]/g,'');
-      html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">Code: '+code+' • '+status+'</div>';
-      if(time) html+='<div class="notif-item-time">'+time+'</div>';
-      html+='</div></div>';
+    var closeBtn=notifPanel.querySelector('.notif-panel-close');
+    if(closeBtn){
+      closeBtn.addEventListener('click',function(e){
+        e.stopPropagation();
+        notifPanel.style.display='none';
+      });
     }
-    notifPanel.innerHTML=html;
+  }
+
+  function markNotificationsRead(){
+    return fetch('dashboardvisitor.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'mark_notifications_read'})})
+      .then(function(r){ return r.json(); })["catch"](function(){});
   }
   
   var prevStatuses={};
@@ -626,6 +734,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             
             // Always update the status attribute to keep in sync with server
             li.setAttribute('data-status',newStatus);
+            if(newItem.payment_status !== undefined){
+              li.setAttribute('data-payment-status', newItem.payment_status || '');
+            }
 
             if(panelId === 'panel-requests' && newStatusLower.indexOf('cancel') !== -1 && historyList && activeList){
               var safeCode=code.replace(/"/g,'&quot;');
@@ -714,6 +825,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
             if(!li) return;
             li.setAttribute('data-status', item.status || 'cancelled');
+            if(item.payment_status !== undefined){
+              li.setAttribute('data-payment-status', item.payment_status || '');
+            }
             var titleEl=li.querySelector('.item-title');
             if(titleEl && item.title) titleEl.textContent=item.title;
             var badge=li.querySelector('.status-badge');
@@ -746,10 +860,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         updateList(data.active,'list-active','panel-requests');
         if(data.history) moveHistoryItems(data.history);
         
-        if(notifPanel) renderNotifPanel();
+        if(Array.isArray(data.notifications)){
+          notifItems = data.notifications;
+          renderNotifPanel();
+        }
+        if(notifCountEl){
+          var uc = parseInt(data.unread_count||'0',10);
+          notifCountEl.textContent = uc;
+          notifCountEl.style.display = uc > 0 ? 'inline-block' : 'none';
+        }
       })["catch"](function(){});
   }
   
+  refreshStatuses();
   setInterval(refreshStatuses,10000);
   
   // Modal Logic
@@ -1024,8 +1147,24 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       e.stopPropagation();
       notifPanel.style.display=(notifPanel.style.display==='block'?'none':'block');
       if(notifPanel.style.display==='block') renderNotifPanel();
+      document.querySelectorAll('.item-list .list-item.status-updated').forEach(function(li){
+        li.classList.remove('status-updated');
+      });
+      if(notifCountEl){
+        notifCountEl.textContent='0';
+        notifCountEl.style.display='none';
+      }
+      if(notifPanel.style.display==='block'){
+        markNotificationsRead();
+      }
     });
   }
+  document.addEventListener('click',function(e){
+    if(!notifPanel || !notifBtn) return;
+    if(notifPanel.style.display!=='block') return;
+    if(notifPanel.contains(e.target) || notifBtn.contains(e.target)) return;
+    notifPanel.style.display='none';
+  });
   
   // Close modals when clicking outside
   window.addEventListener('click', function(e) {
@@ -1034,9 +1173,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
       if (e.target === cancelModal) {
           cancelModal.style.display = 'none';
-      }
-      if (e.target === notifPanel) {
-          notifPanel.style.display = 'none'; // logic for notif panel is handled separately usually, but good to have safety
       }
   });
 
@@ -1049,6 +1185,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var label=fmtLabel(status);
     var statusNote='';
     var s=status.toLowerCase();
+    var paymentStatus=(li.getAttribute('data-payment-status')||'').toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
     var isApproved=s.indexOf('approv')!==-1;
 
@@ -1063,6 +1200,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
+    if(type==='reservation' && paymentStatus==='rejected'){
+        statusNote='Payment proof was rejected. Please update your proof of payment.';
+    }
 
     var titleEl=li.querySelector('.item-title');
     var detailsEl=li.querySelector('.item-details');
@@ -1078,6 +1218,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
     var canCancel=(s.indexOf('pending')!==-1||s===''||s==='new');
     var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
+    var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
     
     var html='';
     html+='<div class="item-extra-section">';
@@ -1101,6 +1242,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
     html+='<div class="item-actions">';
+    if(canUpdateProof && ref){
+        html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
+        html+='<input type="file" class="update-proof-input" accept="image/*" style="display:none;">';
+    }
     if(canCancel && ref){
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
     }
@@ -1109,7 +1254,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     
     if(isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
+        html+='<button type="button" class="item-extra-link download-qr-btn view-details-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
     } else {
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
@@ -1152,6 +1297,41 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           })
           .catch(function(){});
     });
+    var updateBtn=extra.querySelector('.update-proof-btn');
+    var updateInput=extra.querySelector('.update-proof-input');
+    if(updateBtn && updateInput && ref){
+      updateBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        updateInput.click();
+      });
+      updateInput.addEventListener('change',function(){
+        if(!updateInput.files || !updateInput.files[0]) return;
+        var fd=new FormData();
+        fd.append('ref_code', ref);
+        fd.append('receipt', updateInput.files[0]);
+        updateBtn.disabled=true;
+        fetch('upload_receipt.php',{method:'POST',body:fd})
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if(!data || !data.success){
+              updateBtn.disabled=false;
+              alert(data && data.message ? data.message : 'Upload failed.');
+              return;
+            }
+            li.setAttribute('data-payment-status','pending');
+            extra.setAttribute('data-loaded','0');
+            extra.innerHTML='';
+            if(li.classList.contains('expanded')){
+              buildExtraContent(li, extra);
+              extra.setAttribute('data-loaded','1');
+            }
+          })
+          ["catch"](function(){
+            updateBtn.disabled=false;
+            alert('Network error. Please try again.');
+          });
+      });
+    }
   }
 
 })();

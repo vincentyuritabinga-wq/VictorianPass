@@ -559,6 +559,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    animation: fadeInUp 0.5s ease forwards;
     padding: 8px 16px;
     font-size: 0.85rem;
     font-weight: 500;
@@ -569,6 +570,7 @@ body {
     color: #3b82f6;
     background-color: #fff;
     text-decoration: none;
+    margin-top: 0;
 }
 
 .item-extra-link.download-qr-btn:hover {
@@ -704,8 +706,44 @@ body {
     border-radius: 12px;
     box-shadow: 0 12px 30px rgba(0,0,0,0.45);
     overflow-y: auto;
-    padding: 10px 0;
+    padding: 0;
     z-index: 50;
+}
+
+.notif-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    position: sticky;
+    top: 0;
+    background: #111827;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 1;
+}
+
+.notif-panel-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #f9fafb;
+}
+
+.notif-panel-close {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.notif-panel-close:hover {
+    color: #f9fafb;
+}
+
+.notif-panel-body {
+    padding: 6px 0;
 }
 
 .notif-panel::before {
@@ -783,7 +821,7 @@ body {
     border: 1px solid #e0e0e0;
     width: 350px;
     max-width: 90vw;
-    max-height: 80vh;
+    max-height: calc(100vh - 100px);
     display: flex;
     flex-direction: column;
     border-radius: 12px;
@@ -865,10 +903,12 @@ body {
     font-size: 1.1rem;
     color: #111;
     font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
     max-width: 100%;
+    word-break: break-word;
+    line-height: 1.3;
 }
 
 .profile-role {
@@ -914,9 +954,31 @@ body {
     color: #333;
     text-align: right;
     width: 60%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+}
+
+@media (max-width: 480px) {
+    .profile-modal-content {
+        top: 12px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-width: none;
+        max-height: calc(100vh - 24px);
+    }
+    .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    .detail-label,
+    .detail-value {
+        width: 100%;
+        text-align: left;
+    }
 }
 
 .profile-actions {
