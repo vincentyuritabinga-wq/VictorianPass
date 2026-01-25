@@ -330,6 +330,7 @@ body {
 .status-denied { background-color: #ffebee; color: #c62828; }
 .status-cancelled { background-color: #f5f5f5; color: #616161; }
 .status-completed { background-color: #e8f5e9; color: #2e7d32; }
+.status-approved { background-color: #e8f5e9; color: #2e7d32; }
 
 .item-title {
     font-weight: 600;

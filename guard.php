@@ -554,7 +554,7 @@ tr:hover { background-color: #f8fafc; }
     <div class="header-actions">
       <div class="profile-mini">
         <img src="images/logo.svg" alt="Guard" class="avatar">
-        <span style="color:white; margin-top: 2px;"><?php echo htmlspecialchars($surname); ?></span>
+        <span style="colo r:white; margin-top: 2px;"><?php echo htmlspecialchars($surname); ?></span>
       </div>
     </div>
   </header>

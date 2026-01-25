@@ -192,7 +192,12 @@ if ($stmt) {
             if ($bookedName !== '') {
                 $reservedBy = 'Booked by: ' . $bookedName;
             }
-        } else if (!empty($row['gf_id'])) {
+        }
+        if ($reservedBy === '' && (string)($row['booking_for'] ?? '') === 'guest') {
+            if ($bookedName !== '') {
+                $reservedBy = 'Booked by: ' . $bookedName;
+            }
+        } else if ($reservedBy === '' && !empty($row['gf_id'])) {
             $guestNameParts = [];
             if (!empty($row['visitor_first_name'])) { $guestNameParts[] = $row['visitor_first_name']; }
             if (!empty($row['visitor_middle_name'])) { $guestNameParts[] = $row['visitor_middle_name']; }
@@ -735,7 +740,8 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($activeActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
+                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucfirst($act['status']);
@@ -783,7 +789,8 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($historyActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
+                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucfirst($act['status']);
@@ -1077,7 +1084,8 @@ body.account-blocked { overflow: hidden; }
   });
   function statusClassFor(s){
     s=(s||'').toLowerCase();
-    if(s.indexOf('approv')!==-1||s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
+    if(s.indexOf('approv')!==-1) return 'status-approved';
+    if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     return 'status-pending';

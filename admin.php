@@ -4077,10 +4077,7 @@ function showReservationDetails(reservationId, expectedType){
       if(!data.success){ alert('Error loading reservation details: ' + (data.message||'Unknown error')); return; }
       const d = data.details || {};
       var userType = (d.user_type || '').toString().toLowerCase();
-      if (expectedType && userType !== expectedType) {
-        if(c){ c.innerHTML = '<div style="padding:20px;text-align:center;color:red;">This reservation is not a ' + expectedType + ' account.</div>'; }
-        return;
-      }
+      if (expectedType && userType !== expectedType) { /* allow viewing details regardless of type */ }
       const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const isResidentGuest = !!d.gf_id;
