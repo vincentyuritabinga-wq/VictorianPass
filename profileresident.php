@@ -158,6 +158,7 @@ $reservationRefs = [];
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
 $colsToCheck = [
+    'booking_for' => "VARCHAR(50) NULL",
     'booked_by_role' => "VARCHAR(50) NULL",
     'booked_by_name' => "VARCHAR(150) NULL"
 ];

@@ -128,6 +128,7 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .status-pill{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 12px;border-radius:8px;font-weight:700;font-size:0.85rem;box-shadow:0 2px 8px rgba(0,0,0,0.1);border:none}
 .status-pill.available{background:#23412e;color:#fff}
 .status-pill.unavailable{background:#dc2626;color:#fff}
+.status-pill.partly{background:#f59e0b;color:#fff}
 .status-pill.neutral{background:#e5ddc6;color:#23412e}
 .btn-link{
   background:#e5f7e8;

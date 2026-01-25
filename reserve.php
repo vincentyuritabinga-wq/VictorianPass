@@ -999,35 +999,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             return ds >= t.start_date && ds <= t.end_date;
         });
 
-        let reservedHours=0; const marked={};
-        dayBooked.forEach(t=>{
-          
-          let bS=0, bE=24;
-          if (t.has_time) {
-              bS=parseInt(String(t.start).split(':')[0],10);
-              bE=parseInt(String(t.end).split(':')[0],10);
-          }
-          
-          // Handle multi-day time clamping
-          if (t.start_date !== t.end_date) {
-             if (ds === t.start_date) {
-                 // On start date, use start time -> end of day
-                 bE = 24;
-             } else if (ds === t.end_date) {
-                 // On end date, use start of day -> end time
-                 bS = 0;
-             } else {
-                 // Middle days are full days
-                 bS = 0;
-                 bE = 24;
-             }
-          }
-
-          for(let h=bS; h<bE; h++){
-            if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
-          }
-        });
-        
+        const reservedHours = getReservedHoursForDay(dayBooked, minH, maxH, ds, amen);
         if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.classList.add('fully-booked'); cell.title='Fully Booked — no time slots available for this date.'; }
         else if(reservedHours>0){ cell.classList.add('partly'); cell.title='Partially Booked — some time slots are unavailable.'; }
         else { cell.classList.add('available'); cell.title=''; }
@@ -1687,6 +1659,32 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
   }
 
+  function getReservedHoursForDay(booked, minH, maxH, ds, amen){
+    let reservedHours=0; const marked={};
+    (booked||[]).forEach(t=>{
+      if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return;
+      let bS=0, bE=24;
+      if (t.has_time) {
+        bS=parseInt(String(t.start).split(':')[0],10);
+        bE=parseInt(String(t.end).split(':')[0],10);
+      }
+      if (t.start_date && t.end_date && t.start_date !== t.end_date) {
+        if (ds === t.start_date) {
+          bE = 24;
+        } else if (ds === t.end_date) {
+          bS = 0;
+        } else {
+          bS = 0;
+          bE = 24;
+        }
+      }
+      for(let h=bS; h<bE; h++){
+        if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
+      }
+    });
+    return reservedHours;
+  }
+
   async function computeAvailability(){
     const amenSel=document.getElementById('amenityField').value;
     if(!amenSel){ const card=document.querySelector('.amenity-card.selected'); if(card){ const pill=card.querySelector('.status-pill'); if(pill){ pill.textContent='Select amenity'; pill.className='status-pill neutral'; } } return; }
@@ -1704,23 +1702,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const maxH=parseInt(hrsRange.max.split(':')[0],10);
     const totalHours=Math.max(0,maxH-minH);
     let fullyBookedFound=false;
+    let partiallyBookedFound=false;
     for(let d=new Date(sd); d<=ed; d.setDate(d.getDate()+1)){
       const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       try{
         const booked=await fetchBookedTimesFor(ds);
-        let reservedHours=0; const marked={};
-        (booked||[]).forEach(t=>{
-          if(isHourBasedAmenity(amenSel) && (t.has_time===false || t.has_time===0)) return;
-          const bS=parseInt(String(t.start).split(':')[0],10);
-          const bE=parseInt(String(t.end).split(':')[0],10);
-          for(let h=bS; h<bE; h++){
-            if(h>=minH && h<maxH){ if(!marked[h]){ marked[h]=true; reservedHours++; } }
-          }
-        });
+        const reservedHours = getReservedHoursForDay(booked, minH, maxH, ds, amenSel);
         if(reservedHours>=totalHours){ fullyBookedFound=true; break; }
+        if(reservedHours>0){ partiallyBookedFound=true; }
       }catch(_){ /* ignore and treat as not fully booked */ }
     }
-    if(fullyBookedFound){ pill.textContent='Unavailable'; pill.className='status-pill unavailable'; }
+    if(fullyBookedFound){ pill.textContent='Fully Booked'; pill.className='status-pill unavailable'; }
+    else if(partiallyBookedFound){ pill.textContent='Partially Booked'; pill.className='status-pill partly'; }
     else { pill.textContent='Available'; pill.className='status-pill available'; }
   }
 
@@ -1770,7 +1763,16 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const amen=document.getElementById('amenityField').value;
     const overlap=times.some(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return false; const ts=toMinutes(t.start); const te=toMinutes(t.end); return !(sMin2>=te || eMin2<=ts); });
     if(overlap){pill.textContent='Unavailable';pill.className='status-pill unavailable'}
-    else{pill.textContent='Available';pill.className='status-pill available'}
+    else{
+      const hrsRange=getAmenityHours(amen);
+      const minH=parseInt(hrsRange.min.split(':')[0],10);
+      const maxH=parseInt(hrsRange.max.split(':')[0],10);
+      const totalHours=Math.max(0,maxH-minH);
+      const reservedHours = getReservedHoursForDay(times, minH, maxH, s, amen);
+      if(reservedHours>=totalHours){ pill.textContent='Fully Booked'; pill.className='status-pill unavailable'; }
+      else if(reservedHours>0){ pill.textContent='Partially Booked'; pill.className='status-pill partly'; }
+      else { pill.textContent='Available'; pill.className='status-pill available'; }
+    }
     const te=document.getElementById('timeError');
     if(te){
       if(overlap){ te.style.display='block'; te.textContent='Time slot is already booked. Please choose a different time.'; }
