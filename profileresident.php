@@ -57,6 +57,76 @@ if (file_exists('uploads/profiles/user_' . $userId . '.jpg')) {
 }
 $profilePicUrl = $profilePicPath . '?t=' . time();
 
+// Change Password Handler
+$pwdMsg = '';
+$pwdOk = false;
+function ensurePasswordField($con){
+  if(!($con instanceof mysqli)) return;
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'password'");
+  if($res && ($row = $res->fetch_assoc())){
+    $type = strtolower($row['Type'] ?? '');
+    if (strpos($type, 'varchar(255)') === false && strpos($type, 'text') === false) {
+      @$con->query("ALTER TABLE users MODIFY COLUMN password VARCHAR(255)");
+    }
+  } else {
+    @$con->query("ALTER TABLE users ADD COLUMN password VARCHAR(255)");
+  }
+}
+ensurePasswordField($con);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+  $current = $_POST['current_password'] ?? '';
+  $newPass = $_POST['new_password'] ?? '';
+  $confirm = $_POST['confirm_password'] ?? '';
+  if ($current === '' || $newPass === '' || $confirm === '') {
+    $pwdMsg = 'Please fill in all password fields.';
+  } elseif ($newPass !== $confirm) {
+    $pwdMsg = 'New password and confirm password do not match.';
+  } elseif (strlen($newPass) < 8) {
+    $pwdMsg = 'New password must be at least 8 characters.';
+  } else {
+    if (!($con instanceof mysqli)) {
+      $pwdMsg = 'Database connection error.';
+    } else {
+      $stmtP = $con->prepare("SELECT `password` FROM users WHERE id = ? LIMIT 1");
+      if (!$stmtP) {
+        $pwdMsg = 'Database error: ' . $con->error;
+      } else {
+        $stmtP->bind_param('i', $userId);
+        $stmtP->execute();
+        $stmtP->bind_result($hash);
+        $hasRow = $stmtP->fetch();
+        $stmtP->close();
+        if ($hasRow) {
+          if (!password_verify($current, $hash)) {
+            $pwdMsg = 'Current password is incorrect.';
+          } else {
+            $newHash = password_hash($newPass, PASSWORD_BCRYPT);
+            $updP = $con->prepare("UPDATE users SET `password` = ? WHERE id = ?");
+            if (!$updP) {
+              $esc = $con->real_escape_string($newHash);
+              $ok = $con->query("UPDATE users SET `password` = '".$esc."' WHERE id = ".intval($userId));
+              if ($ok) {
+                $pwdOk = true;
+                $pwdMsg = 'Your password has been updated.';
+              } else {
+                $pwdMsg = 'Database error: ' . $con->error;
+              }
+            } else {
+              $updP->bind_param('si', $newHash, $userId);
+              $updP->execute();
+              $updP->close();
+              $pwdOk = true;
+              $pwdMsg = 'Your password has been updated.';
+            }
+          }
+        } else {
+          $pwdMsg = 'Unable to verify your account.';
+        }
+      }
+    }
+  }
+}
+
 function ensureNotificationsTable($con) {
     if (!($con instanceof mysqli)) { return; }
     $con->query("CREATE TABLE IF NOT EXISTS notifications (
@@ -2306,6 +2376,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="detail-label">Address</div>
         <div class="detail-value"><?php echo htmlspecialchars($user['address'] ?? ''); ?></div>
       </div>
+      <div class="detail-row">
+        <div class="detail-label">Change Password</div>
+        <div class="detail-value" style="width:100%;">
+          <button type="button" id="openChangePasswordResident" style="background:#23412e; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600;">Change Password</button>
+        </div>
+      </div>
     </div>
     <div class="profile-actions">
        <a href="logout.php" class="btn-logout-modal">Log Out</a>
@@ -2381,6 +2457,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+});
+</script>
+<div id="changePasswordModalResident" class="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; z-index:3000;">
+  <div class="vp-logout-modal" style="position:relative; top:auto; right:auto; margin:0; width:350px; max-width:90vw; max-height:calc(100vh - 100px);">
+    <button class="close-change-password" style="position:absolute; right:12px; top:10px; background:transparent; border:none; font-size:20px; color:#fff; cursor:pointer;">&times;</button>
+    <div style="margin-bottom:12px; font-weight:700; font-size:1.2rem;">Change Password</div>
+    <?php if ($pwdMsg !== '') { ?>
+      <div style="margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:0.9rem; <?php echo $pwdOk ? 'background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0' : 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca'; ?>">
+        <?php echo htmlspecialchars($pwdMsg); ?>
+      </div>
+    <?php } ?>
+    <form method="post" action="profileresident.php" style="display:grid; grid-template-columns:1fr; gap:8px; max-width:420px;">
+      <input type="hidden" name="change_password" value="1">
+      <input type="password" name="current_password" placeholder="Current Password" required style="padding:10px 12px; border:1px solid #d1d5db; border-radius:8px;">
+      <input type="password" name="new_password" placeholder="New Password (min 8 chars)" required style="padding:10px 12px; border:1px solid #d1d5db; border-radius:8px;">
+      <input type="password" name="confirm_password" placeholder="Confirm New Password" required style="padding:10px 12px; border:1px solid #d1d5db; border-radius:8px;">
+      <button type="submit" style="background:#23412e; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600;">Update Password</button>
+    </form>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var m = document.getElementById('changePasswordModalResident');
+  var openBtn = document.getElementById('openChangePasswordResident');
+  var closeBtn = document.querySelector('#changePasswordModalResident .close-change-password');
+  if (openBtn && m) {
+    openBtn.onclick = function(){ m.style.display = 'flex'; };
+  }
+  if (closeBtn && m) {
+    closeBtn.onclick = function(){ m.style.display = 'none'; };
+  }
+  window.addEventListener('click', function(e){
+    if (e.target === m) { m.style.display = 'none'; }
+  });
+  <?php if ($pwdMsg !== '') { echo "if(m){ m.style.display='flex'; }"; } ?>
 });
 </script>
 <script src="js/logout-modal.js"></script>

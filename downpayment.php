@@ -2,20 +2,6 @@
 session_start();
 include 'connect.php';
 
-// PHPMailer imports
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
-$p1 = __DIR__ . '/PHPMailer-master/src/Exception.php';
-$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/Exception.php';
-require file_exists($p1) ? $p1 : $p2;
-$p1 = __DIR__ . '/PHPMailer-master/src/PHPMailer.php';
-$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/PHPMailer.php';
-require file_exists($p1) ? $p1 : $p2;
-$p1 = __DIR__ . '/PHPMailer-master/src/SMTP.php';
-$p2 = __DIR__ . '/PHPMailer-master/PHPMailer-master/src/SMTP.php';
-require file_exists($p1) ? $p1 : $p2;
-
 // FETCH USER EMAIL FROM ENTRYPASS
 $entry_pass_id = intval($_GET['entry_pass_id'] ?? 0);
 $user_email_prefill = '';
@@ -32,7 +18,6 @@ if($entry_pass_id > 0){
 
 // Helpers and CSRF
 if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); }
-function vp_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/status_view.php?code='.urlencode($code); }
 function ensureReservationsCommonColumns($con){ if(!($con instanceof mysqli)) return; $cols=['downpayment','receipt_path','payment_status','account_type','booking_for','receipt_uploaded_at']; foreach($cols as $col){ $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'"); if(!$c || $c->num_rows===0){ if($col==='downpayment'){ @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL"); } else if($col==='receipt_path'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL"); } else if($col==='payment_status'){ @$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL"); } else if($col==='account_type'){ @$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL"); } else if($col==='booking_for'){ @$con->query("ALTER TABLE reservations ADD COLUMN booking_for ENUM('resident','guest') NULL"); } else if($col==='receipt_uploaded_at'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL"); } } } }
 ensureReservationsCommonColumns($con);
 
@@ -251,36 +236,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       if ($email === '' && $user_email_prefill !== '') { $email = $user_email_prefill; }
       if ($full_name === '') { $full_name = 'Guest'; }
 
-      if (($continue_post ?? $continue) !== 'reserve_resident') {
-        $mail = new PHPMailer(true);
-        try {
-          $mail->isSMTP();
-          $mail->Host = 'smtp.gmail.com';
-          $mail->SMTPAuth = true;
-          $mail->Username = 'victorianpass@gmail.com';
-          $mail->Password = 'vqlsqbrnikcjesia';
-          $mail->SMTPSecure = 'tls';
-          $mail->Port = 587;
-          $mail->setFrom('victorianpass@gmail.com', 'VictorianPass');
-          if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { throw new Exception('Recipient email missing'); }
-          $mail->addAddress($email);
-          $mail->isHTML(true);
-          $statusLink = vp_status_link($ref_code);
-          $mail->Subject = 'Your VictorianPass Code';
-          $mail->Body    = "<h2>Your VictorianPass Code</h2>
-<p><strong>Status Code:</strong> <span style=\"font-family:monospace;background:#f0f0f0;padding:6px 10px;border-radius:6px\">$ref_code</span></p>
-<p><strong>Name:</strong> $full_name</p>
-<p><strong>Email:</strong> $email</p>
-<p>We have successfully received your payment. Please wait while we verify and confirm your request.</p>
-<p>To check the status of your reservation, use the status code <strong>$ref_code</strong>. Simply return to the main page and enter this code in the Check Status section to view your current request status.</p>
-<p>We appreciate you reaching out. You’ll receive an update within 24 hours.</p>
-<p>Thank you for trusting VictorianPass (Victorian Heights Subdivision).</p>";
-          $mail->AltBody = "Your VictorianPass Code\nStatus Code: $ref_code\nName: $full_name\nEmail: $email\n\nWe have successfully received your payment. Please wait while we verify and confirm your request.\n\nTo check the status of your reservation, use the status code $ref_code. Return to the main page and enter this code in the Check Status section to view your current request status.\n\nYou’ll receive an update within 24 hours.\n\nThank you for trusting VictorianPass (Victorian Heights Subdivision).";
-          $mail->send();
-        } catch (Exception $e) {
-          $error_msg = "Payment recorded, but email could not be sent. Mailer Error: {$mail->ErrorInfo}";
-        }
-      }
     }
     if (($continue_post ?? $continue) === 'reserve_resident') {
       header('Location: profileresident.php');
