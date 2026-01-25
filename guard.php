@@ -524,6 +524,20 @@ tr:hover { background-color: #f8fafc; }
     line-height: 1;
     display: block;
 }
+.logout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #c0392b;
+    color: #fff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.2s ease;
+}
+.logout-btn:hover { background: #a93226; color: #fff; }
 </style>
 </head>
 <body>
@@ -543,7 +557,7 @@ tr:hover { background-color: #f8fafc; }
     <div class="nav-item" data-section="notifications"><img src="images/dashboard.svg"><span>Notifications</span></div>
   </nav>
   <div class="sidebar-footer">
-    <a href="logout.php">Log Out</a>
+    <a href="logout.php" class="logout-btn">Log Out</a>
   </div>
 </aside>
 <main class="main">

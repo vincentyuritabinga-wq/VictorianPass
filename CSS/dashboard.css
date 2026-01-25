@@ -115,14 +115,23 @@ body {
 }
 
 .logout-btn {
-    color: #c0392b;
-    font-size: 1.2rem;
-    transition: color 0.2s;
+    color: #fff;
+    font-size: 1rem;
+    transition: background 0.2s, color 0.2s;
     align-self: flex-start;
+    background: #c0392b;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    gap: 8px;
 }
 
 .logout-btn:hover {
-    color: #a93226;
+    background: #a93226;
+    color: #fff;
 }
 
 .qr-section {
@@ -1015,14 +1024,15 @@ body {
 }
 
 .btn-logout-modal {
-    background-color: white;
-    color: #c0392b;
-    border: 1px solid #e0e0e0;
+    background-color: #c0392b;
+    color: #fff;
+    border: 1px solid #c0392b;
 }
 
 .btn-logout-modal:hover {
-    border-color: #c0392b;
-    background-color: #fff5f5;
+    border-color: #a93226;
+    background-color: #a93226;
+    color: #fff;
 }
 
 /* Admin Dashboard Styles (Merged) */

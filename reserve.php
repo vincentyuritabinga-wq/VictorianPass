@@ -623,7 +623,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           <div class="amenities-list" id="amenitiesList" style="<?php echo $isResident ? 'display:none;' : ''; ?>">
             <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175">
               <div class="amenity-media">
-                <img src="images/pool.svg" alt="Pool">
+                <img src="images/communitypool.png" alt="Community Pool">
               </div>
               <div class="info">
                 <div class="title-block">
@@ -639,7 +639,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             </div>
             <div class="amenity-card" data-amenity="Clubhouse" data-key="clubhouse" data-price="200">
               <div class="amenity-media">
-                <img src="images/clubhouse.svg" alt="Clubhouse">
+                <img src="images/clubhouse.png" alt="Clubhouse">
               </div>
               <div class="info">
                 <div class="title-block">
@@ -655,7 +655,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             </div>
             <div class="amenity-card" data-amenity="Basketball Court" data-key="basketball" data-price="150">
               <div class="amenity-media">
-                <img src="images/basketball.svg" alt="Basketball">
+                <img src="images/basketballcourt.png" alt="Basketball Court">
               </div>
               <div class="info">
                 <div class="title-block">
@@ -671,7 +671,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             </div>
             <div class="amenity-card" data-amenity="Tennis Court" data-key="tennis" data-price="150">
               <div class="amenity-media">
-                <img src="images/tennis.svg" alt="Tennis Court">
+                <img src="images/tenniscourt.png" alt="Tennis Court">
               </div>
               <div class="info">
                 <div class="title-block">
@@ -1115,7 +1115,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     pool:{
       title:'Community Pool',
       value:'Pool',
-      img:'images/pool.svg',
+      img:'images/communitypool.png',
       desc:'Relax and cool off in the Community Pool, ideal for families and small groups. Lifeguard-supervised sessions with limited capacity keep the area safe and comfortable for everyone.',
       days:'Open Monday – Friday (Weekdays only)',
       priceLabel:'₱175 per person per session',
@@ -1124,7 +1124,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     clubhouse:{
       title:'Clubhouse',
       value:'Clubhouse',
-      img:'images/clubhouse.svg',
+      img:'images/clubhouse.png',
       desc:'A flexible indoor venue for birthdays, meetings, and celebrations. Air‑conditioned function hall with tables, chairs, and sound‑ready space so you can focus on your event while we provide the venue.',
       days:'Available Monday – Sunday',
       priceLabel:'₱200 per hour (minimum 3 hours)',
@@ -1133,7 +1133,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     basketball:{
       title:'Basketball Court',
       value:'Basketball Court',
-      img:'images/basketball.svg',
+      img:'images/basketballcourt.png',
       desc:'Full outdoor court for pick‑up games, team practice, and training sessions. Ideal for leagues or friendly matches, with clear markings and lighting for late‑afternoon play.',
       days:'Available Monday – Sunday',
       priceLabel:'₱150 per hour',
@@ -1142,7 +1142,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     tennis:{
       title:'Tennis Court',
       value:'Tennis Court',
-      img:'images/tennis.jpg',
+      img:'images/tenniscourt.png',
       desc:'Reserve a dedicated court time for casual rallies or competitive singles and doubles. Well‑maintained surface suitable for all skill levels, from beginners to regular players.',
       days:'Available Monday – Sunday',
       priceLabel:'₱150 per hour',
@@ -1344,6 +1344,21 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(prev){ prev.style.display='none'; }
     const btn=document.getElementById('amenityReturnBtn');
     if(btn){ btn.style.display='none'; }
+  }
+
+  function clearBookingFormState(){
+    try{ sessionStorage.removeItem('reserve_form'); }catch(_){}
+    selectedAmenity='';
+    const amenField=document.getElementById('amenityField'); if(amenField){ amenField.value=''; }
+    const bookingForField=document.getElementById('bookingForField'); if(bookingForField){ bookingForField.value=''; }
+    const guestIdField=document.getElementById('guestIdField'); if(guestIdField){ guestIdField.value=''; }
+    const guestRefField=document.getElementById('guestRefField'); if(guestRefField){ guestRefField.value=''; }
+    resetReservationForm();
+    resetAmenitySelection();
+    document.querySelectorAll('input[name="guest_choice"], input[name="initial_guest_choice"]').forEach(function(r){ r.checked=false; });
+    document.querySelectorAll('.guest-option').forEach(function(go){ go.style.borderColor='#e5e7eb'; });
+    const confirmGuestBtn=document.getElementById('confirmGuestBtn'); if(confirmGuestBtn){ confirmGuestBtn.disabled=true; }
+    updateBookingSummary();
   }
 
   const amenityReturnBtn=document.getElementById('amenityReturnBtn');
@@ -2308,12 +2323,14 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
       }
       if (rRadio) rRadio.addEventListener('change', function(){
+        clearBookingFormState();
         updateGuestWrap();
         const bookingForField=document.getElementById('bookingForField');
         if(bookingForField) bookingForField.value='resident';
         refreshPricingForBookingFor();
       });
       if (gRadio) gRadio.addEventListener('change', function(){
+        clearBookingFormState();
         updateGuestWrap();
         const bookingForField=document.getElementById('bookingForField');
         if(bookingForField) bookingForField.value='guest';
@@ -2347,6 +2364,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
     initialBookingForRadios.forEach(r => {
       r.addEventListener('change', function(){
+        clearBookingFormState();
         // Reset selection visual states
         document.querySelectorAll('.booking-option-card').forEach(c => {
            c.style.borderColor = '#e5e7eb';

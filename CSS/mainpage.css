@@ -686,6 +686,8 @@ html { scroll-behavior: smooth; }
 .btn-change{background:linear-gradient(135deg,#23412e 0%,#345c40 100%);color:#fff;border:none;border-radius:28px;padding:12px 22px;font-weight:700;font-size:1rem;box-shadow:0 4px 12px rgba(35,65,46,.4);cursor:pointer;transition:transform .2s ease, box-shadow .2s ease}
 .btn-change:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(35,65,46,.5)}
 .btn-change:focus{outline:2px solid #e5b84a;outline-offset:2px}
+.btn-change.btn-start{background:#f2c24f;color:#23412e;box-shadow:0 4px 15px rgba(242, 194, 79, 0.4)}
+.btn-change.btn-start:hover{box-shadow:0 6px 18px rgba(242, 194, 79, 0.5)}
 
 /* User Type Dropdown */
 .user-type-dropdown{position:relative;display:inline-block;width:100%;max-width:320px}

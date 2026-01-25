@@ -348,22 +348,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="section-divider"></div>
     <div class="amenities-grid">
       <div class="amenity-card">
-        <img src="images/pool.svg" alt="Community Pool">
+        <img src="images/communitypool.png" alt="Community Pool">
         <h3 class="title">Community Pool</h3>
         <p class="desc">Relax and enjoy the pool with convenient reservation options.</p>
       </div>
       <div class="amenity-card">
-        <img src="images/clubhouse.svg" alt="Clubhouse">
+        <img src="images/clubhouse.png" alt="Clubhouse">
         <h3 class="title">Clubhouse</h3>
         <p class="desc">Host gatherings and events in the subdivision clubhouse.</p>
       </div>
       <div class="amenity-card">
-        <img src="images/basketball.svg" alt="Basketball Court">
+        <img src="images/basketballcourt.png" alt="Basketball Court">
         <h3 class="title">Basketball Court</h3>
         <p class="desc">Play and practice on our outdoor basketball court.</p>
       </div>
       <div class="amenity-card">
-        <img src="images/tennis.jpg" alt="Tennis Court">
+        <img src="images/tenniscourt.png" alt="Tennis Court">
         <h3 class="title">Tennis Court</h3>
         <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
       </div>

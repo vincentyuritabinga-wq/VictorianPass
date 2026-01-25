@@ -1396,5 +1396,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script src="js/logout-modal.js"></script>
 </body>
 </html>

@@ -418,7 +418,7 @@ body.account-blocked { overflow: hidden; }
 .account-blocked-content { background: #fff; border-radius: 14px; padding: 28px 30px; width: 92%; max-width: 420px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
 .account-blocked-content h3 { margin: 0 0 10px; color: #a83b3b; font-size: 1.2rem; }
 .account-blocked-content p { margin: 0 0 20px; color: #333; font-size: 0.95rem; line-height: 1.5; }
-.account-blocked-content .btn-logout-only { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #23412e; color: #fff; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; }
+.account-blocked-content .btn-logout-only { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #c0392b; color: #fff; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; }
 .account-blocked-content .btn-logout-only:hover { filter: brightness(0.95); }
 .field-warning {
   color: #333;
@@ -2265,7 +2265,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="account-blocked-content">
     <h3>Account Suspended</h3>
     <p>Your account is suspended and denied. Please log out.</p>
-    <button type="button" class="btn-logout-only" id="accountBlockedLogoutBtn">Log Out</button>
+    <button type="button" class="btn-logout-only" id="accountBlockedLogoutBtn" data-logout-href="logout.php">Log Out</button>
   </div>
 </div>
 
@@ -2341,13 +2341,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    var blockedLogoutBtn = document.getElementById('accountBlockedLogoutBtn');
-    if (blockedLogoutBtn) {
-        blockedLogoutBtn.addEventListener('click', function() {
-            window.location.href = 'logout.php?confirm=yes';
-        });
-    }
-
     window.onclick = function(event) {
         if (event.target == profileModal) {
             profileModal.style.display = "none";
@@ -2390,5 +2383,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script src="js/logout-modal.js"></script>
 </body>
 </html>

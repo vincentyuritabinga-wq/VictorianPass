@@ -32,12 +32,12 @@ $back = isset($_SERVER['HTTP_REFERER']) && $_SERVER['HTTP_REFERER'] !== '' ? $_S
   <style>
     body{margin:0;font-family:'Poppins',sans-serif;background:#111;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
     .modal{background:#1b1816;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:520px;width:92%;padding:20px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.35)}
-    .title{font-weight:800;font-size:1.2rem;margin:0 0 8px;color:#e5ddc6}
+    .title{font-weight:800;font-size:1.2rem;margin:0 0 8px;color:#e74c3c}
     .text{font-size:.98rem;color:#ddd;margin:0 0 14px}
     .actions{display:flex;gap:10px;justify-content:center}
     .btn{padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;display:inline-block}
-    .btn-confirm{background:#23412e;color:#fff}
-    .btn-cancel{background:#e5ddc6;color:#222}
+    .btn-confirm{background:#c0392b;color:#fff}
+    .btn-cancel{background:#e5e7eb;color:#222}
     .btn:hover{transform:translateY(-1px)}
   </style>
 </head>

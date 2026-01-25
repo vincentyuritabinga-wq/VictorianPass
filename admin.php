@@ -301,7 +301,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
-    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 8");
     if($rr){ while($row=$rr->fetch_assoc()){ 
         $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
@@ -615,9 +615,9 @@ function getRecentNotifications($con){
   $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
-  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY gf.created_at DESC LIMIT 5");
-  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ 
       $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
@@ -1574,12 +1574,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("sii", $payment_status, $staff_id, $reservation_id);
             $stmt->execute();
             
-            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null;
-            $stmtInfo = $con->prepare("SELECT ref_code, entry_pass_id, amenity, approval_status, user_id FROM reservations WHERE id = ? LIMIT 1");
+            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null;
+            $stmtInfo = $con->prepare("SELECT r.ref_code, r.entry_pass_id, r.amenity, r.approval_status, r.user_id, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.id = ? LIMIT 1");
             $stmtInfo->bind_param('i', $reservation_id);
             $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
             $approvedNow=false; $approvalStatusRes=null;
-            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); }
+            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); $userType = strtolower($rw['user_type'] ?? ''); }
             $stmtInfo->close();
             if ($payment_status === 'verified' && $refCode) {
             }
@@ -1592,8 +1592,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             $redirect = 'admin.php?page=verify';
             if ($payment_status === 'verified' && !empty($refCode)) {
-              $redirectPage = ($entryId) ? 'visitor_requests' : 'reservations';
-              $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
               $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
               $stmtGF->bind_param('s', $refCode);
               $stmtGF->execute();
@@ -1601,6 +1599,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               $stmtGF->close();
               if ($resGF && $resGF->num_rows > 0) {
                 $redirect = 'admin.php?page=resident_guest_forms&ref=' . urlencode($refCode);
+              } else {
+                $isVisitor = (!empty($entryId) || $userType === 'visitor');
+                $redirectPage = $isVisitor ? 'visitor_requests' : 'requests';
+                $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
               }
             }
             header("Location: $redirect");
@@ -1769,14 +1771,19 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 }
 
 .sidebar-footer .text-muted-link {
-    color: var(--danger);
-    font-weight: 500;
-    display: flex;
+    color: #fff;
+    font-weight: 600;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     font-size: 0.9rem;
+    background: #c0392b;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none;
 }
-.sidebar-footer .text-muted-link:hover { opacity: 0.8; }
+.sidebar-footer .text-muted-link:hover { background: #a93226; color: #fff; }
 
 /* Main Content Area */
 .main {
@@ -2033,7 +2040,7 @@ tr:hover { background-color: #f8fafc; }
     position: relative;
     color: rgba(255,255,255,0.9);
     transition: var(--transition);
-    padding: 8px;
+    padding: 6px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -2044,14 +2051,14 @@ tr:hover { background-color: #f8fafc; }
 
 .notif-badge {
     position: absolute;
-    top: -2px;
-    right: -2px;
+    top: -3px;
+    right: -3px;
     background: var(--danger);
     color: #fff;
     border-radius: 50%;
-    min-width: 18px;
-    height: 18px;
-    font-size: 0.65rem;
+    min-width: 19px;
+    height: 19px;
+    font-size: 0.66rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2071,7 +2078,7 @@ tr:hover { background-color: #f8fafc; }
     top: 100%;
     right: 0;
     margin-top: 15px;
-    width: 320px;
+    width: 340px;
     max-height: 450px;
     background: var(--bg-surface);
     border-radius: var(--radius);
@@ -2083,44 +2090,54 @@ tr:hover { background-color: #f8fafc; }
 }
 
 .notif-item {
-    padding: 15px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border-light);
     display: flex;
-    gap: 15px;
+    gap: 12px;
     transition: var(--transition);
     cursor: pointer;
     position: relative;
+    align-items: flex-start;
 }
 .notif-item:hover { background: var(--bg-body); }
 .notif-item:last-child { border-bottom: none; }
 
+.notif-item-link {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    text-decoration: none;
+    color: inherit;
+    width: 100%;
+}
+
 .notif-type {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: var(--primary-light);
     color: var(--primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
     flex-shrink: 0;
 }
 
-.notif-meta { flex: 1; }
-.notif-item-title { font-weight: 600; font-size: 0.9rem; color: var(--text-main); margin-bottom: 4px; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
-.notif-item-sub { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
-.notif-item-time { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+.notif-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-meta strong { font-weight: 600; font-size: 0.88rem; color: var(--text-main); }
+.notif-meta div { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.35; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
+.notif-item-time { font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
 
 .notif-dismiss {
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: 8px;
+    right: 8px;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 1rem;
+    font-size: 0.95rem;
     cursor: pointer;
     opacity: 0;
     transition: var(--transition);
@@ -2210,23 +2227,23 @@ tr:hover { background-color: #f8fafc; }
     border: none;
     cursor: pointer;
     position: relative;
-    padding: 8px;
+    padding: 6px;
     border-radius: 50%;
     transition: var(--transition);
 }
 .notif-btn:hover { background: rgba(255,255,255,0.1); }
-.notif-btn img { width: 24px; height: 24px; display: block; }
+.notif-btn img { width: 22px; height: 22px; display: block; }
 
 .notif-badge {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: -3px;
+    right: -3px;
     background: var(--danger);
     color: #fff;
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-weight: 700;
     padding: 2px 6px;
-    border-radius: 10px;
+    border-radius: 999px;
     border: 2px solid #211b18;
 }
 
@@ -2299,11 +2316,11 @@ tr:hover { background-color: #f8fafc; }
 .modal-content td{ padding: 6px 0; }
 
 .modal .notif-item {
-    padding: 22px 26px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border-light);
     display: flex;
     align-items: flex-start;
-    gap: 20px;
+    gap: 14px;
     position: relative;
     transition: var(--transition);
 }
@@ -2313,7 +2330,7 @@ tr:hover { background-color: #f8fafc; }
 .modal .notif-item-link {
     flex: 1;
     display: flex;
-    gap: 18px;
+    gap: 14px;
     text-decoration: none;
     color: inherit;
     align-items: flex-start;
@@ -2321,21 +2338,21 @@ tr:hover { background-color: #f8fafc; }
 }
 
 .modal .notif-type {
-    font-size: 0.76rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 700;
     text-transform: none;
     background: var(--primary-light);
     color: var(--primary);
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 6px 8px;
+    border-radius: 8px;
     height: auto;
     white-space: normal;
-    width: 140px;
-    min-height: 44px;
+    width: 120px;
+    min-height: 36px;
     text-align: center;
-    line-height: 1.25;
+    line-height: 1.2;
     word-break: break-word;
-    margin-top: 2px;
+    margin-top: 1px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2343,23 +2360,23 @@ tr:hover { background-color: #f8fafc; }
 
 .modal .notif-meta {
     flex: 1;
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: 0.9rem;
+    line-height: 1.45;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
-.modal .notif-meta strong { color: var(--text-main); display: block; margin-bottom: 0; }
-.modal .notif-meta div { color: var(--text-secondary); font-size: 0.88rem; word-break: break-word; }
+.modal .notif-meta strong { color: var(--text-main); display: block; margin-bottom: 0; font-size: 0.92rem; }
+.modal .notif-meta div { color: var(--text-secondary); font-size: 0.84rem; word-break: break-word; }
 
 .modal .notif-dismiss {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     cursor: pointer;
-    padding: 8px 12px;
+    padding: 6px 10px;
     opacity: 0;
     transition: var(--transition);
     align-self: flex-start;
@@ -2962,7 +2979,7 @@ tr:hover { background-color: #f8fafc; }
 
     <!-- Resident's Guest Amenity Reservations -->
     <div class="card-box" style="margin-top: 20px;">
-      <h3>Resident’s Guest Amenity Booking</h3>
+    <h3>Resident’s Guest</h3>
       <table class="table table-reservations">
         <thead>
           <tr>
@@ -3099,7 +3116,7 @@ tr:hover { background-color: #f8fafc; }
                   echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                   
                   $isResidentGuest = !empty($rr['gf_id']);
-                  $uType = $isResidentGuest ? "Resident’s Guest Amenity Booking" : ucfirst($rr['user_type'] ?? 'Resident');
+                  $uType = $isResidentGuest ? "Resident’s Guest" : ucfirst($rr['user_type'] ?? 'Resident');
                   $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
@@ -3306,7 +3323,7 @@ tr:hover { background-color: #f8fafc; }
                 $userType = 'Visitor';
             }
             if (!empty($row['gf_id'])) {
-                $userType = "Resident’s Guest Amenity Booking";
+                $userType = "Resident’s Guest";
             }
             echo '<td>' . $userType . '</td>';
             $fullName = !empty($row['entry_pass_id'])
@@ -3344,8 +3361,14 @@ tr:hover { background-color: #f8fafc; }
             $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
             echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
             echo '<td class="actions">';
-              $ref = urlencode($row['ref_code']);
-              $targetPage = !empty($row['entry_pass_id']) ? 'visitor_requests' : 'reservations';
+            $ref = urlencode($row['ref_code']);
+            if (!empty($row['gf_id'])) {
+              $targetPage = 'resident_guest_forms';
+            } else if (!empty($row['entry_pass_id']) || strtolower($row['user_type'] ?? '') === 'visitor') {
+              $targetPage = 'visitor_requests';
+            } else {
+              $targetPage = 'requests';
+            }
               echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
               if($ps!=='verified'){
                 echo '<form method="post">';
@@ -3490,7 +3513,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                 
                 $isResidentGuest = !empty($rr['gf_id']);
-                $uType = $isResidentGuest ? "Resident’s Guest Amenity Booking" : ucfirst($rr['user_type'] ?? 'Resident');
+                $uType = $isResidentGuest ? "Resident’s Guest" : ucfirst($rr['user_type'] ?? 'Resident');
                 $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                 echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
@@ -3780,7 +3803,13 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           }
           
           // 2. Archived Reservations
-          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired') OR r.approval_status IN ('cancelled', 'completed', 'expired')) ORDER BY r.updated_at DESC, r.created_at DESC");
+          $hasReservationUpdatedAt = false;
+          if ($con instanceof mysqli) {
+            $chkUpdated = $con->query("SHOW COLUMNS FROM reservations LIKE 'updated_at'");
+            $hasReservationUpdatedAt = $chkUpdated && $chkUpdated->num_rows > 0;
+          }
+          $orderClause = $hasReservationUpdatedAt ? "r.updated_at DESC, r.created_at DESC" : "r.created_at DESC";
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired') OR r.approval_status IN ('cancelled', 'completed', 'expired')) ORDER BY $orderClause");
           if ($res) {
             while ($row = $res->fetch_assoc()) {
                $hasArchived = true;
@@ -4081,10 +4110,10 @@ function showReservationDetails(reservationId, expectedType){
       const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const isResidentGuest = !!d.gf_id;
-      const whoLabel = isResidentGuest ? "Resident’s Guest Amenity Booking" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
+      const whoLabel = isResidentGuest ? "Resident’s Guest" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
       var modalTitle = document.querySelector('#reservationModal h3');
       if (modalTitle) {
-        var titleBase = isResidentGuest ? "Resident’s Guest Amenity Booking" : (userType === 'visitor' ? 'Visitor Reservation' : 'Resident Reservation');
+        var titleBase = isResidentGuest ? "Resident’s Guest" : (userType === 'visitor' ? 'Visitor Reservation' : 'Resident Reservation');
         modalTitle.textContent = titleBase + ' Details';
       }
       const reservedBy = isResidentGuest ? (guestName || "Resident’s Guest") : whoLabel;
@@ -4209,8 +4238,8 @@ function showResidentReservationDetails(rrId){
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
       const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
       
-      const reservationLabel = isResidentGuest ? "Resident’s Guest Amenity Booking" : "Resident Reservation";
-      const primarySectionTitle = isResidentGuest ? "Resident’s Guest Amenity Booking" : "Resident";
+      const reservationLabel = isResidentGuest ? "Resident’s Guest" : "Resident Reservation";
+      const primarySectionTitle = isResidentGuest ? "Resident’s Guest" : "Resident";
       
       const modalTitle = document.querySelector('#residentReservationModal h3');
       if(modalTitle) modalTitle.textContent = reservationLabel + ' Details';
