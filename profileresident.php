@@ -106,6 +106,16 @@ $activities = [];
 
 // 1. Reservations
 // Ensure start_time/end_time exist, if not use created_at or defaults
+$colsToCheck = [
+    'booked_by_role' => "VARCHAR(50) NULL",
+    'booked_by_name' => "VARCHAR(150) NULL"
+];
+foreach ($colsToCheck as $col => $def) {
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE '$col'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN $col $def");
+    }
+}
 $stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);

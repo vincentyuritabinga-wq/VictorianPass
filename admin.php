@@ -222,9 +222,9 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
 if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_details' && isset($_GET['id'])) {
     header('Content-Type: application/json');
     $id = intval($_GET['id']);
-    $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.persons, r.purpose,
+    $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
-                                    r.price, r.downpayment, r.payment_status,
+                                    r.price, r.downpayment, r.payment_status, r.booking_for, r.booked_by_role, r.booked_by_name,
                                     u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
                                     gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
                                     gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
@@ -301,7 +301,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
-    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+    if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' ORDER BY r.created_at DESC LIMIT 8");
     if($rr){ while($row=$rr->fetch_assoc()){ 
         $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
@@ -621,9 +621,9 @@ function getRecentNotifications($con){
   $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
-  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY gf.created_at DESC LIMIT 5");
-  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident's Guest",'source'=>'guest_form','title'=>"Resident's Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
+  if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest Amenity Booking",'source'=>'guest_form','title'=>"Resident’s Guest Amenity Booking",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ 
       $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
@@ -2288,6 +2288,149 @@ tr:hover { background-color: #f8fafc; }
 .btn-delete { background: var(--bg-body); color: var(--danger); border: 1px solid var(--border); }
 .btn-delete:hover { background: #fee2e2; border-color: var(--danger); }
 
+#visitorModal .modal-content,
+#residentReservationModal .modal-content,
+#reservationModal .modal-content,
+#priceDetailsModal .modal-content {
+    width: min(92vw, 640px);
+    aspect-ratio: auto;
+    padding: 0;
+    border-radius: 14px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+}
+#visitorModal .modal-content h3,
+#residentReservationModal .modal-content h3,
+#reservationModal .modal-content h3,
+#priceDetailsModal .modal-content h3 {
+    margin: 0;
+    padding: 12px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e6ebe6;
+    color: #23412e;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+#visitorDetailsContent,
+#residentReservationDetailsContent,
+#reservationDetailsContent,
+#priceDetailsContent {
+    padding: 18px 20px 22px;
+}
+#visitorDetailsContent .request-details,
+#residentReservationDetailsContent .request-details,
+#reservationDetailsContent .request-details,
+#priceDetailsContent .request-details {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    font-family: 'Poppins', sans-serif;
+    color: #333;
+}
+#visitorDetailsContent .request-status,
+#residentReservationDetailsContent .request-status,
+#reservationDetailsContent .request-status,
+#priceDetailsContent .request-status {
+    text-align: center;
+}
+#visitorDetailsContent .section-title,
+#residentReservationDetailsContent .section-title,
+#reservationDetailsContent .section-title,
+#priceDetailsContent .section-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #555;
+    margin: 10px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+#visitorDetailsContent .info-grid,
+#residentReservationDetailsContent .info-grid,
+#reservationDetailsContent .info-grid,
+#priceDetailsContent .info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #eee;
+}
+#visitorDetailsContent .info-row,
+#residentReservationDetailsContent .info-row,
+#reservationDetailsContent .info-row,
+#priceDetailsContent .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    gap: 12px;
+}
+#visitorDetailsContent .info-label,
+#residentReservationDetailsContent .info-label,
+#reservationDetailsContent .info-label,
+#priceDetailsContent .info-label {
+    color: #666;
+    font-weight: 500;
+}
+#visitorDetailsContent .info-value,
+#residentReservationDetailsContent .info-value,
+#reservationDetailsContent .info-value,
+#priceDetailsContent .info-value {
+    color: #111;
+    font-weight: 600;
+    text-align: right;
+}
+#visitorDetailsContent .status-badge-lg,
+#residentReservationDetailsContent .status-badge-lg,
+#reservationDetailsContent .status-badge-lg,
+#priceDetailsContent .status-badge-lg {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+#visitorDetailsContent .st-approved, #residentReservationDetailsContent .st-approved, #reservationDetailsContent .st-approved, #priceDetailsContent .st-approved { background: #dcfce7; color: #166534; }
+#visitorDetailsContent .st-pending, #residentReservationDetailsContent .st-pending, #reservationDetailsContent .st-pending, #priceDetailsContent .st-pending { background: #ffedd5; color: #c2410c; }
+#visitorDetailsContent .st-denied, #residentReservationDetailsContent .st-denied, #reservationDetailsContent .st-denied, #priceDetailsContent .st-denied { background: #fee2e2; color: #991b1b; }
+#visitorDetailsContent .st-expired, #residentReservationDetailsContent .st-expired, #reservationDetailsContent .st-expired, #priceDetailsContent .st-expired { background: #f3f4f6; color: #4b5563; }
+#visitorDetailsContent .price-section,
+#residentReservationDetailsContent .price-section,
+#reservationDetailsContent .price-section,
+#priceDetailsContent .price-section {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+#visitorDetailsContent .total-price,
+#residentReservationDetailsContent .total-price,
+#reservationDetailsContent .total-price,
+#priceDetailsContent .total-price {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #23412e;
+}
+#visitorDetailsContent .price-down,
+#residentReservationDetailsContent .price-down,
+#reservationDetailsContent .price-down,
+#priceDetailsContent .price-down {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+#visitorDetailsContent .price-balance,
+#residentReservationDetailsContent .price-balance,
+#reservationDetailsContent .price-balance,
+#priceDetailsContent .price-balance {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #c2410c;
+}
+
 .btn-view { background: var(--info); color: #fff; }
 .btn-view:hover { background: #2563eb; }
 
@@ -2714,7 +2857,7 @@ tr:hover { background-color: #f8fafc; }
 
     <!-- Resident's Guest Amenity Reservations -->
     <div class="card-box" style="margin-top: 20px;">
-      <h3>Resident's Guest Amenity Reservation</h3>
+      <h3>Resident’s Guest Amenity Booking</h3>
       <table class="table table-reservations">
         <thead>
           <tr>
@@ -2746,12 +2889,12 @@ tr:hover { background-color: #f8fafc; }
                   // Booked By
                   $bookedBy = !empty($gar['booked_by_name']) ? htmlspecialchars($gar['booked_by_name']) : 'Guest';
                   $roleRaw = $gar['booked_by_role'] ?? '';
-                  $role = !empty($roleRaw) ? ucfirst($roleRaw) : 'Guest';
+                  $role = !empty($roleRaw) ? ucfirst($roleRaw) : 'Resident’s Guest';
                   
                   // If booked by resident but specifically for a guest
                   if (($gar['booking_for'] ?? '') === 'guest') {
                       if ($roleRaw === 'resident') {
-                          $role = 'Resident (for Guest)';
+                          $role = 'Resident’s Guest';
                       } else if ($roleRaw === 'guest') {
                           // It is already guest
                       }
@@ -2809,7 +2952,7 @@ tr:hover { background-color: #f8fafc; }
               }
           }
           if (!$hasGAR) {
-              echo "<tr><td colspan='6' style='text-align:center;'>No resident guest amenity reservations found</td></tr>";
+              echo "<tr><td colspan='6' style='text-align:center;'>No resident’s guest amenity bookings found</td></tr>";
           }
           ?>
         </tbody>
@@ -2851,7 +2994,7 @@ tr:hover { background-color: #f8fafc; }
                   echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                   
                   $isResidentGuest = !empty($rr['gf_id']);
-                  $uType = $isResidentGuest ? "Resident's Guest" : ucfirst($rr['user_type'] ?? 'Resident');
+                  $uType = $isResidentGuest ? "Resident’s Guest Amenity Booking" : ucfirst($rr['user_type'] ?? 'Resident');
                   $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
@@ -3004,7 +3147,7 @@ tr:hover { background-color: #f8fafc; }
                 $userType = 'Visitor';
             }
             if (!empty($row['gf_id'])) {
-                $userType = "Resident's Guest";
+                $userType = "Resident’s Guest Amenity Booking";
             }
             echo '<td>' . $userType . '</td>';
             $fullName = !empty($row['entry_pass_id'])
@@ -3090,11 +3233,14 @@ function openPriceDetails(totalStr, downStr){
   var el = document.getElementById('priceDetailsContent');
   if(el){
     var fmt = function(n){ return Number(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}); };
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse">'
-      + '<tr><td><strong>Total Price</strong></td><td style="text-align:right">₱' + fmt(t) + '</td></tr>'
-      + '<tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱' + fmt(d) + '</td></tr>'
-      + '<tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱' + fmt(r) + '</td></tr>'
-      + '</table>';
+    el.innerHTML = '<div class="request-details">'
+      + '<div class="section-title">Price Breakdown</div>'
+      + '<div class="info-grid">'
+      + '<div class="info-row total-price"><span class="info-label">Total Price</span><span class="info-value">₱' + fmt(t) + '</span></div>'
+      + '<div class="info-row price-down"><span class="info-label">Online Payment (Partial)</span><span class="info-value">₱' + fmt(d) + '</span></div>'
+      + '<div class="info-row price-balance"><span class="info-label">Onsite Payment (Remaining)</span><span class="info-value">₱' + fmt(r) + '</span></div>'
+      + '</div>'
+      + '</div>';
   }
   var m = document.getElementById('priceDetailsModal'); if(m){ m.style.display = 'flex'; }
 }
@@ -3239,7 +3385,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                 
                 $isResidentGuest = !empty($rr['gf_id']);
-                $uType = $isResidentGuest ? "Resident's Guest" : ucfirst($rr['user_type'] ?? 'Resident');
+                $uType = $isResidentGuest ? "Resident’s Guest Amenity Booking" : ucfirst($rr['user_type'] ?? 'Resident');
                 $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
                 echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
@@ -3661,66 +3807,119 @@ function showVisitorDetails(id, source) {
         const visitStartTimeVal = (isGuestEntry ? details.visit_time : details.start_time);
         const visitEndTimeVal = (isGuestEntry ? null : details.end_time);
         const sectionTitle = isGuestEntry ? 'Visit Details' : 'Reservation Details';
+        const approvalStatus = (details.approval_status || 'pending').toLowerCase();
+        let stClass = 'st-pending';
+        let stLabel = 'Pending Review';
+        if (approvalStatus.includes('approv')) { stClass = 'st-approved'; stLabel = 'Approved'; }
+        else if (approvalStatus.includes('denied') || approvalStatus.includes('reject')) { stClass = 'st-denied'; stLabel = 'Denied'; }
+        else if (approvalStatus.includes('cancel')) { stClass = 'st-denied'; stLabel = 'Cancelled'; }
+        else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
+
+        const fullName = [details.full_name || '', details.middle_name || '', details.last_name || ''].join(' ').replace(/\s+/g,' ').trim();
+        const validIdValue = details.valid_id_path ? `<a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a>` : 'Not uploaded';
+        const statusBadge = `<div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>`;
+
+        const priceBlock = details.price ? (()=>{ 
+          const total=parseFloat(details.price)||0; 
+          const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); 
+          const rem=Math.max(0, total-dp); 
+          return `<div class="price-section">
+            <div class="info-row total-price">
+              <span>Total Price</span>
+              <span>₱${total.toLocaleString()}</span>
+            </div>
+            <div class="info-row price-down">
+              <span>Downpayment Paid</span>
+              <span>- ₱${dp.toLocaleString()}</span>
+            </div>
+            <div class="info-row price-balance">
+              <span>Balance Due</span>
+              <span>₱${rem.toLocaleString()}</span>
+            </div>
+          </div>`; 
+        })() : '';
+
         const content = isResident
           ? `
-          <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+          <div class="request-details">
+            ${statusBadge}
             <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Resident Information</h4>
-              ${residentName ? `<p><strong>Name:</strong> ${residentName}</p>` : ''}
-              ${details.res_house_number ? `<p><strong>House No.:</strong> ${details.res_house_number}</p>` : ''}
-              ${details.res_email ? `<p><strong>Email:</strong> ${details.res_email}</p>` : ''}
-              ${details.res_phone ? `<p><strong>Contact:</strong> ${details.res_phone}</p>` : ''}
+              <div class="section-title">Resident Information</div>
+              <div class="info-grid">
+                ${residentName ? `<div class="info-row"><span class="info-label">Name</span><span class="info-value">${residentName}</span></div>` : ''}
+                ${details.res_house_number ? `<div class="info-row"><span class="info-label">House No.</span><span class="info-value">${details.res_house_number}</span></div>` : ''}
+                ${details.res_email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${details.res_email}</span></div>` : ''}
+                ${details.res_phone ? `<div class="info-row"><span class="info-label">Contact</span><span class="info-value">${details.res_phone}</span></div>` : ''}
+              </div>
             </div>
             <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Visitor Information</h4>
-              <p><strong>Full Name:</strong> ${details.full_name} ${details.middle_name || ''} ${details.last_name}</p>
-              <p><strong>Sex:</strong> ${details.sex || '-'}</p>
-              ${details.birthdate ? `<p><strong>Birthdate:</strong> ${new Date(details.birthdate).toLocaleDateString()}</p>` : ''}
-              <p><strong>Contact:</strong> ${details.contact || '-'}</p>
-              ${details.email ? `<p><strong>Email:</strong> ${details.email}</p>` : ''}
-              ${details.valid_id_path ? `<p><strong>Valid ID:</strong> <a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>` : '<p><strong>Valid ID:</strong> Not uploaded</p>'}
+              <div class="section-title">Visitor Information</div>
+              <div class="info-grid">
+                ${fullName ? `<div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${fullName}</span></div>` : ''}
+                <div class="info-row"><span class="info-label">Sex</span><span class="info-value">${details.sex || '-'}</span></div>
+                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${new Date(details.birthdate).toLocaleDateString()}</span></div>` : ''}
+                <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${details.contact || '-'}</span></div>
+                ${details.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${details.email}</span></div>` : ''}
+                <div class="info-row"><span class="info-label">Valid ID</span><span class="info-value">${validIdValue}</span></div>
+              </div>
             </div>
             <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">${sectionTitle}</h4>
-              ${visitDateVal ? `<p><strong>Date:</strong> ${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</p>` : ''}
-              ${(visitStartTimeVal || visitEndTimeVal) ? `<p><strong>Time:</strong> ${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</p>` : ''}
-              ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
-              ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
-              ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
-              <p><strong>Status:</strong> <span class="badge badge-${details.approval_status || 'pending'}">${(details.approval_status || 'pending').charAt(0).toUpperCase() + (details.approval_status || 'pending').slice(1)}</span></p>
-              <p><strong>Request Date:</strong> ${new Date(details.entry_created).toLocaleString()}</p>
-              ${details.approved_by ? `<p><strong>Approved By:</strong> Staff ID ${details.approved_by}</p>` : ''}
-              ${details.approval_date ? `<p><strong>Approval Date:</strong> ${new Date(details.approval_date).toLocaleString()}</p>` : ''}
-              ${details.price ? (()=>{ const total=parseFloat(details.price)||0; const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); const rem=Math.max(0, total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
+              <div class="section-title">${sectionTitle}</div>
+              <div class="info-grid">
+                ${visitDateVal ? `<div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</span></div>` : ''}
+                ${(visitStartTimeVal || visitEndTimeVal) ? `<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</span></div>` : ''}
+                ${details.persons ? `<div class="info-row"><span class="info-label">No. of Persons</span><span class="info-value">${details.persons}</span></div>` : ''}
+                ${details.purpose ? `<div class="info-row"><span class="info-label">Purpose of Visit</span><span class="info-value">${details.purpose}</span></div>` : ''}
+                ${details.amenity && details.amenity !== 'Guest Entry' ? `<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${details.amenity}</span></div>` : ''}
+                ${priceBlock}
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Request Status</div>
+              <div class="info-grid">
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
+                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
+                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${details.approved_by}</span></div>` : ''}
+                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
+              </div>
             </div>
           </div>
           `
           : `
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div class="request-details">
+            ${statusBadge}
             <div>
-              <h4 style="color: #23412e; margin-bottom: 10px;">Personal Information</h4>
-              <p><strong>Full Name:</strong> ${details.full_name} ${details.middle_name || ''} ${details.last_name}</p>
-              <p><strong>Sex:</strong> ${details.sex}</p>
-              <p><strong>Birthdate:</strong> ${new Date(details.birthdate).toLocaleDateString()}</p>
-              <p><strong>Contact:</strong> ${details.contact}</p>
-              ${details.email ? `<p><strong>Email:</strong> ${details.email}</p>` : ''}
-              <p><strong>Address:</strong> ${details.address}</p>
-              ${details.valid_id_path ? `<p><strong>Valid ID:</strong> <a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>` : '<p><strong>Valid ID:</strong> Not uploaded</p>'}
+              <div class="section-title">Personal Information</div>
+              <div class="info-grid">
+                ${fullName ? `<div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${fullName}</span></div>` : ''}
+                ${details.sex ? `<div class="info-row"><span class="info-label">Sex</span><span class="info-value">${details.sex}</span></div>` : ''}
+                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${new Date(details.birthdate).toLocaleDateString()}</span></div>` : ''}
+                ${details.contact ? `<div class="info-row"><span class="info-label">Contact</span><span class="info-value">${details.contact}</span></div>` : ''}
+                ${details.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${details.email}</span></div>` : ''}
+                ${details.address ? `<div class="info-row"><span class="info-label">Address</span><span class="info-value">${details.address}</span></div>` : ''}
+                <div class="info-row"><span class="info-label">Valid ID</span><span class="info-value">${validIdValue}</span></div>
+              </div>
             </div>
             <div>
-              <h4 style="color: #23412e; margin-bottom: 10px;">${sectionTitle}</h4>
-              ${details.ref_code ? `<p><strong>Status Code:</strong> ${details.ref_code}</p>` : ''}
-              ${details.amenity && details.amenity !== 'Guest Entry' ? `<p><strong>Amenity:</strong> ${details.amenity}</p>` : ''}
-              ${visitDateVal ? `<p><strong>Date:</strong> ${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</p>` : ''}
-              ${(visitStartTimeVal || visitEndTimeVal) ? `<p><strong>Time:</strong> ${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</p>` : ''}
-              ${details.persons ? `<p><strong>Persons:</strong> ${details.persons}</p>` : ''}
-              ${details.purpose ? `<p><strong>Purpose of Visit:</strong> ${details.purpose}</p>` : ''}
-              ${details.price ? (()=>{ const total=parseFloat(details.price)||0; const dp=(details.downpayment!=null?parseFloat(details.downpayment):Math.max(0, total*0.5)); const rem=Math.max(0, total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
-              <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
-              <p><strong>Request Date:</strong> ${new Date(details.entry_created).toLocaleString()}</p>
-              <p><strong>Status:</strong> <span class="badge badge-${details.approval_status || 'pending'}">${(details.approval_status || 'pending').charAt(0).toUpperCase() + (details.approval_status || 'pending').slice(1)}</span></p>
-              ${details.approved_by ? `<p><strong>Approved By:</strong> Staff ID ${details.approved_by}</p>` : ''}
-              ${details.approval_date ? `<p><strong>Approval Date:</strong> ${new Date(details.approval_date).toLocaleString()}</p>` : ''}
+              <div class="section-title">${sectionTitle}</div>
+              <div class="info-grid">
+                ${details.ref_code ? `<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${details.ref_code}</span></div>` : ''}
+                ${details.amenity && details.amenity !== 'Guest Entry' ? `<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${details.amenity}</span></div>` : ''}
+                ${visitDateVal ? `<div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</span></div>` : ''}
+                ${(visitStartTimeVal || visitEndTimeVal) ? `<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</span></div>` : ''}
+                ${details.persons ? `<div class="info-row"><span class="info-label">No. of Persons</span><span class="info-value">${details.persons}</span></div>` : ''}
+                ${details.purpose ? `<div class="info-row"><span class="info-label">Purpose of Visit</span><span class="info-value">${details.purpose}</span></div>` : ''}
+                ${priceBlock}
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Request Status</div>
+              <div class="info-grid">
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
+                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
+                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${details.approved_by}</span></div>` : ''}
+                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
+              </div>
             </div>
           </div>
           `;
@@ -3775,42 +3974,63 @@ function showReservationDetails(reservationId){
       const residentName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const guestName = [d.guest_first_name||'', d.guest_middle_name||'', d.guest_last_name||''].join(' ').replace(/\s+/g,' ').trim();
       const isResidentGuest = !!d.gf_id;
-      const whoLabel = isResidentGuest ? "Resident's Guest" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
-      const reservedBy = isResidentGuest ? (guestName || "Resident's Guest") : whoLabel;
+      const whoLabel = isResidentGuest ? "Resident’s Guest Amenity Booking" : ((String(d.user_type||'resident').toLowerCase() === 'visitor') ? 'Visitor' : 'Resident');
+      const reservedBy = isResidentGuest ? (guestName || "Resident’s Guest") : whoLabel;
       const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
       const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
+      const approvalStatus = (d.approval_status || 'pending').toLowerCase();
+      let stClass = 'st-pending';
+      let stLabel = 'Pending Review';
+      if (approvalStatus.includes('approv')) { stClass = 'st-approved'; stLabel = 'Approved'; }
+      else if (approvalStatus.includes('denied') || approvalStatus.includes('reject')) { stClass = 'st-denied'; stLabel = 'Denied'; }
+      else if (approvalStatus.includes('cancel')) { stClass = 'st-denied'; stLabel = 'Cancelled'; }
+      else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
+      const priceBlock = d.price ? (()=>{ 
+        const total=parseFloat(d.price)||0; 
+        const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); 
+        const rem=Math.max(0,total-dp); 
+        return `<div class="price-section">
+          <div class="info-row total-price"><span class="info-label">Total Price</span><span class="info-value">₱${total.toLocaleString()}</span></div>
+          <div class="info-row price-down"><span class="info-label">Online Payment (Partial)</span><span class="info-value">₱${dp.toLocaleString()}</span></div>
+          <div class="info-row price-balance"><span class="info-label">Onsite Payment (Remaining)</span><span class="info-value">₱${rem.toLocaleString()}</span></div>
+        </div>`; 
+      })() : '';
       const content = `
-        <div style="display: flex; flex-direction: column; gap: 20px;">
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">${whoLabel}</h4>
-            ${displayName?`<p><strong>Name:</strong> ${displayName}</p>`:''}
-            ${(!isResidentGuest && d.house_number)?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-            ${displayEmail?`<p><strong>Email:</strong> ${displayEmail}</p>`:''}
-            ${displayPhone?`<p><strong>Phone:</strong> ${displayPhone}</p>`:''}
+        <div class="request-details">
+          <div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>
+          <div class="section-title">${whoLabel} Information</div>
+          <div class="info-grid">
+            ${displayName?`<div class="info-row"><span class="info-label">Name</span><span class="info-value">${displayName}</span></div>`:''}
+            ${(!isResidentGuest && d.house_number)?`<div class="info-row"><span class="info-label">House No.</span><span class="info-value">${d.house_number}</span></div>`:''}
+            ${displayEmail?`<div class="info-row"><span class="info-label">Email</span><span class="info-value">${displayEmail}</span></div>`:''}
+            ${displayPhone?`<div class="info-row"><span class="info-label">Phone</span><span class="info-value">${displayPhone}</span></div>`:''}
           </div>
           ${isResidentGuest ? `
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
-            ${residentName?`<p><strong>Name:</strong> ${residentName}</p>`:''}
-            ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-            ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
-            ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
+          <div class="section-title">Resident Information</div>
+          <div class="info-grid">
+            ${residentName?`<div class="info-row"><span class="info-label">Name</span><span class="info-value">${residentName}</span></div>`:''}
+            ${d.house_number?`<div class="info-row"><span class="info-label">House No.</span><span class="info-value">${d.house_number}</span></div>`:''}
+            ${d.email?`<div class="info-row"><span class="info-label">Email</span><span class="info-value">${d.email}</span></div>`:''}
+            ${d.phone?`<div class="info-row"><span class="info-label">Phone</span><span class="info-value">${d.phone}</span></div>`:''}
           </div>` : ''}
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
-            ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
-            ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
-            ${reservedBy?`<p><strong>Reserved By:</strong> ${reservedBy}</p>`:''}
-            ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
-            ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
-            ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
-            ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
-            ${d.price?(()=>{ const total=parseFloat(d.price)||0; const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); const rem=Math.max(0,total-dp); return `<div style="margin-top:10px;"><h4 style="color:#23412e;margin-bottom:8px;">Price Details</h4><table style="width:100%;border-collapse:collapse"><tr><td><strong>Total Price</strong></td><td style="text-align:right">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style="text-align:right">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style="text-align:right">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
-            ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
-            ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
-            ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
-            ${d.approval_date?`<p><strong>Approval Date:</strong> ${new Date(d.approval_date).toLocaleString()}</p>`:''}
+          <div class="section-title">Reservation Details</div>
+          <div class="info-grid">
+            ${d.ref_code?`<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
+            ${d.amenity?`<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${d.amenity}</span></div>`:''}
+            ${reservedBy?`<div class="info-row"><span class="info-label">Reserved By</span><span class="info-value">${reservedBy}</span></div>`:''}
+            ${d.start_date?`<div class="info-row"><span class="info-label">Start Date</span><span class="info-value">${new Date(d.start_date).toLocaleDateString()}</span></div>`:''}
+            ${d.end_date?`<div class="info-row"><span class="info-label">End Date</span><span class="info-value">${new Date(d.end_date).toLocaleDateString()}</span></div>`:''}
+            ${(d.start_time||d.end_time)?`<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</span></div>`:''}
+            ${d.persons?`<div class="info-row"><span class="info-label">Persons</span><span class="info-value">${d.persons}</span></div>`:''}
+            ${priceBlock}
+          </div>
+          <div class="section-title">Request Status</div>
+          <div class="info-grid">
+            <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
+            ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
+            ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${d.approved_by}</span></div>`:''}
+            ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
           </div>
         </div>`;
       document.getElementById('reservationDetailsContent').innerHTML = content;
@@ -3836,7 +4056,7 @@ window.addEventListener('click', function(event){
 <div id="residentReservationModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeResidentReservationModal()">&times;</span>
-    <h3>Resident Reservation Details</h3>
+    <h3>Resident Reservation</h3>
     <div id="residentReservationDetailsContent"></div>
   </div>
 </div>
@@ -3867,52 +4087,75 @@ function showResidentReservationDetails(rrId){
       
       let userType = ((d.user_type || 'Resident').charAt(0).toUpperCase() + (d.user_type || 'Resident').slice(1));
       if (isResidentGuest) {
-          userType = "Resident's Guest";
+          userType = "Resident’s Guest";
           if (bookedByRole === 'co_owner') userType = "Co-owner";
       }
 
-      const reservedBy = isBookedByGuest ? (bookedByName || userType) : (isResidentGuest ? (guestName || "Resident's Guest") : userType);
+      const reservedBy = isBookedByGuest ? (bookedByName || userType) : (isResidentGuest ? (guestName || "Resident’s Guest") : userType);
       const displayName = isBookedByGuest ? (bookedByName || 'Guest') : (isResidentGuest ? (guestName || 'Guest') : residentName);
       
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
       const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
       
-      // Dynamic Title Update
+      const reservationLabel = isResidentGuest ? "Resident’s Guest Amenity Booking" : "Resident Reservation";
+      const primarySectionTitle = isResidentGuest ? "Resident’s Guest Amenity Booking" : "Resident";
+      
       const modalTitle = document.querySelector('#residentReservationModal h3');
-      if(modalTitle) modalTitle.textContent = userType + ' Reservation Details';
+      if(modalTitle) modalTitle.textContent = reservationLabel + ' Details';
 
+      const approvalStatus = (d.approval_status || 'pending').toLowerCase();
+      let stClass = 'st-pending';
+      let stLabel = 'Pending Review';
+      if (approvalStatus.includes('approv')) { stClass = 'st-approved'; stLabel = 'Approved'; }
+      else if (approvalStatus.includes('denied') || approvalStatus.includes('reject')) { stClass = 'st-denied'; stLabel = 'Denied'; }
+      else if (approvalStatus.includes('cancel')) { stClass = 'st-denied'; stLabel = 'Cancelled'; }
+      else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
+      const priceBlock = d.price ? (()=>{ 
+        const total=parseFloat(d.price)||0; 
+        const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); 
+        const rem=Math.max(0,total-dp); 
+        return `<div class="price-section">
+          <div class="info-row total-price"><span class="info-label">Total Price</span><span class="info-value">₱${total.toLocaleString()}</span></div>
+          <div class="info-row price-down"><span class="info-label">Online Payment (Partial)</span><span class="info-value">₱${dp.toLocaleString()}</span></div>
+          <div class="info-row price-balance"><span class="info-label">Onsite Payment (Remaining)</span><span class="info-value">₱${rem.toLocaleString()}</span></div>
+        </div>`; 
+      })() : '';
       const content = `
-          <div style="display: flex; flex-direction: column; gap: 20px;">
-            <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">${userType}</h4>
-              ${displayName?`<p><strong>Name:</strong> ${displayName}</p>`:''}
-              ${(!isResidentGuest && d.house_number)?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-              ${displayEmail?`<p><strong>Email:</strong> ${displayEmail}</p>`:''}
-              ${displayPhone?`<p><strong>Phone:</strong> ${displayPhone}</p>`:''}
+          <div class="request-details">
+            <div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>
+            <div class="section-title">${primarySectionTitle} Information</div>
+            <div class="info-grid">
+              ${displayName?`<div class="info-row"><span class="info-label">Name</span><span class="info-value">${displayName}</span></div>`:''}
+              ${(!isResidentGuest && d.house_number)?`<div class="info-row"><span class="info-label">House No.</span><span class="info-value">${d.house_number}</span></div>`:''}
+              ${displayEmail?`<div class="info-row"><span class="info-label">Email</span><span class="info-value">${displayEmail}</span></div>`:''}
+              ${displayPhone?`<div class="info-row"><span class="info-label">Phone</span><span class="info-value">${displayPhone}</span></div>`:''}
             </div>
             ${isResidentGuest ? `
-            <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Resident</h4>
-              ${residentName?`<p><strong>Name:</strong> ${residentName}</p>`:''}
-              ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-              ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
-              ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
+            <div class="section-title">Resident Owner Information</div>
+            <div class="info-grid">
+              ${residentName?`<div class="info-row"><span class="info-label">Name</span><span class="info-value">${residentName}</span></div>`:''}
+              ${d.house_number?`<div class="info-row"><span class="info-label">House No.</span><span class="info-value">${d.house_number}</span></div>`:''}
+              ${d.email?`<div class="info-row"><span class="info-label">Email</span><span class="info-value">${d.email}</span></div>`:''}
+              ${d.phone?`<div class="info-row"><span class="info-label">Phone</span><span class="info-value">${d.phone}</span></div>`:''}
             </div>` : ''}
-            <div>
-              <h4 style="color:#23412e;margin-bottom:10px;">Reservation</h4>
-              ${d.ref_code?`<p><strong>Status Code:</strong> ${d.ref_code}</p>`:''}
-              ${d.amenity?`<p><strong>Amenity:</strong> ${d.amenity}</p>`:''}
-              ${reservedBy?`<p><strong>Reserved By:</strong> ${reservedBy}</p>`:''}
-              ${d.start_date?`<p><strong>Start Date:</strong> ${new Date(d.start_date).toLocaleDateString()}</p>`:''}
-              ${d.end_date?`<p><strong>End Date:</strong> ${new Date(d.end_date).toLocaleDateString()}</p>`:''}
-              ${(d.start_time||d.end_time)?`<p><strong>Time:</strong> ${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</p>`:''}
-              ${d.persons?`<p><strong>Persons:</strong> ${d.persons}</p>`:''}
-              ${d.price?(()=>{ const total=parseFloat(d.price)||0; const dp=(d.downpayment!=null?parseFloat(d.downpayment):Math.max(0,total*0.5)); const rem=Math.max(0,total-dp); return `<div style=\"margin-top:10px;\"><h4 style=\"color:#23412e;margin-bottom:8px;\">Price Details</h4><table style=\"width:100%;border-collapse:collapse\"><tr><td><strong>Total Price</strong></td><td style=\"text-align:right\">₱${total.toLocaleString()}</td></tr><tr><td><strong>Online Payment (Partial)</strong></td><td style=\"text-align:right\">₱${dp.toLocaleString()}</td></tr><tr><td><strong>Onsite Payment (Remaining)</strong></td><td style=\"text-align:right\">₱${rem.toLocaleString()}</td></tr></table></div>`; })() : ''}
-              <p><strong>Downpayment:</strong> <span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></p>
-              ${d.created_at?`<p><strong>Requested:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
-              ${d.approval_status?`<p><strong>Status:</strong> <span class="badge badge-${d.approval_status}">${d.approval_status.charAt(0).toUpperCase()+d.approval_status.slice(1)}</span></p>`:''}
-              ${d.approved_by?`<p><strong>Approved By:</strong> Staff ID ${d.approved_by}</p>`:''}
-              ${d.approval_date?`<p><strong>Approval Date:</strong> ${new Date(d.approval_date).toLocaleString()}</p>`:''}
+            <div class="section-title">Reservation Details</div>
+            <div class="info-grid">
+              ${d.ref_code?`<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
+              ${d.amenity?`<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${d.amenity}</span></div>`:''}
+              ${reservedBy?`<div class="info-row"><span class="info-label">Reserved By</span><span class="info-value">${reservedBy}</span></div>`:''}
+              ${d.start_date?`<div class="info-row"><span class="info-label">Start Date</span><span class="info-value">${new Date(d.start_date).toLocaleDateString()}</span></div>`:''}
+              ${d.end_date?`<div class="info-row"><span class="info-label">End Date</span><span class="info-value">${new Date(d.end_date).toLocaleDateString()}</span></div>`:''}
+              ${(d.start_time||d.end_time)?`<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(d.start_time)}${d.end_time?' - '+fmtTime(d.end_time):''}</span></div>`:''}
+              ${d.persons?`<div class="info-row"><span class="info-label">Persons</span><span class="info-value">${d.persons}</span></div>`:''}
+              ${priceBlock}
+              <div class="info-row"><span class="info-label">Downpayment</span><span class="info-value"><span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></span></div>
+            </div>
+            <div class="section-title">Request Status</div>
+            <div class="info-grid">
+              <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
+              ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
+              ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${d.approved_by}</span></div>`:''}
+              ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
             </div>
           </div>`;
       document.getElementById('residentReservationDetailsContent').innerHTML = content;
