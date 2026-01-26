@@ -98,12 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $booking_for_post = isset($_POST['booking_for']) ? trim($_POST['booking_for']) : '';
     $guest_id_post = isset($_POST['guest_id']) ? trim($_POST['guest_id']) : '';
     $guest_ref_code_post = isset($_POST['guest_ref_code']) ? trim($_POST['guest_ref_code']) : '';
+    $residents_count = isset($_POST['residents_count']) ? intval($_POST['residents_count']) : 0;
+    $guests_count = isset($_POST['guests_count']) ? intval($_POST['guests_count']) : 0;
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
-      $basePrice = max(1, $hours) * 150;
+      $basePrice = (max(1, $hours) * ((max(0,$guests_count) * 150) + (max(0,$residents_count) * 150 * 0.5)));
     } else if ($amenity === 'Clubhouse') {
-      $basePrice = max(1, $hours) * 200;
+      $basePrice = (max(1, $hours) * ((max(0,$guests_count) * 200) + (max(0,$residents_count) * 200 * 0.5)));
     } else if ($amenity === 'Pool') {
-      $basePrice = max(1, $persons) * 175;
+      $basePrice = ((max(0,$guests_count) * 175) + (max(0,$residents_count) * 175 * 0.5));
+      $persons = max(1, ($residents_count + $guests_count));
     } else {
       $basePrice = 0;
     }
@@ -137,10 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
     if ($booking_for === '') { $booking_for = null; }
-    $price = $basePrice;
-    if ($acct === 'resident' && $booking_for === 'resident') {
-      $price = round($basePrice * 0.5, 2);
-    }
+    $price = round($basePrice, 2);
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -530,6 +530,30 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     $stmtRG->close();
   }
 }
+$currentResident = null;
+$householdResidents = [];
+if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && isset($_SESSION['user_id']) && ($con instanceof mysqli)) {
+  $rid = intval($_SESSION['user_id']);
+  $stmtU = $con->prepare("SELECT id, first_name, middle_name, last_name, house_number FROM users WHERE id = ? LIMIT 1");
+  if ($stmtU) {
+    $stmtU->bind_param('i', $rid);
+    $stmtU->execute();
+    $resU = $stmtU->get_result();
+    if ($resU && $resU->num_rows) { $currentResident = $resU->fetch_assoc(); }
+    $stmtU->close();
+  }
+  if ($currentResident && !empty($currentResident['house_number'])) {
+    $hn = $currentResident['house_number'];
+    $stmtH = $con->prepare("SELECT id, first_name, middle_name, last_name FROM users WHERE user_type = 'resident' AND status = 'active' AND house_number = ? AND id <> ? ORDER BY created_at DESC");
+    if ($stmtH) {
+      $stmtH->bind_param('si', $hn, $rid);
+      $stmtH->execute();
+      $resH = $stmtH->get_result();
+      while ($row = $resH->fetch_assoc()) { $householdResidents[] = $row; }
+      $stmtH->close();
+    }
+  }
+}
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -538,6 +562,38 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <title>VictorianPass - Reserve</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
   <link rel="stylesheet" href="css/reserve.css">
+  <style>
+    .hero .layout { max-width:1400px; margin:0 auto; padding:0 24px; }
+    .reservation-card { width:100%; margin:0; max-width:none !important; }
+    .reservation-left { max-width:none !important; margin:0 !important; }
+    .calendar { max-width:none !important; }
+    .amenity-preview { max-width:none !important; }
+    .booking-steps { max-width:320px !important; width:auto !important; }
+    .sidebar-steps { grid-column:2 !important; position:sticky !important; top:84px !important; justify-self:start !important; }
+    .res-item.persons { width:100% !important; }
+    .persons .counter { justify-content:flex-start !important; }
+    .persons .res-label { justify-content:flex-start !important; text-align:left !important; }
+    #submitWrap { width:100% !important; display:flex !important; justify-content:flex-end !important; }
+    @media (min-width:1024px){
+      .reservation-grid { display:grid !important; grid-template-columns:2fr 1fr !important; gap:24px !important; align-items:start !important; }
+      .calendar { padding:12px !important; position:sticky !important; top:84px !important; }
+      .calendar table { width:100% !important; }
+      .calendar td { width:52px !important; height:48px !important; font-size:14px !important; }
+      .amenity-preview { grid-column:2 !important; margin-bottom:12px !important; }
+      .reservation-left { grid-column:1 !important; }
+      .reservation-left { display:grid !important; grid-template-columns:repeat(2, minmax(280px,1fr)) !important; gap:16px !important; }
+      #singleDayRow { grid-column:1 / -1 !important; }
+      #dateRow { grid-column:1 / -1 !important; display:grid !important; grid-template-columns:1fr 1fr !important; gap:16px !important; }
+      .reservation-left .res-item.persons { grid-column:1 / -1 !important; }
+      .res-item { margin-top:8px !important; }
+      .reservation-left .price-row { grid-column:1 / -1 !important; display:flex !important; justify-content:flex-start !important; gap:16px !important; }
+      #submitWrap { grid-column:1 / -1 !important; }
+    }
+    @media (min-width:768px) and (max-width:1023px){
+      .reservation-grid { display:grid !important; grid-template-columns:3fr 2fr !important; gap:20px !important; }
+      .calendar td { width:42px !important; height:40px !important; }
+    }
+  </style>
 </head>
 <body>
   <div id="notifyLayer" class="toast"></div>
@@ -556,7 +612,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
 <section class="hero">
   <div class="layout">
-    <div class="left-panel">
+    <div class="left-panel" style="width:100%;">
       <div class="top-actions">
         <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'">&#8592; Back to Account</button>
       </div>
@@ -564,63 +620,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       <?php $isResident = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'); ?>
 
       <?php if ($isResident): ?>
-      <div id="bookingForSectionInitial" class="booking-for-section-initial" style="margin-bottom: 2rem;">
-          <div class="section-header"><h2>Who is this reservation for?</h2><p>Select resident or guest</p></div>
-          <div class="booking-for-options" style="display:flex; flex-direction:column; gap:12px; max-width:600px;">
-              <label class="booking-option-card" style="display:flex; align-items:center; padding:16px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:all 0.2s; background:#fff;">
-                  <input type="radio" name="initial_booking_for" value="resident" style="margin-right:12px;">
-                  <div>
-                      <div style="font-weight:600; color:#111;">Resident (Myself)</div>
-                      <div style="font-size:0.9rem; color:#666;">Book an amenity for yourself</div>
-                  </div>
-              </label>
-              <label class="booking-option-card" style="display:flex; align-items:center; padding:16px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:all 0.2s; background:#fff;">
-                  <input type="radio" name="initial_booking_for" value="guest" style="margin-right:12px;">
-                  <div>
-                      <div style="font-weight:600; color:#111;">Guest</div>
-                      <div style="font-size:0.9rem; color:#666;">Book for an approved guest</div>
-                  </div>
-              </label>
-          </div>
-
-          <div id="initialGuestList" style="display:none; margin-top:16px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
-              <h4 style="margin:0 0 12px; font-size:1rem;">Select an Approved Guest</h4>
-              <?php if (!empty($residentGuests)): ?>
-                <div style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
-                <?php foreach ($residentGuests as $g): ?>
-                  <?php
-                    $parts = [];
-                    if (!empty($g['visitor_first_name'])) { $parts[] = $g['visitor_first_name']; }
-                    if (!empty($g['visitor_middle_name'])) { $parts[] = $g['visitor_middle_name']; }
-                    if (!empty($g['visitor_last_name'])) { $parts[] = $g['visitor_last_name']; }
-                    $gName = trim(implode(' ', $parts));
-                    if ($gName === '') { $gName = 'Guest'; }
-                  ?>
-                  <label class="guest-option" style="display:flex; align-items:center; padding:10px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;">
-                    <input type="radio" name="initial_guest_choice" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>" style="margin-right:10px;">
-                    <div>
-                      <div style="font-weight:600; font-size:0.95rem;"><?php echo htmlspecialchars($gName); ?></div>
-                      <?php if (!empty($g['visitor_email']) || !empty($g['visitor_contact'])): ?>
-                        <div style="font-size:0.85rem; color:#666;">
-                          <?php echo htmlspecialchars($g['visitor_email'] . ($g['visitor_email'] && $g['visitor_contact'] ? ' • ' : '') . $g['visitor_contact']); ?>
-                        </div>
-                      <?php endif; ?>
-                    </div>
-                  </label>
-                <?php endforeach; ?>
-                </div>
-                <button type="button" id="confirmGuestBtn" class="btn-main small" style="margin-top:12px;" disabled>Continue</button>
-              <?php else: ?>
-                <div style="padding:12px; text-align:center; color:#666;">No approved guests found. Please add or wait for approval in your account.</div>
-              <?php endif; ?>
-          </div>
-      </div>
       <?php endif; ?>
 
-      <div class="section-header" id="amenitiesHeader" style="<?php echo $isResident ? 'display:none;' : ''; ?>"><h2>Amenities</h2><p>Select an amenity</p></div>
+      <div class="section-header" id="amenitiesHeader"><h2>Amenities</h2><p>Select an amenity</p></div>
       <div class="amenities-wrapper">
         <div class="amenities-right">
-          <div class="amenities-list" id="amenitiesList" style="<?php echo $isResident ? 'display:none;' : ''; ?>">
+          <div class="amenities-list" id="amenitiesList">
             <div class="amenity-card" data-amenity="Pool" data-key="pool" data-price="175">
               <div class="amenity-media">
                 <img src="images/communitypool.png" alt="Community Pool">
@@ -686,45 +691,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <div class="schedule-panel" data-schedule-panel></div>
             </div>
           </div>
-            <div class="booking-shell">
-            <div class="booking-steps" aria-label="Booking steps">
-              <div class="booking-steps-header">
-                <div class="booking-steps-label">Reservation steps</div>
-                <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
-              </div>
-              <div class="booking-steps-body">
-                <?php if ($isResident): ?>
-                <div class="booking-step is-active" id="step-who">
-                  <div class="step-index">1</div>
-                  <div class="step-content">
-                    <div class="step-title">Who</div>
-                    <div class="step-subtitle">Resident or Guest</div>
-                  </div>
-                </div>
-                <?php endif; ?>
-                <div class="booking-step <?php echo $isResident ? '' : 'is-active'; ?>" id="step-amenity">
-                  <div class="step-index"><?php echo $isResident ? '2' : '1'; ?></div>
-                  <div class="step-content">
-                    <div class="step-title">Select amenity</div>
-                    <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
-                  </div>
-                </div>
-                <div class="booking-step" id="step-schedule">
-                  <div class="step-index"><?php echo $isResident ? '3' : '2'; ?></div>
-                  <div class="step-content">
-                    <div class="step-title">Set schedule</div>
-                    <div class="step-subtitle">Pick an available date and time from the calendar</div>
-                  </div>
-                </div>
-                <div class="booking-step" id="step-review">
-                  <div class="step-index"><?php echo $isResident ? '4' : '3'; ?></div>
-                  <div class="step-content">
-                    <div class="step-title">Review &amp; pay</div>
-                    <div class="step-subtitle">Check your reservation details and partial downpayment</div>
-                  </div>
-                </div>
-              </div>
-            </div>
             <?php if (!empty($errorMsg)) { ?><div class="alert-error"><?php echo htmlspecialchars($errorMsg); ?></div><?php } ?>
             <form method="POST">
           <input type="hidden" name="purpose" value="Amenity Reservation">
@@ -734,11 +700,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           <input type="hidden" name="booking_for" id="bookingForField" value="">
           <input type="hidden" name="guest_id" id="guestIdField" value="">
           <input type="hidden" name="guest_ref_code" id="guestRefField" value="">
+          <input type="hidden" name="residents_count" id="residentsCountInput" value="<?php echo (isset($_SESSION['user_type']) && $_SESSION['user_type']==='resident') ? '1' : '0'; ?>">
+          <input type="hidden" name="guests_count" id="guestsCountInput" value="0">
           <input type="hidden" id="submitAllowed" value="1">
-            <div class="reservation-card" id="reservationCard" style="display:none;">
+            <div class="reservation-card" id="reservationCard" style="display:none; width:100%; margin:0;">
             <input type="hidden" name="amenity" id="amenityField" value="">
-            <div class="reservation-grid">
-              <div class="calendar" style="width:100%">
+            <div class="reservation-grid" style="display:grid; grid-template-columns:minmax(420px,520px) 1fr; gap:24px; align-items:start;">
+              <div class="calendar" style="width:100%; position:sticky; top:90px;">
                 <div class="calendar-header">
                   <button type="button" id="prevMonth">&lt;</button>
                   <h3 id="monthAndYear"></h3>
@@ -749,7 +717,38 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                   <tbody id="calendar-body"></tbody>
                 </table>
               </div>
-              <div class="amenity-preview" id="amenityPreview" style="display:none;">
+              <div class="sidebar-steps">
+                <div class="booking-steps" aria-label="Booking steps">
+                  <div class="booking-steps-header">
+                    <div class="booking-steps-label">Reservation steps</div>
+                    <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
+                  </div>
+                  <div class="booking-steps-body">
+                    <div class="booking-step is-active" id="step-amenity">
+                      <div class="step-index">1</div>
+                      <div class="step-content">
+                        <div class="step-title">Select amenity</div>
+                        <div class="step-subtitle">Choose the VictorianPass facility you want to reserve</div>
+                      </div>
+                    </div>
+                    <div class="booking-step" id="step-schedule">
+                      <div class="step-index">2</div>
+                      <div class="step-content">
+                        <div class="step-title">Set schedule</div>
+                        <div class="step-subtitle">Pick an available date and time from the calendar</div>
+                      </div>
+                    </div>
+                    <div class="booking-step" id="step-review">
+                      <div class="step-index">3</div>
+                      <div class="step-content">
+                        <div class="step-title">Review &amp; pay</div>
+                        <div class="step-subtitle">Check your reservation details and partial downpayment</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="amenity-preview" id="amenityPreview" style="display:none; grid-column:2; margin-bottom:12px;">
                 <img src="" alt="" id="amenityPreviewImg" class="amenity-preview-img">
                 <div class="amenity-preview-header">
                   <div class="amenity-preview-title" id="amenityPreviewTitle">Amenity</div>
@@ -794,8 +793,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div id="dateError" class="time-error" style="display:none;"></div>
                     <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div id="timeError" class="time-error" style="display:none;"></div>
-                    <div class="res-item persons">
-                      <div class="res-label"><small>How Many Persons</small></div>
+                  </div>
+                  <div class="res-item persons">
+                      <div class="res-label"><small>Total Participants</small></div>
                       <div class="counter">
                         <button type="button" onclick="changePersons(-1)">-</button>
                         <span id="personCount">1</span>
@@ -803,7 +803,75 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       </div>
                       <div id="personsMaxNote" class="label-help"></div>
                       <input type="hidden" name="persons" id="personsInput" value="1">
-                    </div>
+                      <div class="participant-selector" style="margin-top:14px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
+                        <div style="font-weight:700; margin-bottom:8px;">Who will attend?</div>
+                        <div class="mode-options" style="display:flex;flex-direction:column;gap:8px;">
+                          <button type="button" class="btn-secondary" data-mode="resident_only">Residents Only</button>
+                          <div style="color:#555;font-size:0.85rem;">All selected residents receive a 50% discount.</div>
+                          <button type="button" class="btn-secondary" data-mode="resident_guest">Residents + Guests</button>
+                          <div style="color:#555;font-size:0.85rem;">Residents receive a 50% discount. Guests pay full price.</div>
+                          <button type="button" class="btn-secondary" data-mode="guest_only">Guests Only</button>
+                          <div style="color:#555;font-size:0.85rem;">Guests are charged the regular rate.</div>
+                        </div>
+                        <div class="resident-group" style="display:none; margin-top:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff;">
+                          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:#1f8a3a;"></div>
+                            <div style="font-weight:600;">Residents (Discounted)</div>
+                          </div>
+                          <div style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;">
+                            <label style="display:flex;align-items:center;gap:8px;">
+                              <input type="checkbox" class="resident-check" value="<?php echo isset($currentResident['id']) ? (int)$currentResident['id'] : 0; ?>" data-name="Me (Primary Resident)" checked>
+                              <span>Me (Primary Resident)</span>
+                            </label>
+                            <?php foreach ($householdResidents as $hr): ?>
+                            <?php $hrName = trim(($hr['first_name'] ?? '') . ' ' . ($hr['middle_name'] ?? '') . ' ' . ($hr['last_name'] ?? '')); if ($hrName==='') { $hrName='Resident'; } ?>
+                            <label style="display:flex;align-items:center;gap:8px;">
+                              <input type="checkbox" class="resident-check" value="<?php echo (int)$hr['id']; ?>" data-name="<?php echo htmlspecialchars($hrName); ?>">
+                              <span><?php echo htmlspecialchars($hrName); ?> (Resident)</span>
+                            </label>
+                            <?php endforeach; ?>
+                          </div>
+                        </div>
+                        <div class="guest-group" style="display:none; margin-top:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff;">
+                          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:#2a4fe5;"></div>
+                            <div style="font-weight:600;">Approved Guests (Full Price)</div>
+                          </div>
+                          <div style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;">
+                            <?php foreach ($residentGuests as $g): ?>
+                            <?php $gName = trim(($g['visitor_first_name'] ?? '') . ' ' . ($g['visitor_middle_name'] ?? '') . ' ' . ($g['visitor_last_name'] ?? '')); if ($gName==='') { $gName='Guest'; } ?>
+                            <label style="display:flex;align-items:center;gap:8px;">
+                              <input type="checkbox" class="guest-check" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>" data-name="<?php echo htmlspecialchars($gName); ?>">
+                              <span><?php echo htmlspecialchars($gName); ?></span>
+                            </label>
+                            <?php endforeach; ?>
+                          </div>
+                        </div>
+                      </div>
+                      <div style="margin-top:10px; border-top:1px dashed #ddd; padding-top:10px;">
+                        <div class="res-label"><small>Participants Breakdown</small></div>
+                        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                          <div style="flex:1; min-width:180px;">
+                            <div style="font-weight:600; color:#23412e; margin-bottom:6px;">Residents</div>
+                            <div class="counter">
+                              <button type="button" onclick="changeResidents(-1)">-</button>
+                              <span id="residentsCountText"><?php echo (isset($_SESSION['user_type']) && $_SESSION['user_type']==='resident') ? '1' : '0'; ?></span>
+                              <button type="button" onclick="changeResidents(1)">+</button>
+                            </div>
+                            <small class="label-help">50% discount per resident</small>
+                          </div>
+                          <div style="flex:1; min-width:180px;">
+                            <div style="font-weight:600; color:#8a2a2a; margin-bottom:6px;">Approved Guests</div>
+                            <div class="counter">
+                              <button type="button" onclick="changeGuests(-1)">-</button>
+                              <span id="guestsCountText">0</span>
+                              <button type="button" onclick="changeGuests(1)">+</button>
+                            </div>
+                            <small class="label-help">Full price per guest</small>
+                          </div>
+                        </div>
+                      </div>
+                  </div>
                     <div class="res-item price-row">
                       <div class="price-box">
                         <div class="price-label">Total Price</div>
@@ -845,51 +913,52 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     <h2>Confirm Details</h2>
     <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
     <?php if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'): ?>
-    <div id="bookingForSection" style="margin-top:16px;text-align:left;">
-      <h3 style="margin:0 0 8px;font-size:1rem;">Who is this booking for?</h3>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <label style="display:flex;align-items:center;gap:6px;">
-          <input type="radio" name="booking_for_choice" id="bookingForResident" value="resident" checked>
-          <span>Resident (myself)</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;">
-          <input type="radio" name="booking_for_choice" id="bookingForGuest" value="guest">
-          <span>Guest / Visitor</span>
-        </label>
-      </div>
-      <div id="guestListWrap" style="margin-top:10px; max-height:180px; overflow:auto; border:1px solid #e0e3e0; border-radius:8px; padding:8px; display:none;">
-        <?php if (!empty($residentGuests)): ?>
-          <?php foreach ($residentGuests as $g): ?>
-            <?php
-              $parts = [];
-              if (!empty($g['visitor_first_name'])) { $parts[] = $g['visitor_first_name']; }
-              if (!empty($g['visitor_middle_name'])) { $parts[] = $g['visitor_middle_name']; }
-              if (!empty($g['visitor_last_name'])) { $parts[] = $g['visitor_last_name']; }
-              $gName = trim(implode(' ', $parts));
-              if ($gName === '') { $gName = 'Guest'; }
-            ?>
-            <label style="display:flex;align-items:flex-start;gap:6px;margin:4px 0;">
-              <input type="radio" name="guest_choice" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>">
-              <div style="flex:1;">
-                <div style="font-weight:600;"><?php echo htmlspecialchars($gName); ?></div>
-                <?php if (!empty($g['visitor_email']) || !empty($g['visitor_contact'])): ?>
-                  <div style="font-size:0.85rem;color:#555;">
-                    <?php if (!empty($g['visitor_email'])): ?>
-                      <?php echo htmlspecialchars($g['visitor_email']); ?>
-                    <?php endif; ?>
-                    <?php if (!empty($g['visitor_contact'])): ?>
-                      <?php echo htmlspecialchars(($g['visitor_email'] ? ' • ' : '') . $g['visitor_contact']); ?>
-                    <?php endif; ?>
-                  </div>
-                <?php endif; ?>
-              </div>
+    <div id="participantSelector" style="margin-top:16px;text-align:left;">
+      <h3 style="margin:0 0 8px;font-size:1rem;">Who will use the amenity?</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:700px;">
+        <div id="modeOptions" style="display:flex;flex-direction:column;gap:8px;">
+          <button type="button" class="btn-secondary" data-mode="resident_only">Residents Only</button>
+          <div style="color:#555;font-size:0.85rem;">All selected residents receive a 50% discount.</div>
+          <button type="button" class="btn-secondary" data-mode="resident_guest">Residents + Guests</button>
+          <div style="color:#555;font-size:0.85rem;">Residents receive a 50% discount. Guests pay full price.</div>
+          <button type="button" class="btn-secondary" data-mode="guest_only">Guests Only</button>
+          <div style="color:#555;font-size:0.85rem;">Guests are charged the regular rate.</div>
+        </div>
+        <div id="residentGroup" style="display:none; margin-top:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#1f8a3a;"></div>
+            <div style="font-weight:600;">Residents (Discounted)</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" class="resident-check" value="<?php echo isset($currentResident['id']) ? (int)$currentResident['id'] : 0; ?>" data-name="Me (Primary Resident)" checked>
+              <span>Me (Primary Resident)</span>
             </label>
-          <?php endforeach; ?>
-        <?php else: ?>
-          <div style="font-size:0.9rem;color:#555;">No saved guests yet. You can add guests from your My Guests page.</div>
-        <?php endif; ?>
+            <?php foreach ($householdResidents as $hr): ?>
+            <?php $hrName = trim(($hr['first_name'] ?? '') . ' ' . ($hr['middle_name'] ?? '') . ' ' . ($hr['last_name'] ?? '')); if ($hrName==='') { $hrName='Resident'; } ?>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" class="resident-check" value="<?php echo (int)$hr['id']; ?>" data-name="<?php echo htmlspecialchars($hrName); ?>">
+              <span><?php echo htmlspecialchars($hrName); ?> (Resident)</span>
+            </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <div id="guestGroup" style="display:none; margin-top:12px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#2a4fe5;"></div>
+            <div style="font-weight:600;">Approved Guests (Full Price)</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;">
+            <?php foreach ($residentGuests as $g): ?>
+            <?php $gName = trim(($g['visitor_first_name'] ?? '') . ' ' . ($g['visitor_middle_name'] ?? '') . ' ' . ($g['visitor_last_name'] ?? '')); if ($gName==='') { $gName='Guest'; } ?>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" class="guest-check" value="<?php echo (int)$g['id']; ?>" data-ref="<?php echo htmlspecialchars($g['ref_code']); ?>" data-name="<?php echo htmlspecialchars($gName); ?>">
+              <span><?php echo htmlspecialchars($gName); ?></span>
+            </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
       </div>
-      <div id="bookingForWarning" style="display:none;margin-top:6px;color:#8a2a2a;font-size:0.85rem;"></div>
     </div>
     <?php endif; ?>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
@@ -1362,9 +1431,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const guestRefField=document.getElementById('guestRefField'); if(guestRefField){ guestRefField.value=''; }
     resetReservationForm();
     resetAmenitySelection();
-    document.querySelectorAll('input[name="guest_choice"], input[name="initial_guest_choice"]').forEach(function(r){ r.checked=false; });
+    document.querySelectorAll('input[name="guest_choice"]').forEach(function(r){ r.checked=false; });
     document.querySelectorAll('.guest-option').forEach(function(go){ go.style.borderColor='#e5e7eb'; });
-    const confirmGuestBtn=document.getElementById('confirmGuestBtn'); if(confirmGuestBtn){ confirmGuestBtn.disabled=true; }
     updateBookingSummary();
   }
 
@@ -1441,14 +1509,24 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     return field && field.value === 'resident';
   }
   function getBaseAmenityPrice(amen, persons, hours){
-    if(amen==='Basketball Court' || amen==='Tennis Court'){ return hours>0 ? (hours * 150) : 0; }
-    if(amen==='Clubhouse'){ return hours>0 ? (hours * 200) : 0; }
+    if(amen==='Basketball Court' || amen==='Tennis Court'){ return (hours>0 ? (hours * 150) : 0) * Math.max(1,persons); }
+    if(amen==='Clubhouse'){ return (hours>0 ? (hours * 200) : 0) * Math.max(1,persons); }
     if(amen==='Pool'){ return Math.max(1,persons) * 175; }
     return 0;
   }
   function getEffectiveAmenityPrice(amen, persons, hours){
-    const base=getBaseAmenityPrice(amen, persons, hours);
-    return isResidentSelfBooking() ? (base * 0.5) : base;
+    const r=parseInt(document.getElementById('residentsCountInput').value||'0',10);
+    const g=parseInt(document.getElementById('guestsCountInput').value||'0',10);
+    const hoursNum=parseInt(hours||'0',10);
+    let total=0;
+    if(amen==='Pool'){
+      total = (r * 175 * 0.5) + (g * 175);
+    } else if(amen==='Clubhouse'){
+      total = hoursNum * ((r * 200 * 0.5) + (g * 200));
+    } else if(amen==='Basketball Court' || amen==='Tennis Court'){
+      total = hoursNum * ((r * 150 * 0.5) + (g * 150));
+    }
+    return total;
   }
   function formatPesoAmount(val){
     const rounded=Math.round(val*100)/100;
@@ -1577,6 +1655,42 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateHoursSelectEnabled();
   }
 
+  function changeResidents(delta){
+    const rEl=document.getElementById('residentsCountText');
+    const rInput=document.getElementById('residentsCountInput');
+    const gInput=document.getElementById('guestsCountInput');
+    const pInput=document.getElementById('personsInput');
+    const pText=document.getElementById('personCount');
+    let r=parseInt(rEl.textContent||'0',10);
+    r=Math.max(0, r+delta);
+    rEl.textContent=String(r);
+    rInput.value=String(r);
+    const g=parseInt(gInput.value||'0',10);
+    const total=Math.max(1, r+g);
+    pInput.value=String(total);
+    if(pText) pText.textContent=String(total);
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+    updateBookingSummary();
+  }
+  function changeGuests(delta){
+    const gEl=document.getElementById('guestsCountText');
+    const gInput=document.getElementById('guestsCountInput');
+    const rInput=document.getElementById('residentsCountInput');
+    const pInput=document.getElementById('personsInput');
+    const pText=document.getElementById('personCount');
+    let g=parseInt(gEl.textContent||'0',10);
+    g=Math.max(0, g+delta);
+    gEl.textContent=String(g);
+    gInput.value=String(g);
+    const r=parseInt(rInput.value||'0',10);
+    const total=Math.max(1, r+g);
+    pInput.value=String(total);
+    if(pText) pText.textContent=String(total);
+    updateDisplayedPrice();
+    updateDownpaymentSuggestion();
+    updateBookingSummary();
+  }
   function getAmenityMaxPersons(amen){
     if(amen==='Pool') return 20;
     if(amen==='Clubhouse') return 200;
@@ -2172,6 +2286,68 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       });
     }
   })();
+  (function(){
+    const selectors=document.querySelectorAll('.participant-selector, #participantSelector');
+    if(!selectors.length) return;
+    const bookingForField=document.getElementById('bookingForField');
+    const residentsCountInput=document.getElementById('residentsCountInput');
+    const guestsCountInput=document.getElementById('guestsCountInput');
+    function updateCounts(){
+      let rSel=0, gSel=0;
+      selectors.forEach(function(sel){
+        const rGroup=sel.querySelector('.resident-group');
+        const gGroup=sel.querySelector('.guest-group');
+        if(rGroup && rGroup.style.display!=='none'){ rSel += sel.querySelectorAll('.resident-check:checked').length; }
+        if(gGroup && gGroup.style.display!=='none'){ gSel += sel.querySelectorAll('.guest-check:checked').length; }
+      });
+      residentsCountInput.value=String(rSel);
+      guestsCountInput.value=String(gSel);
+      const total=Math.max(1, rSel+gSel);
+      const pInput=document.getElementById('personsInput'); if(pInput){ pInput.value=String(total); }
+      const pText=document.getElementById('personCount'); if(pText){ pText.textContent=String(total); }
+      updateDisplayedPrice();
+      updateDownpaymentSuggestion();
+      updateBookingSummary();
+    }
+    function applyModeTo(sel, m){
+      const rGroup=sel.querySelector('.resident-group');
+      const gGroup=sel.querySelector('.guest-group');
+      if(!rGroup || !gGroup) return;
+      if(m==='resident_only'){
+        rGroup.style.display='block';
+        gGroup.style.display='none';
+        if(bookingForField) bookingForField.value='resident';
+        const me=sel.querySelector('.resident-check')||null;
+        if(me){ me.checked=true; }
+      } else if(m==='resident_guest'){
+        rGroup.style.display='block';
+        gGroup.style.display='block';
+        if(bookingForField) bookingForField.value='resident';
+        const me=sel.querySelector('.resident-check')||null;
+        if(me){ me.checked=true; }
+      } else {
+        rGroup.style.display='none';
+        gGroup.style.display='block';
+        if(bookingForField) bookingForField.value='guest';
+        sel.querySelectorAll('.resident-check').forEach(function(x){ x.checked=false; });
+      }
+    }
+    selectors.forEach(function(sel){
+      sel.querySelectorAll('.mode-options [data-mode], #modeOptions [data-mode]').forEach(function(btn){
+        btn.addEventListener('click',function(){
+          applyModeTo(sel, btn.getAttribute('data-mode')||'resident_only');
+          updateCounts();
+        });
+      });
+      sel.addEventListener('change',function(e){
+        if(e.target.classList.contains('resident-check')||e.target.classList.contains('guest-check')){
+          updateCounts();
+        }
+      });
+      applyModeTo(sel, 'resident_only');
+    });
+    updateCounts();
+  })();
 
   (function(){
     const modal=document.getElementById('changeAmenityModal');
@@ -2245,23 +2421,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     try{
       const raw=sessionStorage.getItem('reserve_form'); if(!raw) return;
       const data=JSON.parse(raw||'{}');
-      
-      if(data.booking_for){
-         const r = document.querySelector(`input[name="initial_booking_for"][value="${data.booking_for}"]`);
-         if(r) {
-           r.checked = true;
-           r.dispatchEvent(new Event('change'));
-         }
-      }
-      if(data.booking_for === 'guest' && data.guest_id){
-         const gr = document.querySelector(`input[name="initial_guest_choice"][value="${data.guest_id}"]`);
-         if(gr) {
-           gr.checked = true;
-           gr.dispatchEvent(new Event('change'));
-           const btn = document.getElementById('confirmGuestBtn');
-           if(btn) btn.click();
-         }
-      }
 
       if(data.amenity){ document.getElementById('amenityField').value=data.amenity; }
       if(data.start_date){ document.getElementById('startDateInput').value=data.start_date; }
@@ -2356,106 +2515,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function closeHint(){document.getElementById('hintModal').style.display='none'}
 
   document.addEventListener('DOMContentLoaded', function(){
-    const initialBookingForRadios = document.querySelectorAll('input[name="initial_booking_for"]');
-    const guestListSection = document.getElementById('initialGuestList');
-    const guestRadios = document.querySelectorAll('input[name="initial_guest_choice"]');
-    const confirmGuestBtn = document.getElementById('confirmGuestBtn');
     const amenitiesHeader = document.getElementById('amenitiesHeader');
     const amenitiesList = document.getElementById('amenitiesList');
     const bookingForField = document.getElementById('bookingForField');
     const guestIdField = document.getElementById('guestIdField');
     const guestRefField = document.getElementById('guestRefField');
-    const stepWho = document.getElementById('step-who');
     const stepAmenity = document.getElementById('step-amenity');
-    
-    // Hide verify modal choice section if resident and initial selection exists
-    const verifyBookingSection = document.getElementById('bookingForSection');
-    if(verifyBookingSection && initialBookingForRadios.length > 0) {
-      verifyBookingSection.style.display = 'none';
-    }
-
-    initialBookingForRadios.forEach(r => {
-      r.addEventListener('change', function(){
-        clearBookingFormState();
-        // Reset selection visual states
-        document.querySelectorAll('.booking-option-card').forEach(c => {
-           c.style.borderColor = '#e5e7eb';
-           c.style.backgroundColor = '#fff';
-        });
-        const card = this.closest('.booking-option-card');
-        if(card) {
-            card.style.borderColor = '#2e7d32';
-            card.style.backgroundColor = '#f0faf2';
-        }
-
-        if(this.value === 'resident') {
-          // Resident selected
-          if(guestListSection) guestListSection.style.display = 'none';
-          if(bookingForField) bookingForField.value = 'resident';
-          if(guestIdField) guestIdField.value = '';
-          if(guestRefField) guestRefField.value = '';
-          refreshPricingForBookingFor();
-          
-          // Show amenities
-          if(amenitiesHeader) amenitiesHeader.style.display = '';
-          if(amenitiesList) amenitiesList.style.display = '';
-          
-          // Update steps
-          if(stepWho) stepWho.classList.remove('is-active');
-          if(stepAmenity) stepAmenity.classList.add('is-active');
-          
-        } else if (this.value === 'guest') {
-          // Guest selected
-          if(guestListSection) guestListSection.style.display = 'block';
-          if(bookingForField) bookingForField.value = ''; // wait for guest selection
-          refreshPricingForBookingFor();
-          
-          // Hide amenities until guest confirmed
-          if(amenitiesHeader) amenitiesHeader.style.display = 'none';
-          if(amenitiesList) amenitiesList.style.display = 'none';
-          
-          if(stepWho) stepWho.classList.add('is-active');
-          if(stepAmenity) stepAmenity.classList.remove('is-active');
-          
-          // Reset amenities if any selected
-          resetAmenitySelection();
-        }
-      });
-    });
-
-    guestRadios.forEach(gr => {
-      gr.addEventListener('change', function(){
-        if(confirmGuestBtn) confirmGuestBtn.disabled = false;
-        document.querySelectorAll('.guest-option').forEach(go => go.style.borderColor = '#e5e7eb');
-        const go = this.closest('.guest-option');
-        if(go) go.style.borderColor = '#2e7d32';
-      });
-    });
-
-    if(confirmGuestBtn) {
-      confirmGuestBtn.addEventListener('click', function(){
-        const selected = document.querySelector('input[name="initial_guest_choice"]:checked');
-        if(selected) {
-          if(bookingForField) bookingForField.value = 'guest';
-          if(guestIdField) guestIdField.value = selected.value;
-          if(guestRefField) guestRefField.value = selected.getAttribute('data-ref');
-          const bookingForGuestRadio = document.getElementById('bookingForGuest');
-          if (bookingForGuestRadio) { bookingForGuestRadio.checked = true; }
-          refreshPricingForBookingFor();
-          
-          // Show amenities
-          if(amenitiesHeader) amenitiesHeader.style.display = '';
-          if(amenitiesList) amenitiesList.style.display = '';
-          
-          // Update steps
-          if(stepWho) stepWho.classList.remove('is-active');
-          if(stepAmenity) stepAmenity.classList.add('is-active');
-          
-          // Scroll to amenities
-          if(amenitiesHeader) amenitiesHeader.scrollIntoView({behavior: 'smooth'});
-        }
-      });
-    }
   });
 
 </script>
