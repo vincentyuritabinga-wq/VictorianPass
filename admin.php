@@ -408,17 +408,26 @@ if (isset($_POST['user_action']) && isset($_POST['user_id'])) {
     ensureUsersStatusColumn($con);
 
     if ($action === 'suspend_user' || $action === 'deactivate_user') {
-        $stmt = $con->prepare("UPDATE users SET status='disabled' WHERE id = ?");
-        $stmt->bind_param('i', $uid);
+        $reason = trim($_POST['suspension_reason'] ?? '');
+        if ($reason !== '') {
+            $reason = substr($reason, 0, 255);
+        } else {
+            $reason = null;
+        }
+        $stmt = $con->prepare("UPDATE users SET status='disabled', suspension_reason = ? WHERE id = ?");
+        $stmt->bind_param('si', $reason, $uid);
         $stmt->execute();
         $stmt->close();
-        $msg = 'Your account has been suspended. Please contact the admin for assistance.';
+        $msg = 'Your account has been suspended by the admin.';
+        if ($reason) {
+            $msg .= ' Reason: ' . $reason;
+        }
         notifyUser($con, $uid, 'Account Suspended', $msg, 'warning');
         header("Location: admin.php?page=" . $redirectPage);
         exit;
     }
     if ($action === 'activate_user') {
-        $stmt = $con->prepare("UPDATE users SET status='active' WHERE id = ?");
+        $stmt = $con->prepare("UPDATE users SET status='active', suspension_reason = NULL WHERE id = ?");
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $stmt->close();
@@ -959,6 +968,13 @@ function ensureUsersStatusColumn($con) {
     }
 }
 ensureUsersStatusColumn($con);
+function ensureUsersSuspensionReasonColumn($con) {
+    $check = $con->query("SHOW COLUMNS FROM users LIKE 'suspension_reason'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE users ADD COLUMN suspension_reason VARCHAR(255) NULL AFTER status");
+    }
+}
+ensureUsersSuspensionReasonColumn($con);
 
 // Ensure notifications table exists
 function ensureNotificationsTable($con) {
@@ -1989,6 +2005,21 @@ tr:hover { background-color: #f8fafc; }
 
 /* Table Actions */
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.actions .suspend-reason {
+    width: 180px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: #fff;
+    height: 32px;
+    line-height: 1.2;
+}
+.actions .suspend-reason:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(35,65,46,0.12);
+}
 .btn {
     padding: 8px 14px;
     border-radius: 6px;
@@ -3210,6 +3241,7 @@ tr:hover { background-color: #f8fafc; }
               echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='suspend_user'>";
               echo "<input type='hidden' name='redirect_page' value='residents'>";
+              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
               echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
               echo "</form>";
               echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
@@ -3261,6 +3293,7 @@ tr:hover { background-color: #f8fafc; }
               echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='suspend_user'>";
               echo "<input type='hidden' name='redirect_page' value='visitors'>";
+              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
               echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
               echo "</form>";
               echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
