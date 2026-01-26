@@ -69,18 +69,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $row = $result_user->fetch_assoc();
 
                 if (password_verify($password, $row['password'])) {
-                    $_SESSION['user_id']   = $row['id'];
-                    $_SESSION['email']     = $row['email'];
-                    $_SESSION['user_type'] = $row['user_type'];
-                    // Keep a generic role key for parts of the site that expect it
-                    $_SESSION['role']      = $row['user_type'];
-
-                    if ($row['user_type'] === 'resident') {
-                        $loginSuccessMessage = 'Login successful!';
-                        $loginRedirect = 'profileresident.php';
+                    $status = strtolower(trim($row['status'] ?? ''));
+                    if ($status === 'disabled') {
+                        $loginError = 'suspended_account';
+                        $loginErrorMessage = 'Your account has been suspended by the admin.';
                     } else {
-                        $loginSuccessMessage = 'Login successful!';
-                        $loginRedirect = 'mainpage.php';
+                        $_SESSION['user_id']   = $row['id'];
+                        $_SESSION['email']     = $row['email'];
+                        $_SESSION['user_type'] = $row['user_type'];
+                        $_SESSION['role']      = $row['user_type'];
+
+                        if ($row['user_type'] === 'resident') {
+                            $loginSuccessMessage = 'Login successful!';
+                            $loginRedirect = 'profileresident.php';
+                        } else {
+                            $loginSuccessMessage = 'Login successful!';
+                            $loginRedirect = 'mainpage.php';
+                        }
                     }
                 } else {
                     $loginError = 'invalid_password';
