@@ -253,7 +253,7 @@ if (empty($error)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pass Validation - VictorianPass</title>
+    <title>Entry Pass Details - VictorianPass</title>
     <link rel="icon" type="image/png" href="images/logo.svg" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -338,7 +338,7 @@ if (empty($error)) {
 
                 <?php if (!empty($data['resident_name'])): ?>
                 <div class="detail-row">
-                    <span class="label">Resident Host</span>
+                    <span class="label">Referred by Resident</span>
                     <span class="value"><?php echo htmlspecialchars($data['resident_name']); ?></span>
                 </div>
                 <?php endif; ?>
@@ -366,32 +366,10 @@ if (empty($error)) {
             <!-- Actions -->
             <div class="actions">
                 <?php if ($data['ui_state'] === 'valid'): ?>
-                    <?php if ($isAuthorizedScanner): ?>
-                        <!-- Only Guards/Admins see the Confirm Button -->
-                        <form method="POST" onsubmit="return confirm('Are you sure you want to confirm entry for this pass?');">
-                            <input type="hidden" name="action" value="confirm_entry">
-                            <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($data['code']); ?>">
-                            <input type="hidden" name="source_table" value="<?php echo htmlspecialchars($data['table']); ?>">
-                            <input type="hidden" name="source_id" value="<?php echo htmlspecialchars($data['id']); ?>">
-                            <button type="submit" class="btn btn-confirm">CONFIRM ENTRY</button>
-                        </form>
-                    <?php else: ?>
-                        <!-- Residents/Visitors see this -->
-                        <div class="btn btn-disabled" style="background:#22c55e; color:#000; opacity:1; cursor:default;">VALID ENTRY PASS</div>
-                        <p style="margin-top:10px; color:#aaa; font-size:0.85rem;">Present this QR code to the guard at the gate.</p>
-                        
-                        <!-- Download Button for Residents/Visitors -->
-                        <button onclick="downloadPass()" class="btn btn-download">
-                            <i class="fa-solid fa-download"></i> Download Entry Pass
-                        </button>
-                    <?php endif; ?>
-                <?php elseif ($data['ui_state'] === 'scanned'): ?>
-                    <div class="btn btn-disabled">ALREADY SCANNED</div>
-                    <p style="margin-top:10px; color:#888; font-size:0.85rem;">
-                        Scanned on <?php echo date('M j, H:i', strtotime($data['scanned_at'])); ?>
-                    </p>
-                <?php else: ?>
-                    <div class="btn btn-disabled">ACCESS DENIED</div>
+                    <!-- Download Button for Residents/Visitors -->
+                    <button onclick="downloadPass()" class="btn btn-download">
+                        <i class="fa-solid fa-download"></i> Download Entry Pass
+                    </button>
                 <?php endif; ?>
             </div>
         </div>
