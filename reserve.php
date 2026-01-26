@@ -1986,7 +1986,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   if(formEl){
     let submitting = false;
     formEl.addEventListener('submit', async function(e){
-      if(submitting){ e.preventDefault(); return; }
+      e.preventDefault();
+      if(submitting){ return; }
       persistForm();
       let verifyAllowed=true;
       const gateEl=document.getElementById('submitAllowed');
@@ -2027,9 +2028,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const amenVal=document.getElementById('amenityField').value;
       if(!amenVal || !s || !eD || !st || !et){ verifyAllowed=false; }
       if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
-      if(!verifyAllowed){ e.preventDefault(); showToast('Please complete all fields accurately before proceeding.','warning'); return; }
+      if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
-        e.preventDefault();
         let basePriceForSummary=getEffectiveAmenityPrice(amenVal, persons, hours);
         const priceTxt = '₱'+basePriceForSummary.toFixed(2);
         const hoursRaw = document.getElementById('hoursInput').value||'';
@@ -2073,7 +2073,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       } else {
         window.__verifyConfirmed=false;
         submitting=true;
-        // allow natural form submission
+        formEl.submit();
+        return;
       }
     });
     formEl.addEventListener('keydown',function(e){

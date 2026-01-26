@@ -821,19 +821,27 @@ input:focus-visible {
   .left-panel,.right-panel{width:100%}
   .reservation-card{flex-direction:column; gap:20px}
   .res-item{width:100%}
-  .reservation-grid{display:flex;flex-direction:column}
-  .amenity-preview{order:2}
+  .reservation-grid{display:flex;flex-direction:column; gap:16px}
+  .reservation-grid .amenity-preview{order:-2}
+  .reservation-grid .calendar{order:-1}
+  .reservation-grid .reservation-left{order:0}
   .hero{padding:20px 4%}
   .amenities-list{display:flex; flex-direction:column; align-items:center}
   .amenity-card {min-height:auto; flex-direction:column; align-items:flex-start; max-width:720px; width:100%; flex:0 0 auto}
   .amenity-card img{width:100%;height:160px;border-radius:10px}
   .amenity-card .info{width:100%; flex-direction:column; align-items:flex-start; gap:8px}
   .amenity-card .info .meta{width:100%; justify-content:flex-start}
+  .amenity-card .info .meta{padding-right:0; gap:10px}
+  .amenity-card .info .meta button[data-action="view-desc"]{position:static; margin-top:6px}
+  .amenity-card button[data-action="book-now"]{position:static; margin-top:10px; align-self:flex-start}
+  .amenity-card:hover{transform:none}
   .booking-steps{padding:14px 12px; gap:10px}
   .booking-step{min-width:140px; flex:0 1 auto}
   .step-title{font-size:.9rem}
   .step-subtitle{font-size:.8rem}
   .reservation-right{position:static; top:auto}
+  .reservation-left #submitWrap{justify-content:stretch}
+  .btn-submit{width:100%}
 }
 @media (min-width:769px) and (max-width:1023px){
   .layout{grid-template-columns:minmax(0,1fr)}
@@ -848,4 +856,32 @@ input:focus-visible {
 }
 .toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); background:#23412e; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 8px 18px rgba(0,0,0,.12); font-size:.9rem; z-index:1000; display:none}
 #amenityImageModalImg{width:720px; height:480px; object-fit:cover;}
+@media (max-width:640px){
+  body{padding-top:64px}
+  .navbar{padding:10px 4%}
+  .logo img{width:32px;height:32px}
+  .brand-text h1{font-size:1.05rem}
+  .brand-text p{font-size:0.7rem}
+  .page-title{font-size:1.3rem}
+  .section-header h2{font-size:1.4rem}
+  .section-header p{font-size:0.95rem}
+  .top-actions{flex-direction:column; align-items:stretch; gap:10px}
+  .back-account-btn{width:100%; justify-content:center}
+  .reservation-card{padding:18px}
+  .calendar{max-width:100%}
+  .booking-steps{width:100%; max-width:100%}
+  .date-row{flex-direction:row; gap:10px; flex-wrap:nowrap}
+  .date-row .date-item{width:auto; flex:1 1 50%}
+  .btn-link{width:100%; text-align:center}
+}
+@media (max-width:480px){
+  .brand-text p{display:none}
+  .amenity-card{padding:16px}
+  .amenity-card img{height:140px}
+  .amenity-desc{padding:16px}
+  .res-label{flex-wrap:wrap}
+  .price-box{flex-direction:column; align-items:flex-start}
+  .booking-step{min-width:0}
+  .step-title{font-size:0.85rem}
+}
 @media (max-width:768px){ #amenityImageModalImg{ width:90vw; height:60vh; } }

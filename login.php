@@ -363,6 +363,90 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     .signup-link a:hover {
       text-decoration: underline;
     }
+
+    @media (max-width: 900px) {
+      body {
+        display: block;
+      }
+      .login-wrapper {
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .login-left {
+        min-height: 240px;
+        padding: 40px 28px;
+      }
+      .login-right {
+        padding: 32px 24px;
+      }
+      .back-arrow {
+        top: 1rem;
+        left: 1rem;
+      }
+      .login-box {
+        max-width: 520px;
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .login-left {
+        min-height: 200px;
+        padding: 32px 20px;
+      }
+      .branding h1 {
+        font-size: 1.9rem;
+      }
+      .branding p {
+        font-size: 0.95rem;
+      }
+      .login-right {
+        padding: 24px 16px;
+      }
+      .login-box img.biglogo {
+        width: 64px;
+        margin-bottom: 12px;
+      }
+      .login-box h2 {
+        font-size: 1.6rem;
+      }
+      .subtitle {
+        font-size: 0.95rem;
+        margin-bottom: 18px;
+      }
+      .login-box input {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
+      .btn-login {
+        padding: 12px;
+        font-size: 0.95rem;
+      }
+      .btn-login:hover {
+        transform: none;
+        box-shadow: none;
+      }
+      .login-modal .modal-content {
+        width: 92%;
+        max-width: 340px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .login-left {
+        min-height: 170px;
+        padding: 24px 16px;
+      }
+      .branding h1 {
+        font-size: 1.6rem;
+      }
+      .branding p {
+        font-size: 0.85rem;
+      }
+      .forgot {
+        text-align: left;
+      }
+    }
   </style>
 </head>
 <body>
