@@ -1437,34 +1437,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                  const hasHouseError = errors.houseHidden && (errors.houseHidden.includes('already in use') || errors.houseHidden.includes('Invalid'));
                  const hasEmailError = errors.email && errors.email.includes('already registered');
 
-                 if (hasHouseError) {
-                   let cooldown = 30;
-                   submitBtn.disabled = true;
-                   
-                   const updateCooldown = () => {
-                     if (cooldown > 0) {
-                       submitBtn.textContent = `Try again in ${cooldown}s`;
-                       cooldown--;
-                       setTimeout(updateCooldown, 1000);
-                     } else {
-                       submitBtn.disabled = false;
-                       submitBtn.textContent = originalBtnText;
-                     }
-                   };
-                   
-                   const onCloseAction = hasEmailError ? () => {
-                       showCenterModal('Email Already Exists', 
-                         '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
-                       );
-                   } : null;
+                if (hasHouseError) {
+                  const onCloseAction = hasEmailError ? () => {
+                      showCenterModal('Email Already Exists', 
+                        '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
+                      );
+                  } : null;
 
-                   showCenterModal('House Number Error', 
-                     `<p>${errors.houseHidden}</p><p>Please try again later.</p>`,
-                     onCloseAction
-                   );
-                   updateCooldown();
-                   modalShown = true;
-                 }
+                  showCenterModal('House Number Error', 
+                    `<p>${errors.houseHidden}</p>`,
+                    onCloseAction
+                  );
+                  modalShown = true;
+                }
                  else if (hasEmailError) {
                    showCenterModal('Email Already Exists', 
                      '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'

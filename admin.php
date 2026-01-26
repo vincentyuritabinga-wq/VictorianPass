@@ -2995,12 +2995,11 @@ body.modal-open { overflow: hidden; }
                       echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                       echo "</form>";
                   } else {
-                      $approvedBy = !empty($req['approved_by']) ? "by Staff ID " . $req['approved_by'] : "";
-                      $approvalDate = !empty($req['approval_date']) ? date('M d, Y', strtotime($req['approval_date'])) : "";
+                      $approvedBy = !empty($req['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($req['ref_code'])) {
                         echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
                       }
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   echo "</td>";
                   echo "</tr>";
@@ -3099,12 +3098,11 @@ body.modal-open { overflow: hidden; }
                       echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                       echo "</form>";
                   } else {
-                      $approvedBy = !empty($gar['approved_by']) ? "by Staff ID " . $gar['approved_by'] : "";
-                      $approvalDate = !empty($gar['approval_date']) ? date('M d, Y', strtotime($gar['approval_date'])) : "";
+                      $approvedBy = !empty($gar['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($gar['ref_code'])) {
                         echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
                       }
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   echo "</td>";
                   echo "</tr>";
@@ -3189,12 +3187,11 @@ body.modal-open { overflow: hidden; }
                     echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                     echo "</form>";
                   } else {
-                      $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
-                      $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
+                      $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
                         echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
                       }
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   echo "</td>";
                   echo "</tr>";
@@ -3606,9 +3603,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                     echo "</form>";
                 } else {
-                    $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
-                    $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
-                    echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                    $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
+                    echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                 }
                 echo "</td>";
                 echo "</tr>";
@@ -3783,9 +3779,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<button type='submit' class='btn btn-remove'>Delete</button>";
                       echo "</form>";
                   } else {
-                      $approvedBy = !empty($rr['approved_by']) ? "by Staff ID " . $rr['approved_by'] : "";
-                      $approvalDate = !empty($rr['approval_date']) ? date('M d, Y', strtotime($rr['approval_date'])) : "";
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy<br>$approvalDate</span>";
+                      $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
+                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   echo "</td>";
                   echo "</tr>";
