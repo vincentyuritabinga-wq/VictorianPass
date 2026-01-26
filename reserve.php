@@ -932,6 +932,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   let selectedAmenity=document.getElementById('amenityField').value||'';
   let hintShown=false;
 
+  function formatDateToMMDDYYYY(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[1]}-${parts[2]}-${parts[0]}`;
+  }
+
   async function loadBookedDates(){
     if(!selectedAmenity){ bookedDates=new Set(); renderCalendar(currentMonth,currentYear); computeAvailability(); return; }
     try{ const res=await fetch(`reserve.php?action=booked_dates&amenity=${encodeURIComponent(selectedAmenity)}`); const data=await res.json(); bookedDates=new Set(data.dates||[]); }
@@ -1016,7 +1023,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const eVal=document.getElementById('endDateInput').value||'';
       if(eVal && ds > eVal){ showStartDateError('Start date cannot be later than end date.'); return false; }
       selectedStart=ds;
-      document.getElementById('startDate').textContent=selectedStart;
+      document.getElementById('startDate').textContent=formatDateToMMDDYYYY(selectedStart);
       document.getElementById('startDateInput').value=selectedStart;
       showStartDateError('');
       updateHoursSelectEnabled();
@@ -1027,7 +1034,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(sVal && ds < sVal){ showDateError('End date cannot be earlier than start date.'); return false; }
       if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return false; } }
       selectedEnd=ds;
-      document.getElementById('endDate').textContent=selectedEnd;
+      document.getElementById('endDate').textContent=formatDateToMMDDYYYY(selectedEnd);
       document.getElementById('endDateInput').value=selectedEnd;
       showDateError('');
       return true;
@@ -1100,7 +1107,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     cb.addEventListener('change', function(){
       const s=document.getElementById('startDateInput').value;
       if(this.checked){
-        if(s){ selectedEnd=s; document.getElementById('endDateInput').value=s; document.getElementById('endDate').textContent=s; }
+        if(s){ selectedEnd=s; document.getElementById('endDateInput').value=s; document.getElementById('endDate').textContent=formatDateToMMDDYYYY(s); }
       }
       computeAvailability();
       renderTimeSlotButtons();
@@ -1655,9 +1662,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const dpInput=document.getElementById('downpaymentInput');
     const dpRaw=dpInput && dpInput.value ? dpInput.value : '';
     const sdEl=document.getElementById('summaryStartDate');
-    if(sdEl){ sdEl.textContent=start||'--'; }
+    if(sdEl){ sdEl.textContent=formatDateToMMDDYYYY(start)||'--'; }
     const edEl=document.getElementById('summaryEndDate');
-    if(edEl){ edEl.textContent=end||'--'; }
+    if(edEl){ edEl.textContent=formatDateToMMDDYYYY(end)||'--'; }
     const hrsEl=document.getElementById('summaryHours');
     if(hrsEl){ hrsEl.textContent=hours||'--'; }
     const stEl=document.getElementById('summaryStartTime');
@@ -2060,8 +2067,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
         const summary = [
           ['Amenity', amenVal||'-'],
-          ['Start Date', s||'-'],
-          ['End Date', eD||'-'],
+          ['Start Date', formatDateToMMDDYYYY(s) || '-'],
+          ['End Date', formatDateToMMDDYYYY(eD) || '-'],
           ['Time', timeDisplay || '-'],
           ['Persons', String(personsVal)],
           ['Total Price', priceTxt],
