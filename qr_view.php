@@ -81,11 +81,6 @@ if (empty($error)) {
             $statusVal = $row['approval_status'] ?? 'pending';
             $visitDate = $row['visit_date'] ?? null;
             $scannedAt = $row['scanned_at'] ?? null;
-            
-            // Expiry Logic
-            $isExpired = false;
-            if ($visitDate && $visitDate < $today) { $isExpired = true; }
-            if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
 
             $fullName = trim(implode(' ', array_filter([$row['visitor_first_name']??'', $row['visitor_middle_name']??'', $row['visitor_last_name']??''])));
             $residentName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
@@ -98,7 +93,6 @@ if (empty($error)) {
                 'name' => $fullName ?: 'Guest',
                 'resident_name' => $residentName,
                 'house' => $row['res_house_number'] ?? 'N/A',
-                'validity_label' => $visitDate ? date('M d, Y', strtotime($visitDate)) : 'N/A',
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt
             ];
@@ -119,18 +113,26 @@ if (empty($error)) {
             $id = $row['id'];
             $table = 'reservations';
             $statusVal = $row['status'] ?? 'pending';
-            $rDate = $row['reservation_date'];
-            $startTime = $row['start_time'];
-            $endTime = $row['end_time'];
+            $rDate = $row['reservation_date'] ?? null;
+            $startTime = $row['start_time'] ?? null;
+            $endTime = $row['end_time'] ?? null;
             $scannedAt = $row['scanned_at'] ?? null;
 
-            // Amenity Validity Logic
+            $nowDt = new DateTime('now');
+            $startAt = null;
+            $endAt = null;
+            if (!empty($rDate) && !empty($startTime)) { $startAt = new DateTime($rDate . ' ' . $startTime); }
+            if (!empty($rDate) && !empty($endTime)) { $endAt = new DateTime($rDate . ' ' . $endTime); }
+
             $isExpired = false;
-            if ($rDate < $today) { $isExpired = true; }
-            elseif ($rDate === $today) {
-                // If today, check time? (Optional strictness, sticking to date for now)
+            if ($statusVal === 'approved') {
+                if ($startAt && $endAt) {
+                    if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
+                } elseif (!empty($rDate) && $rDate < $today) {
+                    $isExpired = true;
+                }
+                if ($isExpired) { $statusVal = 'expired'; }
             }
-            if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
 
             $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
 
@@ -164,14 +166,26 @@ if (empty($error)) {
             $id = $row['id'];
             $table = 'resident_reservations';
             $statusVal = $row['status'] ?? 'pending';
-            $rDate = $row['reservation_date'];
-            $startTime = $row['start_time'];
-            $endTime = $row['end_time'];
+            $rDate = $row['reservation_date'] ?? null;
+            $startTime = $row['start_time'] ?? null;
+            $endTime = $row['end_time'] ?? null;
             $scannedAt = $row['scanned_at'] ?? null;
 
+            $nowDt = new DateTime('now');
+            $startAt = null;
+            $endAt = null;
+            if (!empty($rDate) && !empty($startTime)) { $startAt = new DateTime($rDate . ' ' . $startTime); }
+            if (!empty($rDate) && !empty($endTime)) { $endAt = new DateTime($rDate . ' ' . $endTime); }
+
             $isExpired = false;
-            if ($rDate < $today) { $isExpired = true; }
-            if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
+            if ($statusVal === 'approved') {
+                if ($startAt && $endAt) {
+                    if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
+                } elseif (!empty($rDate) && $rDate < $today) {
+                    $isExpired = true;
+                }
+                if ($isExpired) { $statusVal = 'expired'; }
+            }
 
             $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
 
@@ -218,7 +232,6 @@ if (empty($error)) {
                 'type_label' => "Resident",
                 'name' => $fullName,
                 'house' => $row['house_number'],
-                'validity_label' => "Permanent",
                 'status' => $statusVal,
                 'scanned_at' => null // Users table doesn't have scanned_at usually, or we don't track it same way
             ];
@@ -488,10 +501,12 @@ if (empty($error)) {
                     <span class="value"><?php echo htmlspecialchars($data['code']); ?></span>
                 </div>
                 
+                <?php if (isset($data['type_label']) && $data['type_label'] === 'Amenity' && !empty($data['validity_label'])): ?>
                 <div class="detail-row">
                     <span class="label">Validity</span>
                     <span class="value"><?php echo htmlspecialchars($data['validity_label']); ?></span>
                 </div>
+                <?php endif; ?>
 
                 <?php if (!empty($data['amenity'])): ?>
                 <div class="detail-row">

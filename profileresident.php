@@ -535,6 +535,56 @@ body.account-blocked { overflow: hidden; }
   color: #555;
 }
 
+#guestPassModal {
+  overflow: hidden;
+}
+#guestPassModal .modal-content {
+  max-width: 360px;
+  padding: 22px 20px 24px;
+  margin: 0 auto;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+#guestPassModal .close {
+  top: 10px;
+  right: 12px;
+}
+#guestPassModal h3 {
+  margin: 0 0 12px;
+  color: #111827;
+  font-size: 1.05rem;
+}
+#guestPassContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+#guestPassContent h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #111827;
+}
+#guestPassContent p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+#guestPassContent img {
+  width: 200px;
+  height: 200px;
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+}
+#guestPassContent a {
+  color: #4f46e5;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .report-wait-content {
   max-width: 520px;
   padding: 28px 30px;

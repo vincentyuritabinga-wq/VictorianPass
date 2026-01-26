@@ -384,9 +384,7 @@
       const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
       document.getElementById("qrImage").src = useStoredQR ? qrPath : dynamicQR;
       
-      const accessWindow = isGuestEntry
-        ? (data.start_date || '-')
-        : `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
+      const accessWindow = `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
       const statusLower = (status || '').toLowerCase();
       const banner = statusLower === 'approved' ? '✅ Valid Entry Pass'
                     : statusLower === 'expired' ? '❌ Expired Entry Pass'
@@ -404,7 +402,7 @@
         ${data.address ? `<p><strong>${isGuestEntry ? 'Resident House Number' : 'Address'}:</strong> ${data.address}</p>` : ''}
         ${data.purpose ? `<p><strong>Purpose:</strong> ${data.purpose}</p>` : ''}
         <p><strong>Type:</strong> ${isGuestEntry ? "Resident's Guest" : type}</p>
-        <p><strong>Valid Dates:</strong> ${accessWindow}</p>
+        ${(!isGuestEntry && (data.start_date || data.expires_at)) ? `<p><strong>Valid Dates:</strong> ${accessWindow}</p>` : ''}
         <p><strong>Full QR Card:</strong> <a href="${verificationLink}" target="_blank" style="color:#9bd08f;">Open full QR card</a></p>
       `;
     }
