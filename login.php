@@ -72,7 +72,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $status = strtolower(trim($row['status'] ?? ''));
                     if ($status === 'disabled') {
                         $loginError = 'suspended_account';
-                        $loginErrorMessage = 'Your account has been suspended by the admin.';
+                        $reason = trim($row['suspension_reason'] ?? '');
+                        if ($reason !== '') {
+                            $loginErrorMessage = 'Your account has been suspended by the admin. Reason: ' . $reason;
+                        } else {
+                            $loginErrorMessage = 'Your account has been suspended by the admin.';
+                        }
                     } else {
                         $_SESSION['user_id']   = $row['id'];
                         $_SESSION['email']     = $row['email'];
