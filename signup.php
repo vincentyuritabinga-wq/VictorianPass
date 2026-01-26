@@ -1410,89 +1410,88 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
           if (!valid) return;
 
-          // AJAX Submission
-          const formData = new FormData(form);
-          formData.append('ajax', '1');
-          
-          const submitBtn = form.querySelector('button[type="submit"]');
-          const originalBtnText = submitBtn.textContent;
-          submitBtn.disabled = true;
-          submitBtn.textContent = 'Processing...';
+          function doAjaxSubmit() {
+            const formData = new FormData(form);
+            formData.append('ajax', '1');
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
 
-          fetch('signup.php', {
-            method: 'POST',
-            body: formData
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-               window.location.href = data.redirect;
-            } else {
-               submitBtn.disabled = false;
-               submitBtn.textContent = originalBtnText;
-               
-               const errors = data.errors || {};
-               let modalShown = false;
-
-               const hasHouseError = errors.houseHidden && (errors.houseHidden.includes('already in use') || errors.houseHidden.includes('Invalid'));
-               const hasEmailError = errors.email && errors.email.includes('already registered');
-
-               // Check for House Number Error
-               if (hasHouseError) {
-                 let cooldown = 30;
-                 submitBtn.disabled = true;
+            fetch('signup.php', {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                 window.location.href = data.redirect;
+              } else {
+                 submitBtn.disabled = false;
+                 submitBtn.textContent = originalBtnText;
                  
-                 const updateCooldown = () => {
-                   if (cooldown > 0) {
-                     submitBtn.textContent = `Try again in ${cooldown}s`;
-                     cooldown--;
-                     setTimeout(updateCooldown, 1000);
-                   } else {
-                     submitBtn.disabled = false;
-                     submitBtn.textContent = originalBtnText;
-                   }
-                 };
+                 const errors = data.errors || {};
+                 let modalShown = false;
+
+                 const hasHouseError = errors.houseHidden && (errors.houseHidden.includes('already in use') || errors.houseHidden.includes('Invalid'));
+                 const hasEmailError = errors.email && errors.email.includes('already registered');
+
+                 if (hasHouseError) {
+                   let cooldown = 30;
+                   submitBtn.disabled = true;
+                   
+                   const updateCooldown = () => {
+                     if (cooldown > 0) {
+                       submitBtn.textContent = `Try again in ${cooldown}s`;
+                       cooldown--;
+                       setTimeout(updateCooldown, 1000);
+                     } else {
+                       submitBtn.disabled = false;
+                       submitBtn.textContent = originalBtnText;
+                     }
+                   };
+                   
+                   const onCloseAction = hasEmailError ? () => {
+                       showCenterModal('Email Already Exists', 
+                         '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
+                       );
+                   } : null;
+
+                   showCenterModal('House Number Error', 
+                     `<p>${errors.houseHidden}</p><p>Please try again later.</p>`,
+                     onCloseAction
+                   );
+                   updateCooldown();
+                   modalShown = true;
+                 }
+                 else if (hasEmailError) {
+                   showCenterModal('Email Already Exists', 
+                     '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
+                   );
+                   modalShown = true;
+                 }
+
+                 Object.entries(errors).forEach(([key, msg]) => {
+                   setWarning(key, msg);
+                 });
                  
-                 // If email error also exists, chain it to show after house modal closes
-                 const onCloseAction = hasEmailError ? () => {
-                     showCenterModal('Email Already Exists', 
-                       '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
-                     );
-                 } : null;
+                 if (!modalShown) {
+                   const firstErrorKey = Object.keys(errors)[0];
+                   const firstErrorEl = document.getElementById(firstErrorKey) || document.querySelector(`[name="${firstErrorKey}"]`);
+                   if (firstErrorEl) firstErrorEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+                 }
+              }
+            })
+            .catch(err => {
+              console.error(err);
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalBtnText;
+              alert('An error occurred. Please try again.');
+            });
+          }
 
-                 showCenterModal('House Number Error', 
-                   `<p>${errors.houseHidden}</p><p>Please try again later.</p>`,
-                   onCloseAction
-                 );
-                 updateCooldown();
-                 modalShown = true;
-               }
-               // Check for Email Error (only if no house error, or handled via chain above)
-               else if (hasEmailError) {
-                 showCenterModal('Email Already Exists', 
-                   '<p>This email is already registered.</p><a href="login.php" class="center-modal-btn">Go to Login Page</a>'
-                 );
-                 modalShown = true;
-               }
-
-               // Show inline warnings for all errors (including those in modal)
-               Object.entries(errors).forEach(([key, msg]) => {
-                 setWarning(key, msg);
-               });
-               
-               if (!modalShown) {
-                 const firstErrorKey = Object.keys(errors)[0];
-                 const firstErrorEl = document.getElementById(firstErrorKey) || document.querySelector(`[name="${firstErrorKey}"]`);
-                 if (firstErrorEl) firstErrorEl.scrollIntoView({behavior: 'smooth', block: 'center'});
-               }
-            }
-          })
-          .catch(err => {
-            console.error(err);
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalBtnText;
-            alert('An error occurred. Please try again.');
-          });
+          showSignupConfirm(doAjaxSubmit);
         });
       }
     });
@@ -1531,6 +1530,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       document.getElementById('centerModalBody').innerHTML = bodyHtml;
       document.getElementById('centerWarningModal').style.display = 'flex';
       window._modalCloseCallback = onClose || null;
+    }
+
+    function showSignupConfirm(onConfirm) {
+      const modal = document.getElementById('centerWarningModal');
+      const titleEl = document.getElementById('centerModalTitle');
+      const bodyEl = document.getElementById('centerModalBody');
+      if (!modal || !titleEl || !bodyEl) {
+        if (typeof onConfirm === 'function') onConfirm();
+        return;
+      }
+      titleEl.textContent = 'Confirm Sign Up';
+      bodyEl.innerHTML = '<p style="margin-bottom:16px;">Please review your details before creating your account. Do you want to continue?</p><div style="display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;"><button type="button" id="signupConfirmCancelBtn" class="center-modal-btn" style="background-color:#e5e7eb;color:#111827;">Cancel</button><button type="button" id="signupConfirmProceedBtn" class="center-modal-btn">Proceed</button></div>';
+      modal.style.display = 'flex';
+      window._modalCloseCallback = null;
+      setTimeout(function(){
+        const cancelBtn = document.getElementById('signupConfirmCancelBtn');
+        const proceedBtn = document.getElementById('signupConfirmProceedBtn');
+        if (cancelBtn) {
+          cancelBtn.onclick = function() {
+            closeCenterModal();
+          };
+        }
+        if (proceedBtn) {
+          proceedBtn.onclick = function() {
+            closeCenterModal();
+            if (typeof onConfirm === 'function') onConfirm();
+          };
+        }
+      },0);
     }
   </script>
 

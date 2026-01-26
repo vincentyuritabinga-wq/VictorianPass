@@ -51,7 +51,7 @@ if (!preg_match($namePattern, $resident_full_name)) {
   exit;
 }
 if (!preg_match($namePattern, $visitor_first_name) || !preg_match($namePattern, $visitor_last_name)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor names must contain letters only.']);
+  echo json_encode(['success' => false, 'message' => 'Guest names must contain letters only.']);
   exit;
 }
 // Normalize phone numbers to 09 format (11 digits)
@@ -74,7 +74,7 @@ if (!preg_match('/^09\d{9}$/', $resident_contact)) {
   exit;
 }
 if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor phone must be 11 digits starting with 09 (e.g. 09XX...).']);
+  echo json_encode(['success' => false, 'message' => 'Guest phone must be 11 digits starting with 09 (e.g. 09XX...).']);
   exit;
 }
 if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {
@@ -88,12 +88,12 @@ if (ctype_digit($rParts[0])) {
 }
 
 if ($visitor_email === '' || !filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
-  echo json_encode(['success' => false, 'message' => 'Please provide a valid visitor email address.']);
+  echo json_encode(['success' => false, 'message' => 'Please provide a valid guest email address.']);
   exit;
 }
 $vParts = explode('@', $visitor_email);
 if (ctype_digit($vParts[0])) {
-  echo json_encode(['success' => false, 'message' => 'Visitor Email Invalid']);
+  echo json_encode(['success' => false, 'message' => 'Guest Email Invalid']);
   exit;
 }
 
@@ -121,7 +121,7 @@ if (isset($_FILES['visitor_valid_id']) && $_FILES['visitor_valid_id']['error'] =
   }
   $validIdPath = $dest;
 } else {
-  echo json_encode(['success' => false, 'message' => 'Visitor valid ID is required.']);
+  echo json_encode(['success' => false, 'message' => 'Guest valid ID is required.']);
   exit;
 }
 

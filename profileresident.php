@@ -924,8 +924,8 @@ body.account-blocked { overflow: hidden; }
 
               <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
               <div class="form-row">
-                <input type="text" id="visitor_first_name" name="visitor_first_name" placeholder="Visitor First Name*" required>
-                <input type="text" id="visitor_last_name" name="visitor_last_name" placeholder="Visitor Last Name*" required>
+                <input type="text" id="visitor_first_name" name="visitor_first_name" placeholder="Guest First Name*" required>
+                <input type="text" id="visitor_last_name" name="visitor_last_name" placeholder="Guest Last Name*" required>
               </div>
               <div class="form-row">
                 <select id="visitor_sex" name="visitor_sex" required>
@@ -939,10 +939,10 @@ body.account-blocked { overflow: hidden; }
                 </div>
               </div>
               <div class="input-wrap">
-                <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
+                <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Guest Phone Number*" required>
               </div>
               <div class="form-group">
-                <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+                <input type="email" id="visitor_email" name="visitor_email" placeholder="Guest Email*" required>
               </div>
 
               <label class="upload-box">
@@ -951,7 +951,7 @@ body.account-blocked { overflow: hidden; }
                 <p>Upload Guest’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
               </label>
               <div class="privacy-note" style="background:#f9fafb;border:1px solid #e5e7eb;color:#374151;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
-                Data Privacy Notice: The visitor’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
+                Data Privacy Notice: The guest’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
               </div>
 
               <div id="idPreviewWrap" style="display:none;margin:8px 0 14px;">
@@ -1115,7 +1115,7 @@ body.account-blocked { overflow: hidden; }
       var html = '';
       html += '<div style="margin-bottom:15px;">';
       html += '<h4 style="margin:0;color:#333;">' + name + '</h4>';
-      html += '<p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Guest of ' + resident + '</p>';
+      html += '<p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Referred by Resident: ' + resident + '</p>';
       html += '</div>';
       html += '<img src="' + qrSrc + '" style="width:200px;height:200px;border:1px solid #ddd;padding:10px;border-radius:8px;">';
       html += '<p style="margin-top:15px;font-size:0.85rem;color:#888;">Present this QR code at the gate for entry.</p>';
@@ -1940,7 +1940,7 @@ body.account-blocked { overflow: hidden; }
       valid=false;
     }
     if(idInput && !(idInput.files && idInput.files[0])){
-      setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.');
+      setWarning('visitor_valid_id','Please upload Guest’s Valid ID.');
       valid=false;
     }
     return valid;
@@ -1968,10 +1968,10 @@ body.account-blocked { overflow: hidden; }
       ['Resident',resName||'-'],
       ['House/Unit',resHouse||'-'],
       ['Resident Contact',resContact||'-'],
-      ['Visitor',(visFirst+' '+visLast).trim()||'-'],
-      ['Visitor Sex',vSex||'-'],
-      ['Visitor Contact',visContact||'-'],
-      ['Visitor Email',visEmail||'-']
+      ['Guest',(visFirst+' '+visLast).trim()||'-'],
+      ['Guest Sex',vSex||'-'],
+      ['Guest Contact',visContact||'-'],
+      ['Guest Email',visEmail||'-']
     ];
     verifySummary.innerHTML=items.map(function(x){
       return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>';
@@ -1984,7 +1984,7 @@ body.account-blocked { overflow: hidden; }
       var file=idInput.files && idInput.files[0];
       if(!file){
         if(idPreviewWrap) idPreviewWrap.style.display='none';
-        setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.');
+        setWarning('visitor_valid_id','Please upload Guest’s Valid ID.');
         return;
       }
       var reader=new FileReader();
@@ -2008,7 +2008,7 @@ body.account-blocked { overflow: hidden; }
       if(idPreviewWrap){
         idPreviewWrap.style.display='none';
       }
-      setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.');
+      setWarning('visitor_valid_id','Please upload Guest’s Valid ID.');
     });
   }
 
@@ -2048,12 +2048,12 @@ body.account-blocked { overflow: hidden; }
           var msg = data && data.message ? data.message : 'Failed to save guest.';
           // Try to map error to field
           if(msg.indexOf('Resident phone')!==-1) setWarning('resident_contact', msg);
-          else if(msg.indexOf('Visitor phone')!==-1) setWarning('visitor_contact', msg);
+          else if(msg.indexOf('Guest phone')!==-1) setWarning('visitor_contact', msg);
           else if(msg.indexOf('Resident name')!==-1) setWarning('resident_full_name', msg);
-          else if(msg.indexOf('Visitor name')!==-1) setWarning('visitor_first_name', msg);
+          else if(msg.indexOf('Guest name')!==-1) setWarning('visitor_first_name', msg);
           else if(msg.indexOf('valid ID')!==-1) setWarning('visitor_valid_id', msg);
           else if(msg.indexOf('Resident email')!==-1) setWarning('resident_email', msg);
-          else if(msg.indexOf('Visitor email')!==-1) setWarning('visitor_email', msg);
+          else if(msg.indexOf('Guest email')!==-1) setWarning('visitor_email', msg);
           else setWarning('visitor_email', msg);
         }
       })["catch"](function(){

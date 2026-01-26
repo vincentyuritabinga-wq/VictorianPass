@@ -397,7 +397,7 @@
       document.getElementById("qrDetails").innerHTML = `
         <p style="font-weight:600;">${banner}</p>
         <p><strong>${isGuestEntry ? "Resident's Guest Name" : "Name"}:</strong> ${name}</p>
-        ${isGuestEntry && data.resident_name ? `<p><strong>Resident:</strong> ${data.resident_name}</p>` : ''}
+        ${isGuestEntry && data.resident_name ? `<p><strong>Referred by Resident:</strong> ${data.resident_name}</p>` : ''}
         ${data.birthdate ? `<p><strong>Birthdate:</strong> ${data.birthdate}</p>` : ''}
         ${data.sex ? `<p><strong>Sex:</strong> ${data.sex}</p>` : ''}
         ${data.contact ? `<p><strong>Contact:</strong> ${data.contact}</p>` : ''}
