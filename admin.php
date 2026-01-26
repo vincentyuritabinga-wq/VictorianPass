@@ -2015,6 +2015,8 @@ tr:hover { background-color: #f8fafc; }
     height: 32px;
     line-height: 1.2;
 }
+.actions .delete-form { display: none; }
+.actions .delete-form.show { display: inline-flex; }
 .actions .suspend-reason:focus {
     outline: none;
     border-color: var(--primary);
@@ -2193,6 +2195,9 @@ tr:hover { background-color: #f8fafc; }
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal.closing { animation: fadeIn 0.2s ease-out reverse; }
+.modal.closing .modal-content { animation: slideIn 0.2s ease-out reverse; }
+body.modal-open { overflow: hidden; }
 
 /* Receipt Thumbnail */
 .receipt-thumbnail {
@@ -2292,6 +2297,7 @@ tr:hover { background-color: #f8fafc; }
     align-items: center;
     justify-content: center;
 }
+.modal.modal-top { z-index: 3000; }
 
 .modal-content {
     background-color: var(--bg-surface);
@@ -3237,19 +3243,28 @@ tr:hover { background-color: #f8fafc; }
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'>View Details</button>";
-              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='suspend_user'>";
-              echo "<input type='hidden' name='redirect_page' value='residents'>";
-              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
-              echo "</form>";
-              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='delete_user'>";
-              echo "<input type='hidden' name='redirect_page' value='residents'>";
-              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-              echo "</form>";
+              if ($status === 'disabled') {
+                  echo "<form method='post' class='delete-form show' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='delete_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='residents'>";
+                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+                  echo "</form>";
+              } else {
+                  echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='suspend_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='residents'>";
+                  echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
+                  echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+                  echo "</form>";
+                  echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='delete_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='residents'>";
+                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+                  echo "</form>";
+              }
               echo "</td>";
               echo "</tr>";
           }
@@ -3289,19 +3304,28 @@ tr:hover { background-color: #f8fafc; }
               echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'>View Details</button>";
-              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='suspend_user'>";
-              echo "<input type='hidden' name='redirect_page' value='visitors'>";
-              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
-              echo "</form>";
-              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='delete_user'>";
-              echo "<input type='hidden' name='redirect_page' value='visitors'>";
-              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-              echo "</form>";
+              if ($status === 'disabled') {
+                  echo "<form method='post' class='delete-form show' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='delete_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
+                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+                  echo "</form>";
+              } else {
+                  echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='suspend_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
+                  echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
+                  echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+                  echo "</form>";
+                  echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
+                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+                  echo "<input type='hidden' name='user_action' value='delete_user'>";
+                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
+                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+                  echo "</form>";
+              }
               echo "</td>";
               echo "</tr>";
           }
@@ -3938,9 +3962,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
 function showIncidentProofModal(src){
   var m=document.getElementById('incidentProofModal');
   var img=document.getElementById('incidentProofImg');
-  if(m&&img){ img.src=src; m.style.display='flex'; }
+  if(m&&img){ img.src=src; m.classList.add('modal-top'); m.style.display='flex'; }
 }
-function closeIncidentProofModal(){ var m=document.getElementById('incidentProofModal'); if(m){ m.style.display='none'; } }
+function closeIncidentProofModal(){ var m=document.getElementById('incidentProofModal'); if(m){ m.style.display='none'; m.classList.remove('modal-top'); } }
 
 // Function to show visitor details modal
 function showVisitorDetails(id, source) {
@@ -3983,7 +4007,7 @@ function showVisitorDetails(id, source) {
         else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
 
         const fullName = [details.full_name || '', details.middle_name || '', details.last_name || ''].join(' ').replace(/\s+/g,' ').trim();
-        const validIdValue = details.valid_id_path ? `<a href="${details.valid_id_path}" target="_blank" class="btn btn-view">View ID</a>` : 'Not uploaded';
+        const validIdValue = details.valid_id_path ? `<button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(details.valid_id_path).replace(/'/g, "\\'")}')">View ID</button>` : 'Not uploaded';
         const statusBadge = `<div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>`;
 
         const priceBlock = details.price ? (()=>{ 
@@ -4035,7 +4059,7 @@ function showVisitorDetails(id, source) {
               <div class="info-grid">
                 ${visitDateVal ? `<div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</span></div>` : ''}
                 ${(visitStartTimeVal || visitEndTimeVal) ? `<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</span></div>` : ''}
-                ${details.persons ? `<div class="info-row"><span class="info-label">No. of Persons</span><span class="info-value">${details.persons}</span></div>` : ''}
+                
                 ${details.purpose ? `<div class="info-row"><span class="info-label">Purpose of Visit</span><span class="info-value">${details.purpose}</span></div>` : ''}
                 ${details.amenity && details.amenity !== 'Guest Entry' ? `<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${details.amenity}</span></div>` : ''}
                 ${priceBlock}
@@ -4046,7 +4070,7 @@ function showVisitorDetails(id, source) {
               <div class="info-grid">
                 <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
                 ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
-                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${details.approved_by}</span></div>` : ''}
+                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>` : ''}
                 ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
               </div>
             </div>
@@ -4084,7 +4108,7 @@ function showVisitorDetails(id, source) {
               <div class="info-grid">
                 <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
                 ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
-                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${details.approved_by}</span></div>` : ''}
+                ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>` : ''}
                 ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
               </div>
             </div>
@@ -4203,7 +4227,7 @@ function showReservationDetails(reservationId, expectedType){
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
             ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
-            ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${d.approved_by}</span></div>`:''}
+            ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>`:''}
             ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
           </div>
         </div>`;
@@ -4328,7 +4352,7 @@ function showResidentReservationDetails(rrId){
             <div class="info-grid">
               <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
               ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
-              ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Staff ID ${d.approved_by}</span></div>`:''}
+              ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>`:''}
               ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
             </div>
           </div>`;
@@ -4356,7 +4380,7 @@ window.addEventListener('click', function(event){
 <!-- User Details Modal -->
 <div id="userModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeUserModal()">&times;</span>
+    <button type="button" class="close" onclick="closeUserModal()" aria-label="Close">✕</button>
     <h3>User Profile</h3>
     <div id="userDetailsContent"></div>
   </div>
@@ -4365,7 +4389,13 @@ window.addEventListener('click', function(event){
 <script>
 function showUserDetails(userId, expectedType){
   document.getElementById('userDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+  closeVisitorModal();
+  closeReservationModal();
+  closeResidentReservationModal();
+  closePriceDetailsModal();
+  closeIncidentProofModal();
   document.getElementById('userModal').style.display = 'flex';
+  document.body.classList.add('modal-open');
   
   fetch('admin.php?action=get_user_details&id=' + userId)
     .then(r => r.json())
@@ -4397,7 +4427,7 @@ function showUserDetails(userId, expectedType){
             ${d.birthdate?`<p><strong>Birthdate:</strong> ${new Date(d.birthdate).toLocaleDateString()}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
-            ${d.valid_id_path?`<p><strong>Valid ID:</strong> <a href="${d.valid_id_path}" target="_blank" class="btn btn-view">View ID</a></p>`:''}
+            ${d.valid_id_path?`<p><strong>Valid ID:</strong> <button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(d.valid_id_path).replace(/'/g, "\\'")}')">View ID</button></p>`:''}
           </div>
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">Residence</h4>
@@ -4416,18 +4446,44 @@ function showUserDetails(userId, expectedType){
 }
 
 function closeUserModal(){
-  document.getElementById('userModal').style.display = 'none';
+  var m = document.getElementById('userModal');
+  if (!m) return;
+  m.classList.add('closing');
+  setTimeout(function(){
+    m.style.display = 'none';
+    m.classList.remove('closing');
+    document.body.classList.remove('modal-open');
+  }, 200);
 }
 
 window.addEventListener('click', function(event){
   const umodal = document.getElementById('userModal');
-  if(event.target === umodal){ umodal.style.display = 'none'; }
+  if(event.target === umodal){ closeUserModal(); }
 });
 </script>
 
 </main>
 </div>
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+<script>
+  function toggleDeleteForReason(input) {
+    var wrap = input.closest('.actions');
+    if (!wrap) return;
+    var del = wrap.querySelector('.delete-form');
+    if (!del) return;
+    var hasText = (input.value || '').trim().length > 0;
+    if (hasText) {
+      del.classList.add('show');
+    } else {
+      del.classList.remove('show');
+    }
+  }
+  document.querySelectorAll('.suspend-reason').forEach(function(input){
+    toggleDeleteForReason(input);
+    input.addEventListener('input', function(){ toggleDeleteForReason(input); });
+    input.addEventListener('change', function(){ toggleDeleteForReason(input); });
+  });
+</script>
 <script src="js/logout-modal.js"></script>
 </body>
  </html>
