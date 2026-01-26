@@ -838,6 +838,7 @@ body {
     font-family: 'Poppins', sans-serif;
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
     animation: modalSlideIn 0.2s ease-out;
+    box-sizing: border-box;
 }
 
 @keyframes modalSlideIn {
@@ -933,6 +934,7 @@ body {
     overflow-y: auto;
     flex: 1;
     padding-right: 5px; /* space for scrollbar */
+    overflow-x: hidden;
 }
 
 /* Scrollbar for details */
@@ -968,26 +970,78 @@ body {
     overflow: visible;
     text-overflow: unset;
     word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+    .profile-modal {
+        background: rgba(0,0,0,0.4);
+        overflow: auto;
+    }
     .profile-modal-content {
+        position: fixed;
         top: 12px;
         right: 12px;
         left: 12px;
+        bottom: 12px;
         width: auto;
         max-width: none;
-        max-height: calc(100vh - 24px);
+        max-height: none;
+        padding: 16px;
+    }
+    .profile-header {
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        gap: 8px;
+    }
+    .profile-title h3 {
+        font-size: 1.02rem;
+    }
+    .profile-role {
+        font-size: 0.8rem;
+    }
+    .profile-details {
+        margin-bottom: 14px;
+        padding-right: 0;
     }
     .detail-row {
         flex-direction: column;
         align-items: flex-start;
-        gap: 4px;
+        gap: 6px;
+        padding: 8px 0;
+        font-size: 0.95rem;
     }
     .detail-label,
     .detail-value {
         width: 100%;
         text-align: left;
+    }
+    .profile-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .btn-open-dashboard, .btn-logout-modal {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .profile-modal-content {
+        padding: 14px;
+    }
+    .detail-row {
+        font-size: 0.9rem;
+    }
+    .profile-title h3 {
+        font-size: 0.98rem;
+    }
+    .profile-icon-large {
+        width: 72px;
+        height: 72px;
+    }
+    .btn-open-dashboard, .btn-logout-modal {
+        font-size: 0.9rem;
+        padding: 10px 0;
     }
 }
 

@@ -2154,9 +2154,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         try{ document.getElementById('clientConfirmed').value='1'; }catch(_){}
         if(vm){ vm.style.display='none'; }
         showToast('Details confirmed.','success');
-        const f=document.querySelector('form');
+        const f = (typeof formEl !== 'undefined' && formEl) ? formEl : document.querySelector('form');
         if(f){
-          f.submit();
+          if(typeof f.requestSubmit === 'function'){
+            f.requestSubmit();
+          } else {
+            f.submit();
+          }
         }
       });
     }

@@ -1472,10 +1472,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<div id="changePasswordModalVisitor" class="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; z-index:3000;">
+<div id="changePasswordModalVisitor" class="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3000;">
   <div class="vp-logout-modal" style="position:relative; top:auto; right:auto; margin:0; width:350px; max-width:90vw; max-height:calc(100vh - 100px);">
-    <button class="close-change-password" style="position:absolute; right:12px; top:10px; background:transparent; border:none; font-size:20px; color:#fff; cursor:pointer;">&times;</button>
-    <div style="margin-bottom:12px; font-weight:700; font-size:1.2rem;">Change Password</div>
+    <button class="close-change-password" style="position:absolute; right:12px; top:10px; background:transparent; border:none; font-size:20px; cursor:pointer;">&times;</button>
+    <div class="change-password-title">Change Password</div>
     <?php if ($pwdMsg !== '') { ?>
       <div style="margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:0.9rem; <?php echo $pwdOk ? 'background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0' : 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca'; ?>">
         <?php echo htmlspecialchars($pwdMsg); ?>
