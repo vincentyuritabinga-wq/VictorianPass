@@ -139,18 +139,23 @@ body {
 }
 
 .download-qr-btn {
-  display: block;
-  width: 100%;
-  padding: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  width: auto;
+  min-width: 110px;
+  padding: 10px 12px;
   background-color: #23412e;
   color: #fff;
-  text-align: center;
-  border-radius: 8px;
+  text-align: left;
+  border-radius: 10px;
   text-decoration: none;
-  font-weight: 600;
-  margin-top: 5px;
+  font-weight: 500;
+  margin-top: 0;
   transition: background 0.2s;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .download-qr-btn:hover {

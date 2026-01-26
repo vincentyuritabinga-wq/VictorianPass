@@ -573,13 +573,6 @@ if (!$data) {
     </div>
 
     <?php if (($data['status'] ?? '') === 'approved'): ?>
-    <div class="qr-display">
-        <div style="margin-bottom:10px; font-size:0.9rem; color:#666;">Present this QR code at the gate</div>
-        <img src="<?php echo htmlspecialchars($data['qr']); ?>" alt="QR Code" crossorigin="anonymous" />
-        <button type="button" class="action-btn" onclick="downloadQRImage('<?php echo htmlspecialchars($data['code']); ?>');return false;">
-            <i class="fa-solid fa-download"></i> Download QR Pass
-        </button>
-    </div>
     <?php endif; ?>
 
 </div>

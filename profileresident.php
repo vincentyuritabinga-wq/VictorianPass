@@ -206,7 +206,7 @@ $qrRelPath = '';
 $qrAbsPath = '';
 $qrImg = '';
 
-if ($userStatus === 'active') {
+if (!$isAccountBlocked) {
     $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
@@ -482,6 +482,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 <!-- FontAwesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 body.account-blocked { overflow: hidden; }
 .account-blocked-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; z-index: 3000; }
@@ -715,21 +716,16 @@ body.account-blocked { overflow: hidden; }
     </nav>
 
     <div class="sidebar-footer">
-      <?php if ($userStatus === 'active'): ?>
-      <div class="qr-section">
-        <div style="font-size:0.8rem; font-weight:600; margin-bottom:8px; color:#555;">My Personal QR Code</div>
-        
-        <a href="#" onclick="downloadPersonalQR(); return false;" class="download-qr-btn">Download QR Code</a>
-        <div style="font-size:0.75rem; color:#666; margin-top:8px; line-height:1.3; text-align:center;">
-            You may show this QR code to the guard for verification.
-        </div>
-      </div>
+      <?php if (!$isAccountBlocked): ?>
+      <a href="#" onclick="downloadPersonalQR(); return false;" class="download-qr-btn" title="Download My QR Code">
+        <i class="fa-solid fa-qrcode"></i> <span>My QR</span>
+      </a>
       <?php endif; ?>
-      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i> <span>Log Out</span></a>
     </div>
 
     <!-- Hidden ID Card for Download Generation -->
-    <?php if ($userStatus === 'active'): ?>
+    <?php if (!$isAccountBlocked): ?>
     <div style="position:fixed; left:-9999px; top:0;">
         <div class="resident-id-card" id="residentCard" style="width:360px;">
           <div class="card-header">
@@ -738,8 +734,10 @@ body.account-blocked { overflow: hidden; }
           <div class="id-top">
             <div class="avatar"><img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="QR"></div>
             <div class="top-info">
+              <div style="color:#e5ddc6; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Official Proof of Residency</div>
               <div class="name"><?php echo htmlspecialchars($fullName); ?></div>
               <div class="contact"><?php echo htmlspecialchars($user['email']); ?></div>
+              <div style="margin-top:6px;"><span class="badge active">Verified Resident</span></div>
             </div>
           </div>
           <div class="divider"></div>
@@ -1083,6 +1081,23 @@ body.account-blocked { overflow: hidden; }
       <div id="guestPassContent"></div>
     </div>
   </div>
+
+  <!-- Hidden Template for Amenity Pass Download -->
+  <div id="amenityPassTemplate" style="position:fixed; left:-9999px; top:0; z-index:-9999; width:400px; background:#fff; padding:20px; box-sizing:border-box; font-family:'Poppins',sans-serif;">
+      <div style="border: 2px solid #23412e; padding: 20px; border-radius: 12px; background: #f9f9f9; text-align: center;">
+        <div style="margin-bottom: 15px; font-weight: 700; color: #23412e; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.1rem;">
+           <img src="images/logo.svg" alt="Logo" style="width: 32px; height: 32px; margin: 0;">
+           <span>Victorian Pass</span>
+        </div>
+        <div style="background:#fff; padding:10px; border:1px solid #ddd; display:inline-block; border-radius:0;">
+            <div id="amenityPassQR" style="width: 200px; height: 200px; display: flex; justify-content: center; align-items: center; margin: 0 auto; overflow: hidden;"></div>
+            <style>#amenityPassQR img, #amenityPassQR canvas { width: 100% !important; height: 100% !important; object-fit: contain; }</style>
+        </div>
+        <div id="amenityPassWarning" style="color: #d9534f; font-weight: 600; margin: 15px auto 5px auto; font-size: 0.85rem; line-height: 1.5; border: 1px dashed #d9534f; padding: 10px; border-radius: 8px; background: #fff5f5;">
+            Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.
+        </div>
+      </div>
+  </div>
 </div>
 <script>
 (function(){
@@ -1117,7 +1132,7 @@ body.account-blocked { overflow: hidden; }
       html += '<h4 style="margin:0;color:#333;">' + name + '</h4>';
       html += '<p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Referred by Resident: ' + resident + '</p>';
       html += '</div>';
-      html += '<img src="' + qrSrc + '" style="width:200px;height:200px;border:1px solid #ddd;padding:10px;border-radius:8px;">';
+      html += '<img src="' + qrSrc + '" style="width:200px;height:200px;border:1px solid #ddd;padding:10px;border-radius:0;object-fit:contain;">';
       html += '<p style="margin-top:15px;font-size:0.85rem;color:#888;">Present this QR code at the gate for entry.</p>';
       html += '<a href="' + statusLink + '" target="_blank" style="display:inline-block;margin-top:10px;color:#4f46e5;text-decoration:underline;font-size:0.9rem;">Open full pass</a>';
       
@@ -1441,10 +1456,9 @@ body.account-blocked { overflow: hidden; }
         var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         qrSrcForDownload = qrSrc;
-        html+='<div class="item-extra-title">Entry QR Pass</div>';
+        html+='<div class="item-extra-title">Entry Request Status</div>';
         html+='<div class="item-extra-body">';
-        html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
-        html+='<div class="item-extra-info">';
+        html+='<div class="item-extra-info-only">';
       }else{
         html+='<div class="item-extra-title">Entry Request Status</div>';
         html+='<div class="item-extra-body">';
@@ -1453,6 +1467,17 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
+      if(type==='reservation' && isApproved && ref){
+        var previewStatusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
+        var previewQrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(previewStatusLink);
+        html+='<div style="margin-top:12px;text-align:center;">';
+        html+='<div style="font-weight:700;color:#23412e;margin-bottom:6px;">Victorian Pass</div>';
+        html+='<div style="background:#fff;padding:10px;border:1px solid #ddd;display:inline-block;border-radius:0;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
+        html+='<img src="'+previewQrSrc+'" alt="QR Code" style="width:200px;height:200px;object-fit:contain;display:block;">';
+        html+='</div>';
+        html+='<div style="margin-top:8px;font-size:0.8rem;color:#a83b3b;">Do not scan. One-time use only.</div>';
+        html+='</div>';
+      }
       
       html+='<div class="item-actions">';
       if(type==='guest_form' && isApproved){
@@ -1470,7 +1495,7 @@ body.account-blocked { overflow: hidden; }
          html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
       }
       if(type!=='guest_form' && isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn view-details-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'" data-type="'+esc(type)+'">Download QR code</button>';
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
       } else {
         html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
@@ -1523,24 +1548,90 @@ body.account-blocked { overflow: hidden; }
       downloadBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         var url = downloadBtn.getAttribute('data-qr') || '';
-        if(!url){
-          var img = extra.querySelector('.item-extra-qr');
-          if(img) url = img.src || '';
-        }
+        var itemType = downloadBtn.getAttribute('data-type') || '';
         if(!url) return;
-        fetch(url)
-          .then(function(resp){ return resp.blob(); })
-          .then(function(blob){
-            var objectUrl = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = objectUrl;
-            a.download = 'QR_' + (ref || 'pass') + '.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(objectUrl);
-          })
-          .catch(function(){});
+        
+        function downloadRaw() {
+            fetch(url)
+              .then(function(resp){ return resp.blob(); })
+              .then(function(blob){
+                var objectUrl = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = 'QR_' + (ref || 'pass') + '.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(objectUrl);
+              })
+              .catch(function(){});
+        }
+
+        if(itemType === 'reservation') {
+             var template = document.getElementById('amenityPassTemplate');
+             var qrContainer = document.getElementById('amenityPassQR');
+             if(template && qrContainer) {
+                 var qrData = '';
+                 try {
+                     var urlObj = new URL(url);
+                     qrData = urlObj.searchParams.get('data');
+                 } catch(e) {
+                     if(ref) {
+                         var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+                         qrData = location.origin + basePath + '/status_view.php?code=' + encodeURIComponent(ref);
+                     }
+                 }
+                 if(qrData) {
+                     // Always use image via base64 to guarantee html2canvas capture
+                     var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qrData);
+                     fetch(qrImgUrl)
+                       .then(function(resp){ return resp.blob(); })
+                       .then(function(blob){
+                         var reader = new FileReader();
+                         reader.onload = function(){
+                           var img = document.createElement('img');
+                           img.src = reader.result; // dataURL -> same-origin
+                           img.style.width = '100%';
+                           img.style.height = '100%';
+                           img.style.objectFit = 'contain';
+                           img.style.display = 'block';
+                           qrContainer.innerHTML = '';
+                           qrContainer.appendChild(img);
+                           img.onload = function(){
+                             html2canvas(template.querySelector('div'), {
+                               backgroundColor: null,
+                               scale: 2,
+                               logging: false,
+                               useCORS: true
+                             }).then(function(canvas){
+                               var a = document.createElement('a');
+                               a.href = canvas.toDataURL('image/png');
+                               a.download = 'VictorianPass_' + (ref || 'amenity') + '.png';
+                               document.body.appendChild(a);
+                               a.click();
+                               document.body.removeChild(a);
+                               if(canvas && canvas.style) canvas.style.display = '';
+                               qrContainer.innerHTML = '';
+                             }).catch(function(e){
+                               console.error(e);
+                               downloadRaw();
+                             });
+                           };
+                           img.onerror = function(){ downloadRaw(); };
+                         };
+                         reader.onerror = function(){ downloadRaw(); };
+                         reader.readAsDataURL(blob);
+                       })
+                       .catch(function(){ downloadRaw(); });
+                 } else {
+                     downloadRaw();
+                 }
+             } else {
+                 downloadRaw();
+             }
+        } else {
+            downloadRaw();
+        }
       });
     }
     var updateBtn=extra.querySelector('.update-proof-btn');
@@ -1647,6 +1738,27 @@ body.account-blocked { overflow: hidden; }
    });
    
    window.downloadQRImage = function(code) {
+      var container = document.querySelector('#activityModalBody .amenity-pass-container');
+      if (container) {
+         html2canvas(container, {
+             backgroundColor: null,
+             scale: 2,
+             logging: false,
+             useCORS: true
+         }).then(function(canvas) {
+             var a = document.createElement('a');
+             a.href = canvas.toDataURL('image/png');
+             a.download = 'VictorianPass_' + (code || 'amenity') + '.png';
+             document.body.appendChild(a);
+             a.click();
+             document.body.removeChild(a);
+         }).catch(function(e){
+             console.error(e);
+             alert('Could not download pass.');
+         });
+         return;
+      }
+
       var img = document.querySelector('#activityModalBody img[alt="QR Code"]');
       if (!img) { alert('QR Code not found'); return; }
       fetch(img.src)

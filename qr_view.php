@@ -31,7 +31,6 @@ $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset(
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
 $verificationLink = sprintf('%s://%s%s/qr_view.php?code=%s', $scheme, $host, $basePath, urlencode($code));
-$qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink);
 
 // -------------------------------------------------------------------------
 // POST Action: Mark as Scanned
@@ -95,143 +94,159 @@ if (empty($error)) {
                 'id' => $id,
                 'table' => $table,
                 'code' => $row['ref_code'],
-                'type_label' => "Resident's Guest",
+                'type_label' => "Guest",
                 'name' => $fullName ?: 'Guest',
                 'resident_name' => $residentName,
-                'status_raw' => $statusVal,
-                'is_expired' => $isExpired,
-                'scanned_at' => $scannedAt,
-                'valid_date' => $visitDate ? date('M j, Y', strtotime($visitDate)) : 'N/A',
-                'details' => [
-                    'Purpose' => $row['purpose'] ?? '-',
-                    'Address' => $row['res_house_number'] ?? '-'
-                ]
+                'house' => $row['res_house_number'] ?? 'N/A',
+                'validity_label' => $visitDate ? date('M d, Y', strtotime($visitDate)) : 'N/A',
+                'status' => $statusVal,
+                'scanned_at' => $scannedAt
             ];
         }
     }
 
-    // 2. Check RESERVATIONS (Entry Pass linked)
+    // 2. Check RESERVATIONS (Amenity)
     if (!$data) {
-        $stmt = $con->prepare("SELECT r.*, e.full_name, e.middle_name, e.last_name, u.first_name, u.middle_name, u.last_name as u_last_name, u.user_type FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
-        $stmt->bind_param('s', $code);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $stmt->close();
+        $stmtRes = $con->prepare("SELECT r.*, a.amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM reservations r LEFT JOIN amenities a ON r.amenity_id = a.id LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
+        $stmtRes->bind_param('s', $code);
+        $stmtRes->execute();
+        $resRes = $stmtRes->get_result();
+        $stmtRes->close();
 
-        if ($res && $res->num_rows > 0) {
-            $row = $res->fetch_assoc();
-            
+        if ($resRes && $resRes->num_rows > 0) {
+            $row = $resRes->fetch_assoc();
+
             $id = $row['id'];
             $table = 'reservations';
-            $statusVal = $row['approval_status'] ?? 'pending';
-            $startDate = $row['start_date'] ?? null;
-            $endDate = $row['end_date'] ?? null;
+            $statusVal = $row['status'] ?? 'pending';
+            $rDate = $row['reservation_date'];
+            $startTime = $row['start_time'];
+            $endTime = $row['end_time'];
             $scannedAt = $row['scanned_at'] ?? null;
-            
-            // Expiry
-            $isExpired = false;
-            if ($endDate && $endDate < $today) { $isExpired = true; }
-            if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
-            
-            // Name & Type
-            $uType = isset($row['user_type']) ? strtolower($row['user_type']) : '';
-            $hasEntryPass = !empty($row['entry_pass_id']);
-            
-            if ($hasEntryPass) {
-                $name = trim(implode(' ', array_filter([$row['full_name']??'', $row['middle_name']??'', $row['last_name']??''])));
-                $typeLabel = 'Visitor';
-            } else {
-                $name = trim(implode(' ', array_filter([$row['first_name']??'', $row['middle_name']??'', $row['u_last_name']??''])));
-                $typeLabel = ($uType === 'visitor') ? 'Visitor' : 'Resident';
-            }
 
-            $validWindow = ($startDate ? date('M j', strtotime($startDate)) : '?') . ' - ' . ($endDate ? date('M j, Y', strtotime($endDate)) : '?');
+            // Amenity Validity Logic
+            $isExpired = false;
+            if ($rDate < $today) { $isExpired = true; }
+            elseif ($rDate === $today) {
+                // If today, check time? (Optional strictness, sticking to date for now)
+            }
+            if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
+
+            $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
 
             $data = [
                 'id' => $id,
                 'table' => $table,
                 'code' => $row['ref_code'],
-                'type_label' => $typeLabel,
-                'name' => $name ?: 'Unknown',
-                'resident_name' => '', 
-                'status_raw' => $statusVal,
-                'is_expired' => $isExpired,
-                'scanned_at' => $scannedAt,
-                'valid_date' => $validWindow,
-                'details' => [
-                    'Amenity' => $row['amenity'] ?? '-',
-                    'Time' => ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? ''),
-                    'Persons' => $row['persons'] ?? '-'
-                ]
+                'type_label' => "Amenity",
+                'name' => $fullName,
+                'amenity' => $row['amenity_name'] ?? 'Unknown',
+                'validity_label' => date('M d, Y', strtotime($rDate)),
+                'time_range' => date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime)),
+                'pax' => $row['number_of_persons'] ?? 1,
+                'status' => $statusVal,
+                'scanned_at' => $scannedAt
             ];
         }
     }
-
-    // 3. Check RESIDENT RESERVATIONS
+    
+    // 3. Check RESIDENT RESERVATIONS (Amenity for Resident)
     if (!$data) {
-        $stmt2 = $con->prepare("SELECT rr.*, u.first_name, u.middle_name, u.last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
-        $stmt2->bind_param('s', $code);
-        $stmt2->execute();
-        $res2 = $stmt2->get_result();
-        $stmt2->close();
+        $stmtRR = $con->prepare("SELECT rr.*, a.amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM resident_reservations rr LEFT JOIN amenities a ON rr.amenity_id = a.id LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
+        $stmtRR->bind_param('s', $code);
+        $stmtRR->execute();
+        $resRR = $stmtRR->get_result();
+        $stmtRR->close();
 
-        if ($res2 && $res2->num_rows > 0) {
-            $row = $res2->fetch_assoc();
+        if ($resRR && $resRR->num_rows > 0) {
+            $row = $resRR->fetch_assoc();
 
             $id = $row['id'];
             $table = 'resident_reservations';
-            $statusVal = $row['approval_status'] ?? 'pending';
-            $startDate = $row['start_date'] ?? null;
-            $endDate = $row['end_date'] ?? null;
+            $statusVal = $row['status'] ?? 'pending';
+            $rDate = $row['reservation_date'];
+            $startTime = $row['start_time'];
+            $endTime = $row['end_time'];
             $scannedAt = $row['scanned_at'] ?? null;
 
             $isExpired = false;
-            if ($endDate && $endDate < $today) { $isExpired = true; }
+            if ($rDate < $today) { $isExpired = true; }
             if ($statusVal === 'approved' && $isExpired) { $statusVal = 'expired'; }
 
-            $name = trim(implode(' ', array_filter([$row['first_name']??'', $row['middle_name']??'', $row['last_name']??''])));
-            $validWindow = ($startDate ? date('M j', strtotime($startDate)) : '?') . ' - ' . ($endDate ? date('M j, Y', strtotime($endDate)) : '?');
+            $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
 
             $data = [
                 'id' => $id,
                 'table' => $table,
                 'code' => $row['ref_code'],
-                'type_label' => 'Resident',
-                'name' => $name ?: 'Resident',
-                'resident_name' => '',
-                'status_raw' => $statusVal,
-                'is_expired' => $isExpired,
-                'scanned_at' => $scannedAt,
-                'valid_date' => $validWindow,
-                'details' => [
-                    'Amenity' => $row['amenity'] ?? '-',
-                    'Time' => ($row['start_time'] ?? '') . ' - ' . ($row['end_time'] ?? '')
-                ]
+                'type_label' => "Amenity",
+                'name' => $fullName,
+                'amenity' => $row['amenity_name'] ?? 'Unknown',
+                'validity_label' => date('M d, Y', strtotime($rDate)),
+                'time_range' => date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime)),
+                'pax' => 1, // Usually 1 for resident reservation? Or check column? Assuming 1.
+                'status' => $statusVal,
+                'scanned_at' => $scannedAt
             ];
         }
     }
 
-    // Final Validation State Calculation
+    // 4. Check USERS (Resident Personal QR)
+    if (!$data) {
+        $stmtU = $con->prepare("SELECT * FROM users WHERE ref_code = ?");
+        $stmtU->bind_param('s', $code);
+        $stmtU->execute();
+        $resU = $stmtU->get_result();
+        $stmtU->close();
+
+        if ($resU && $resU->num_rows > 0) {
+            $row = $resU->fetch_assoc();
+            
+            $statusVal = $row['status'] ?? 'pending';
+            $fullName = trim($row['first_name'] . ' ' . $row['last_name']);
+            
+            // Resident QR is always valid if status is active/approved
+            // Mapping user status to 'approved' for UI
+            if (stripos($statusVal, 'active') !== false || stripos($statusVal, 'approv') !== false) {
+                $statusVal = 'approved';
+            }
+
+            $data = [
+                'id' => $row['id'],
+                'table' => 'users',
+                'code' => $row['ref_code'],
+                'type_label' => "Resident",
+                'name' => $fullName,
+                'house' => $row['house_number'],
+                'validity_label' => "Permanent",
+                'status' => $statusVal,
+                'scanned_at' => null // Users table doesn't have scanned_at usually, or we don't track it same way
+            ];
+        }
+    }
+
+    // Prepare UI Data
     if ($data) {
-        $s = $data['status_raw'];
-        $exp = $data['is_expired'];
-        $scan = $data['scanned_at'];
+        $s = strtolower($data['status']);
         
-        if ($scan) {
-            $data['ui_state'] = 'scanned';
-            $data['ui_title'] = 'ALREADY SCANNED';
-            $data['ui_color'] = '#f97316'; // Orange
-            $data['ui_msg'] = 'This pass has already been used on ' . date('M j, Y h:i A', strtotime($scan));
-        } elseif ($exp) {
+        // Define UI States
+        if ($s === 'approved') {
+            if ($data['scanned_at']) {
+                $data['ui_state'] = 'used';
+                $data['ui_title'] = 'PASS ALREADY USED';
+                $data['ui_color'] = '#f59e0b'; // Orange
+                $data['ui_msg'] = 'This pass has already been scanned.';
+            } else {
+                $data['ui_state'] = 'valid';
+                $data['ui_title'] = 'VALID ENTRY PASS';
+                $data['ui_color'] = '#22c55e'; // Green
+                $data['ui_msg'] = 'Access Granted';
+            }
+        } elseif ($s === 'expired') {
             $data['ui_state'] = 'expired';
             $data['ui_title'] = 'EXPIRED PASS';
-            $data['ui_color'] = '#ef4444'; // Red
-            $data['ui_msg'] = 'This pass has expired.';
-        } elseif ($s === 'approved') {
-            $data['ui_state'] = 'valid';
-            $data['ui_title'] = 'VALID ENTRY PASS';
-            $data['ui_color'] = '#22c55e'; // Green
-            $data['ui_msg'] = 'Access Granted';
+            $data['ui_color'] = '#6b7280'; // Gray
+            $data['ui_msg'] = 'This pass is no longer valid.';
         } elseif ($s === 'pending') {
             $data['ui_state'] = 'pending';
             $data['ui_title'] = 'PENDING APPROVAL';
@@ -241,7 +256,7 @@ if (empty($error)) {
             $data['ui_state'] = 'invalid';
             $data['ui_title'] = 'INVALID / DENIED';
             $data['ui_color'] = '#ef4444'; // Red
-            $data['ui_msg'] = 'Access Denied. Status: ' . ucfirst($s);
+            $data['ui_msg'] = 'Access Denied.';
         }
     } else {
         $error = 'Invalid or Unknown QR Code.';
@@ -256,75 +271,207 @@ if (empty($error)) {
     <title>Entry Pass Details - VictorianPass</title>
     <link rel="icon" type="image/png" href="images/logo.svg" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Empty script tag for clean removal -->
     <style>
-        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
-        body { margin: 0; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
-        .container { width: 100%; max-width: 420px; background: #1e1e1e; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; margin: 0; padding: 0; }
+        body { 
+            background: #121212; 
+            color: #fff; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
         
-        .header { background: #000; padding: 15px; text-align: center; border-bottom: 1px solid #333; }
-        .header img { height: 32px; vertical-align: middle; }
-        .header span { margin-left: 10px; font-weight: 600; font-size: 1.1rem; vertical-align: middle; color: #e5ddc6; }
+        .container { 
+            width: 100%; 
+            max-width: 400px; 
+            background: #1e1e1e; 
+            border-radius: 16px; 
+            overflow: hidden; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+            display: flex;
+            flex-direction: column;
+        }
 
-        .status-banner { padding: 30px 20px; text-align: center; color: #fff; }
-        .status-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; line-height: 1.2; }
-        .status-msg { font-size: 1rem; opacity: 0.9; font-weight: 500; }
+        .top-bar {
+            background: #000;
+            padding: 15px;
+            text-align: center;
+        }
+        .top-bar img {
+            height: 24px;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .top-bar span {
+            color: #e5ddc6;
+            font-weight: 600;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
 
-        .qr-section { background: #fff; padding: 20px; text-align: center; border-bottom: 1px solid #eee; }
-        .qr-section img { width: 180px; height: 180px; display: block; margin: 0 auto; }
-        .qr-note { color: #333; margin-top: 10px; font-size: 0.85rem; font-weight: 500; }
+        .status-header {
+            padding: 30px 20px;
+            text-align: center;
+            color: #fff;
+        }
+        .status-header h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .status-header p {
+            font-size: 0.95rem;
+            font-weight: 500;
+            opacity: 0.9;
+        }
 
-        .details { padding: 24px; }
-        .detail-row { display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid #333; padding-bottom: 8px; }
-        .detail-row:last-child { border-bottom: none; }
-        .label { color: #aaa; font-size: 0.9rem; }
-        .value { font-weight: 600; text-align: right; color: #eee; font-size: 1rem; }
+        .qr-display {
+            background: #1e1e1e;
+            padding: 20px;
+            text-align: center;
+        }
+        .qr-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            display: inline-block;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            width: 210px;
+            height: 210px;
+        }
+        .qr-box img, .qr-box canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+            object-fit: contain;
+        }
+        .qr-instruction {
+            margin-top: 15px;
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+
+        .details-section {
+            padding: 20px 25px;
+            background: #1e1e1e;
+        }
+        .details-title {
+            color: #9bd08f; /* Light Green */
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
         
-        .section-title { color: #9bd08f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700; }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
+        }
+        .detail-row .label {
+            color: #888;
+        }
+        .detail-row .value {
+            color: #fff;
+            font-weight: 600;
+            text-align: right;
+        }
 
-        .actions { padding: 20px; background: #252525; text-align: center; }
-        .btn { display: block; width: 100%; padding: 16px; border-radius: 12px; border: none; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s; text-decoration: none; color: #fff; }
-        .btn:active { transform: scale(0.98); }
-        .btn-confirm { background: #22c55e; color: #000; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
-        .btn-disabled { background: #444; color: #888; cursor: not-allowed; }
-        .btn-download { background: #3b82f6; color: #fff; margin-top: 10px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .action-area {
+            padding: 25px;
+            text-align: center;
+        }
+        .btn-confirm {
+            background: #22c55e;
+            color: #000;
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        }
+        .btn-confirm:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .btn-home {
+            background: transparent;
+            color: #aaa;
+            border: 1px solid #444;
+            margin-top: 15px;
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
 
-        .footer { margin-top: 20px; color: #666; font-size: 0.8rem; text-align: center; }
+        .footer {
+            margin-top: 30px;
+            color: #555;
+            font-size: 0.75rem;
+            text-align: center;
+        }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
 
     <?php if ($error): ?>
-        <div class="container" style="padding:20px; text-align:center;">
-            <h2 style="color:#ef4444;">Error</h2>
-            <p><?php echo htmlspecialchars($error); ?></p>
-            <a href="javascript:history.back()" style="color:#aaa;">Go Back</a>
+        <div class="container" style="text-align:center; padding:40px;">
+            <h2 style="color:#ef4444; margin-bottom:10px;">Error</h2>
+            <p style="color:#ccc;"><?php echo htmlspecialchars($error); ?></p>
         </div>
     <?php elseif ($data): ?>
-        <div class="container" id="passCard">
-            <!-- Header -->
-            <div class="header">
+        <div class="container">
+            <!-- Top Bar -->
+            <div class="top-bar">
                 <img src="images/logo.svg" alt="Logo">
                 <span>Victorian Heights</span>
             </div>
 
-            <!-- Status Banner -->
-            <div class="status-banner" style="background-color: <?php echo $data['ui_color']; ?>;">
-                <div class="status-title"><?php echo htmlspecialchars($data['ui_title']); ?></div>
-                <div class="status-msg"><?php echo htmlspecialchars($data['ui_msg']); ?></div>
+            <!-- Status Header -->
+            <div class="status-header" style="background: <?php echo $data['ui_color']; ?>;">
+                <h1><?php echo htmlspecialchars($data['ui_title']); ?></h1>
+                <p><?php echo htmlspecialchars($data['ui_msg']); ?></p>
             </div>
 
-            <!-- QR Code (Visible only if Valid/Pending) -->
-            <?php if ($data['ui_state'] === 'valid' || $data['ui_state'] === 'pending'): ?>
-            <div class="qr-section">
-                <img src="<?php echo $qrImgUrl; ?>" alt="QR Code">
-                <div class="qr-note">Present this QR code to the guard</div>
+            <!-- QR Code Area -->
+            <div class="qr-display">
+                <div class="qr-box" id="qrcode">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=<?php echo urlencode($verificationLink); ?>" alt="QR Code">
+                </div>
+                <div class="qr-instruction">Present this QR code to the guard</div>
             </div>
+            
+            <style>
+                .qr-box img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    display: block;
+                }
+            </style>
+
+            <?php if (isset($data['type_label']) && $data['type_label'] === 'Amenity'): ?>
+                <p style="text-align:center; color:#aaa; font-size:0.85rem; margin-bottom: 20px;">Do not scan<br><span style="font-size:12px; font-weight:normal;">(For verification only)</span></p>
             <?php endif; ?>
 
             <!-- Pass Details -->
-            <div class="details">
-                <div class="section-title">Pass Details</div>
+            <div class="details-section">
+                <div class="details-title">Pass Details</div>
                 
                 <div class="detail-row">
                     <span class="label">Pass Type</span>
@@ -335,79 +482,70 @@ if (empty($error)) {
                     <span class="label">Name</span>
                     <span class="value"><?php echo htmlspecialchars($data['name']); ?></span>
                 </div>
-
-                <?php if (!empty($data['resident_name'])): ?>
+                
                 <div class="detail-row">
-                    <span class="label">Referred by Resident</span>
-                    <span class="value"><?php echo htmlspecialchars($data['resident_name']); ?></span>
+                    <span class="label">Ref Code</span>
+                    <span class="value"><?php echo htmlspecialchars($data['code']); ?></span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="label">Validity</span>
+                    <span class="value"><?php echo htmlspecialchars($data['validity_label']); ?></span>
+                </div>
+
+                <?php if (!empty($data['amenity'])): ?>
+                <div class="detail-row">
+                    <span class="label">Amenity</span>
+                    <span class="value"><?php echo htmlspecialchars($data['amenity']); ?></span>
                 </div>
                 <?php endif; ?>
 
+                <?php if (!empty($data['time_range'])): ?>
                 <div class="detail-row">
-                    <span class="label">Ref Code</span>
-                    <span class="value" style="font-family:monospace; letter-spacing:1px;"><?php echo htmlspecialchars($data['code']); ?></span>
+                    <span class="label">Time</span>
+                    <span class="value"><?php echo htmlspecialchars($data['time_range']); ?></span>
                 </div>
+                <?php endif; ?>
 
+                <?php if (!empty($data['pax'])): ?>
                 <div class="detail-row">
-                    <span class="label">Validity</span>
-                    <span class="value"><?php echo htmlspecialchars($data['valid_date']); ?></span>
+                    <span class="label">Persons</span>
+                    <span class="value"><?php echo htmlspecialchars($data['pax']); ?></span>
                 </div>
-
-                <!-- Extra Details -->
-                <?php foreach ($data['details'] as $k => $v): if ($v && $v !== '-'): ?>
+                <?php endif; ?>
+                
+                <?php if (!empty($data['house'])): ?>
                 <div class="detail-row">
-                    <span class="label"><?php echo htmlspecialchars($k); ?></span>
-                    <span class="value"><?php echo htmlspecialchars($v); ?></span>
+                    <span class="label">House No.</span>
+                    <span class="value"><?php echo htmlspecialchars($data['house']); ?></span>
                 </div>
-                <?php endif; endforeach; ?>
-
+                <?php endif; ?>
             </div>
 
             <!-- Actions -->
-            <div class="actions">
-                <?php if ($data['ui_state'] === 'valid'): ?>
-                    <!-- Download Button for Residents/Visitors -->
-                    <button onclick="downloadPass()" class="btn btn-download">
-                        <i class="fa-solid fa-download"></i> Download Entry Pass
-                    </button>
+            <div class="action-area">
+                <?php if ($isAuthorizedScanner && $data['ui_state'] === 'valid'): ?>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="confirm_entry">
+                        <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($data['code']); ?>">
+                        <input type="hidden" name="source_table" value="<?php echo htmlspecialchars($data['table']); ?>">
+                        <input type="hidden" name="source_id" value="<?php echo htmlspecialchars($data['id']); ?>">
+                        <button type="submit" class="btn-confirm">CONFIRM ENTRY</button>
+                    </form>
+                <?php elseif ($data['ui_state'] === 'used'): ?>
+                     <button class="btn-confirm" style="background:#f59e0b; cursor:default;">ALREADY USED</button>
+                <?php elseif ($data['ui_state'] === 'expired'): ?>
+                     <button class="btn-confirm" style="background:#6b7280; cursor:default;" disabled>EXPIRED</button>
+                <?php else: ?>
+                    <!-- Optional: Link to go home or something -->
                 <?php endif; ?>
             </div>
         </div>
-
-        <div class="footer">
-            VictorianPass Validation System &copy; <?php echo date('Y'); ?>
-        </div>
-
     <?php endif; ?>
 
-    <script>
-    function downloadPass() {
-        var element = document.getElementById('passCard');
-        if(!element) return;
-        
-        // Temporarily hide the download button during capture
-        var btn = document.querySelector('.btn-download');
-        if(btn) btn.style.display = 'none';
-
-        html2canvas(element, {
-            scale: 2, // Higher resolution
-            useCORS: true,
-            backgroundColor: null
-        }).then(function(canvas) {
-            var link = document.createElement('a');
-            link.download = 'EntryPass_<?php echo $data['code'] ?? 'VP'; ?>.png';
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            
-            // Show button again
-            if(btn) btn.style.display = 'block';
-        }).catch(function(err) {
-            console.error('Download failed', err);
-            if(btn) btn.style.display = 'block';
-            alert('Could not generate image. Please screenshot instead.');
-        });
-    }
-    </script>
+    <div class="footer">
+        VictorianPass Validation System &copy; <?php echo date('Y'); ?>
+    </div>
 
 </body>
 </html>

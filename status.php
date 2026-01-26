@@ -628,7 +628,7 @@ if ($result && $result->num_rows > 0) {
         'end_date' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : '',
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
         'end_time' => !empty($row['end_time']) ? $row['end_time'] : null,
-        'expires_at' => $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : ''
+        'expires_at' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ''
     ];
     // Guard scan logging
     if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
@@ -680,9 +680,10 @@ if ($res2 && $res2->num_rows > 0) {
 
     $today = date('Y-m-d');
     $statusVal = isset($row['approval_status']) && $row['approval_status'] !== '' ? $row['approval_status'] : 'pending';
-    // Expire based on end_date after approval
-    if ($statusVal === 'approved' && !empty($row['end_date']) && $row['end_date'] < $today) {
-        $statusVal = 'expired';
+    // Time-bound validity for Resident Reservations
+    if ($statusVal === 'approved') {
+        $endTs = strtotime(($row['end_date'] ?: $today) . ' ' . ($row['end_time'] ?: '23:59:59'));
+        if (time() > $endTs) { $statusVal = 'expired'; }
     }
     $statusMessage = '';
     switch ($statusVal) {
