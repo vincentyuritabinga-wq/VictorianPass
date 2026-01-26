@@ -110,6 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if ($report_date !== '') {
         $dt = DateTime::createFromFormat('Y-m-d', $report_date);
         if (!($dt && $dt->format('Y-m-d') === $report_date)) { $reportErrors[] = 'Date format is invalid.'; }
+        else { if ($dt > new DateTime('today')) { $reportErrors[] = 'Date must be today or earlier.'; } }
     }
     if (count($natureArr) === 0) { $reportErrors[] = 'Please select at least one nature of concern.'; }
 
@@ -388,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <label for="address">Address / Location*</label>
               </div>
               <div class="form-group">
-                  <input type="date" id="report_date" name="report_date" value="<?php echo htmlspecialchars($reportValues['report_date'] ?? ''); ?>" required>
+                  <input type="date" id="report_date" name="report_date" value="<?php echo htmlspecialchars($reportValues['report_date'] ?? ''); ?>" required max="<?php echo date('Y-m-d'); ?>">
                   <label for="report_date">Date of Incident*</label>
               </div>
           </div>

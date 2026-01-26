@@ -105,6 +105,43 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_incidents') {
   exit;
 }
 
+if (isset($_GET['action']) && $_GET['action'] === 'incident_details' && isset($_GET['id'])) {
+  header('Content-Type: application/json');
+  $rid = intval($_GET['id']);
+  $data = null;
+  $files = [];
+  if ($rid > 0) {
+    $stmt = $con->prepare("SELECT ir.id, ir.complainant, ir.subject, ir.address, ir.nature, ir.other_concern, ir.report_date, ir.created_at, ir.status, u.first_name, u.middle_name, u.last_name FROM incident_reports ir LEFT JOIN users u ON ir.user_id = u.id WHERE ir.id = ? LIMIT 1");
+    $stmt->bind_param('i', $rid);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res && $res->num_rows === 1) {
+      $r = $res->fetch_assoc();
+      $full = trim(($r['first_name'] ?? '') . ' ' . ($r['middle_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+      $data = [
+        'id' => intval($r['id']),
+        'resident_name' => ($full !== '' ? $full : $r['complainant']),
+        'subject' => $r['subject'] ?? '',
+        'address' => $r['address'] ?? '',
+        'nature' => $r['nature'] ?? '',
+        'other_concern' => $r['other_concern'] ?? '',
+        'report_date' => $r['report_date'] ?? null,
+        'created_at' => $r['created_at'] ?? null,
+        'status' => $r['status'] ?? ''
+      ];
+    }
+    $stmt->close();
+    $stmtP = $con->prepare("SELECT file_path FROM incident_proofs WHERE report_id = ? ORDER BY uploaded_at ASC");
+    $stmtP->bind_param('i', $rid);
+    $stmtP->execute();
+    $resP = $stmtP->get_result();
+    if ($resP) { while ($rowP = $resP->fetch_assoc()) { $files[] = $rowP['file_path']; } }
+    $stmtP->close();
+  }
+  echo json_encode(['success' => ($data !== null), 'report' => $data, 'proofs' => $files]);
+  exit;
+}
+
 // API: escalate incident to admin
 if (isset($_POST['action']) && $_POST['action'] === 'escalate' && isset($_POST['report_id'])) {
   header('Content-Type: application/json');
@@ -462,6 +499,8 @@ tr:hover { background-color: #f8fafc; }
 .action-btn.approve, .btn-approve { background: var(--success); }
 .action-btn.deny, .btn-reject { background: var(--danger); }
 .action-btn:hover { filter: brightness(92%); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.btn-view { background: var(--info); color: #fff; }
+.btn-view:hover { background: #2563eb; }
 
 /* Guard Specific Adapters */
 .section.hidden { display: none; }
@@ -538,6 +577,17 @@ tr:hover { background-color: #f8fafc; }
     transition: background 0.2s ease;
 }
 .logout-btn:hover { background: #a93226; color: #fff; }
+.modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+.modal.modal-top { z-index: 3000; }
+.modal-content { background-color: var(--bg-surface); margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); position: relative; display: flex; flex-direction: column; gap: 12px; width: min(92vw, 640px); aspect-ratio: auto; max-height: 90vh; overflow: hidden; }
+.modal-content h3 { padding: 12px 16px; border-bottom: 1px solid var(--border-light); margin: 0; font-size: 1.05rem; background: var(--bg-surface); position: sticky; top: 0; z-index: 10; color: #23412e; font-weight: 700; }
+.modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; line-height: 1; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; }
+.incident-details-content { overflow-y: auto; flex: 1; padding: 18px 20px 22px; }
+.details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.proofs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.proofs img { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.proofs a { display: inline-block; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -692,6 +742,7 @@ function renderIncidents(rows){
     const dstr = dt ? dt.toLocaleDateString() : '';
     tr.innerHTML = `<td>${r.id}</td><td>${(r.resident_name||'-')}</td><td>${desc||'-'}</td><td>${dstr}</td>
       <td>
+        <button class="btn btn-view details-btn" data-id="${r.id}">View Details</button>
         <button class="btn handle-btn" data-id="${r.id}" style="background:#23412e;color:#fff">Handle Locally</button>
         <button class="btn btn-approve escalate-btn" data-id="${r.id}">Escalate to Admin</button>
       </td>`;
@@ -722,6 +773,16 @@ function renderIncidents(rows){
         }).catch(_=>{ showToast('Network error','error'); });
     });
   });
+  Array.from(tbody.querySelectorAll('button.details-btn')).forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = parseInt(this.getAttribute('data-id')||'0');
+      if(!id) return;
+      fetch(`guard.php?action=incident_details&id=${encodeURIComponent(id)}`).then(r=>r.json()).then(data=>{
+        if(data&&data.success){ showIncidentDetailsModal(data.report, data.proofs||[]); }
+        else { showToast('Unable to load details','error'); }
+      }).catch(_=>{ showToast('Network error','error'); });
+    });
+  });
 }
 function loadIncidents(){ fetch('guard.php?action=list_incidents').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderIncidents(data.incidents||[]); } }).catch(_=>{}); }
 document.addEventListener('DOMContentLoaded', function(){ loadIncidents(); setInterval(loadIncidents, 15000); });
@@ -739,7 +800,59 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(loadTodayEntries, 60000);
   setInterval(loadDashboardEntries, 60000);
 });
+function showIncidentDetailsModal(report, proofs){
+  var m = document.getElementById('incidentDetailsModal');
+  if(!m || !report) return;
+  document.getElementById('incResident').textContent = report.resident_name || '-';
+  document.getElementById('incSubject').textContent = report.subject || '-';
+  document.getElementById('incAddress').textContent = report.address || '-';
+  var n = report.nature || '';
+  var o = report.other_concern || '';
+  document.getElementById('incNature').textContent = n ? n : (o || '-');
+  var rd = report.report_date || report.created_at || '';
+  document.getElementById('incDate').textContent = rd ? rd : '-';
+  document.getElementById('incStatus').textContent = report.status ? report.status : '-';
+  var pf = document.getElementById('incProofs');
+  pf.innerHTML = '';
+  if (proofs && proofs.length > 0) {
+    proofs.forEach(function(p){
+      var ext = p.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif'].indexOf(ext) >= 0) {
+        var img = document.createElement('img'); img.src = p; pf.appendChild(img);
+      } else {
+        var a = document.createElement('a'); a.href = p; a.target = '_blank'; a.textContent = 'View file'; pf.appendChild(a);
+      }
+    });
+  } else {
+    var span = document.createElement('span'); span.textContent = 'No proofs'; pf.appendChild(span);
+  }
+  m.style.display = 'flex';
+}
+function closeIncidentDetailsModal(){
+  var m = document.getElementById('incidentDetailsModal');
+  if (m) { m.style.display = 'none'; }
+}
 </script>
 <script src="js/logout-modal.js"></script>
+<div id="incidentDetailsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Incident Details</h3>
+      <button class="modal-close" onclick="closeIncidentDetailsModal()">×</button>
+    </div>
+    <div id="incidentDetailsContent" class="incident-details-content">
+      <div class="details-grid">
+        <div><strong>Resident</strong><div id="incResident"></div></div>
+        <div><strong>Complainee</strong><div id="incSubject"></div></div>
+        <div><strong>Address</strong><div id="incAddress"></div></div>
+        <div><strong>Nature</strong><div id="incNature"></div></div>
+        <div><strong>Date</strong><div id="incDate"></div></div>
+        <div><strong>Status</strong><div id="incStatus"></div></div>
+      </div>
+      <div style="margin-top:12px"><strong>Proofs</strong></div>
+      <div id="incProofs" class="proofs"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
