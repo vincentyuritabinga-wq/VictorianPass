@@ -778,6 +778,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       <div id="personsMaxNote" class="label-help"></div>
                       <input type="hidden" name="persons" id="personsInput" value="1">
                       
+                      <?php if ($isResident): ?>
                       <div id="participantWrap" style="display:block;">
                         <div class="participant-selector" style="margin-top:14px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
                           <div style="font-weight:700; margin-bottom:8px;">Who will attend?</div>
@@ -848,6 +849,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                           </div>
                         </div>
                       </div>
+                      <?php endif; ?>
                     </div>
                     <div class="res-item price-row">
                       <div class="price-box">
