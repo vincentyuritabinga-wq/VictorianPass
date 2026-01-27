@@ -777,8 +777,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       </div>
                       <div id="personsMaxNote" class="label-help"></div>
                       <input type="hidden" name="persons" id="personsInput" value="1">
-                      <?php if ($isResident): ?>
-                      <div id="participantWrap" style="display:none;">
+                      
+                      <div id="participantWrap" style="display:block;">
                         <div class="participant-selector" style="margin-top:14px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
                           <div style="font-weight:700; margin-bottom:8px;">Who will attend?</div>
                           <div class="mode-options" style="display:flex;flex-direction:column;gap:8px;">
@@ -848,40 +848,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                           </div>
                         </div>
                       </div>
-                      <?php else: ?>
-                      <div id="participantWrap" style="display:none;">
-                        <div class="participant-selector" style="margin-top:14px; border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
-                          <div style="font-weight:700; margin-bottom:8px;">Who will attend?</div>
-                          <div class="mode-options" style="display:flex;flex-direction:column;gap:8px;">
-                            <button type="button" class="btn-secondary" data-mode="guest_only">Guests Only</button>
-                            <div style="color:#555;font-size:0.85rem;">Guests are charged the regular rate.</div>
-                          </div>
-                        </div>
-                        <div style="margin-top:10px; border-top:1px dashed #ddd; padding-top:10px;">
-                          <div class="res-label"><small>Participants Breakdown</small></div>
-                          <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                            <div style="flex:1; min-width:180px;">
-                              <div style="font-weight:600; color:#23412e; margin-bottom:6px;">Residents</div>
-                              <div class="counter">
-                                <button type="button" disabled style="opacity:0.5; cursor:not-allowed;">-</button>
-                                <span id="residentsCountText">0</span>
-                                <button type="button" disabled style="opacity:0.5; cursor:not-allowed;">+</button>
-                              </div>
-                              <small class="label-help">Residents are not available for visitor bookings</small>
-                            </div>
-                            <div style="flex:1; min-width:180px;">
-                              <div style="font-weight:600; color:#8a2a2a; margin-bottom:6px;">Approved Guests</div>
-                              <div class="counter">
-                                <button type="button" onclick="changeGuests(-1)">-</button>
-                                <span id="guestsCountText">1</span>
-                                <button type="button" onclick="changeGuests(1)">+</button>
-                              </div>
-                              <small class="label-help">Full price per guest</small>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <?php endif; ?>
                     </div>
                     <div class="res-item price-row">
                       <div class="price-box">
@@ -963,6 +929,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   let bookedDates=new Set();
   let selectedAmenity=document.getElementById('amenityField').value||'';
   let hintShown=false;
+  const approvedGuestsMax = <?php echo (isset($residentGuests) && is_array($residentGuests)) ? count($residentGuests) : 0; ?>;
 
   function formatDateToMMDDYYYY(dateStr) {
     if (!dateStr) return '';
@@ -1437,6 +1404,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateActionStates();
   }
   function changeResidents(delta){
+    const wrap=document.getElementById('participantWrap');
+    const mode=wrap ? (wrap.getAttribute('data-mode')||'') : '';
+    if(mode==='guest_only'){
+      setFieldWarning('personsInput','Residents cannot be added in Guests Only mode.');
+      return;
+    }
     const rEl=document.getElementById('residentsCountText');
     const rInput=document.getElementById('residentsCountInput');
     const gInput=document.getElementById('guestsCountInput');
@@ -1470,6 +1443,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(typeof persistForm === 'function') persistForm();
   }
   function changeGuests(delta){
+    const wrap=document.getElementById('participantWrap');
+    const mode=wrap ? (wrap.getAttribute('data-mode')||'') : '';
+    if(mode==='resident_only'){
+      setFieldWarning('personsInput','Guests cannot be added in Residents Only mode.');
+      return;
+    }
     const gEl=document.getElementById('guestsCountText');
     const gInput=document.getElementById('guestsCountInput');
     const rInput=document.getElementById('residentsCountInput');
@@ -1482,6 +1461,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const amen=document.getElementById('amenityField').value;
     const max=getAmenityMaxPersons(amen);
     const total=r+nextG;
+    if(approvedGuestsMax>=0 && nextG>approvedGuestsMax){
+      setFieldWarning('personsInput',`You can add up to ${approvedGuestsMax} approved guests.`);
+      return;
+    }
     if(total < 1){
       setFieldWarning('personsInput','At least 1 participant is required.');
       return;
@@ -1558,15 +1541,31 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const field=document.getElementById('bookingForField');
     return field && field.value === 'resident';
   }
-  function getBaseAmenityPrice(amen, persons, hours){
-    if(amen==='Basketball Court' || amen==='Tennis Court'){ return hours>0 ? (hours * 150) : 0; }
-    if(amen==='Clubhouse'){ return hours>0 ? (hours * 200) : 0; }
-    if(amen==='Pool'){ return Math.max(1,persons) * 175; }
+  function getHourlyRate(amen){
+    if(amen==='Basketball Court' || amen==='Tennis Court'){ return 150; }
+    if(amen==='Clubhouse'){ return 200; }
     return 0;
   }
-  function getEffectiveAmenityPrice(amen, persons, hours){
-    const base=getBaseAmenityPrice(amen, persons, hours);
-    return isResidentSelfBooking() ? (base * 0.5) : base;
+  function getPerPersonRate(amen){
+    if(amen==='Pool'){ return 175; }
+    return 0;
+  }
+  function computeDynamicPrice(amen, residentsCount, guestsCount, hours){
+    const r = Math.max(0, parseInt(residentsCount||'0',10));
+    const g = Math.max(0, parseInt(guestsCount||'0',10));
+    const h = Math.max(1, parseInt(hours||'1',10));
+    if(amen==='Pool'){
+      const per = getPerPersonRate(amen);
+      const resPart = r * (per * 0.5);
+      const guestPart = g * per;
+      return resPart + guestPart;
+    }
+    if(isHourBasedAmenity(amen)){
+      const rate = getHourlyRate(amen);
+      const perHourTotal = (r * (rate * 0.5)) + (g * rate);
+      return h * perHourTotal;
+    }
+    return 0;
   }
   function formatPesoAmount(val){
     const rounded=Math.round(val*100)/100;
@@ -1604,9 +1603,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
   function updateDisplayedPrice(){
     const amen=document.getElementById('amenityField').value;
-    const persons=parseInt(document.getElementById('personsInput').value||'0');
-    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
-    const base=getEffectiveAmenityPrice(amen, persons, hours);
+    const residents=parseInt(document.getElementById('residentsCountInput')?.value||'0',10);
+    const guests=parseInt(document.getElementById('guestsCountInput')?.value||'0',10);
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0',10);
+    const base=computeDynamicPrice(amen, residents, guests, hours);
     const dpPercent=0.5;
     const downpayment=(base*dpPercent);
     const priceEl=document.getElementById('price'); if(priceEl){ priceEl.textContent = '₱' + base.toFixed(2); }
@@ -1616,9 +1616,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function updateDownpaymentSuggestion(){
     const dp=document.getElementById('downpaymentInput'); if(!dp) return;
     const amen=document.getElementById('amenityField').value;
-    const persons=parseInt(document.getElementById('personsInput').value||'0');
-    const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
-    const base=getEffectiveAmenityPrice(amen, persons, hours);
+    const residents=parseInt(document.getElementById('residentsCountInput')?.value||'0',10);
+    const guests=parseInt(document.getElementById('guestsCountInput')?.value||'0',10);
+    const hours=parseInt(document.getElementById('hoursInput')?.value||'0',10);
+    const base=computeDynamicPrice(amen, residents, guests, hours);
     const dpPercent=0.5;
     const downpayment=(base*dpPercent);
     dp.value = downpayment.toFixed(2);
@@ -2152,8 +2153,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
       }
       const amenVal=document.getElementById('amenityField').value;
-      if(!amenVal || !s || !eD || !st || !et){ verifyAllowed=false; }
-      if(isHourBasedAmenity(amenVal)){ if(hours<1) verifyAllowed=false; } else { if(persons<1) verifyAllowed=false; }
+      if(!amenVal || !s || !eD){ verifyAllowed=false; }
+      if(isHourBasedAmenity(amenVal)){
+        if(!st || !et){ verifyAllowed=false; }
+        if(hours<1) verifyAllowed=false;
+      } else {
+        if(persons<1) verifyAllowed=false;
+      }
       if(!verifyAllowed){ showToast('Please complete all fields accurately before proceeding.','warning'); return; }
       if(!window.__verifyConfirmed){
         let basePriceForSummary=getEffectiveAmenityPrice(amenVal, persons, hours);
@@ -2263,11 +2269,30 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const guestsCountInput=document.getElementById('guestsCountInput');
     function updateCounts(){
       let rSel=0, gSel=0;
+      const wrap=document.getElementById('participantWrap');
+      const mode=wrap ? (wrap.getAttribute('data-mode')||'') : '';
       selectors.forEach(function(sel){
         const rGroup=sel.querySelector('.resident-group');
         const gGroup=sel.querySelector('.guest-group');
         if(rGroup && rGroup.style.display!=='none'){ rSel += sel.querySelectorAll('.resident-check:checked').length; }
-        if(gGroup && gGroup.style.display!=='none'){ gSel += sel.querySelectorAll('.guest-check:checked').length; }
+        if(gGroup && gGroup.style.display!=='none'){
+          if(mode==='resident_guest'){
+            const gInput=document.getElementById('guestsCountInput');
+            const val=Math.max(0, parseInt(gInput?.value||'0',10));
+            gSel = Math.min(val, approvedGuestsMax>=0 ? approvedGuestsMax : val);
+            sel.querySelectorAll('.guest-check').forEach(function(cb){ cb.checked=false; cb.disabled=true; });
+          } else {
+            const checks=sel.querySelectorAll('.guest-check');
+            const selected=Array.from(checks).filter(cb=>cb.checked);
+            if(approvedGuestsMax>=0 && selected.length>approvedGuestsMax){
+              selected.slice(approvedGuestsMax).forEach(function(cb){ cb.checked=false; });
+            }
+            gSel = Math.min(selected.length, approvedGuestsMax>=0 ? approvedGuestsMax : selected.length);
+            Array.from(checks).forEach(function(cb){
+              cb.disabled = (!cb.checked && approvedGuestsMax>=0 && gSel>=approvedGuestsMax);
+            });
+          }
+        }
       });
       if(residentsCountInput) residentsCountInput.value=String(rSel);
       if(guestsCountInput) guestsCountInput.value=String(gSel);
@@ -2292,6 +2317,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const rGroup=sel.querySelector('.resident-group');
       const gGroup=sel.querySelector('.guest-group');
       if(!rGroup || !gGroup) return;
+      const wrap=document.getElementById('participantWrap');
+      if(wrap){ wrap.setAttribute('data-mode', m); }
       if(m==='resident_only'){
         rGroup.style.display='block';
         gGroup.style.display='none';
@@ -2303,17 +2330,19 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         gGroup.style.display='block';
         const me=sel.querySelector('.resident-check')||null;
         if(me){ me.checked=true; }
+        sel.querySelectorAll('.guest-check').forEach(function(x){ x.checked=false; x.disabled=true; });
       } else {
         rGroup.style.display='none';
         gGroup.style.display='block';
         sel.querySelectorAll('.resident-check').forEach(function(x){ x.checked=false; });
+        sel.querySelectorAll('.guest-check').forEach(function(x){ x.disabled=false; });
       }
+      updateCounts();
     }
     selectors.forEach(function(sel){
       sel.querySelectorAll('.mode-options [data-mode]').forEach(function(btn){
         btn.addEventListener('click',function(){
           applyModeTo(sel, btn.getAttribute('data-mode')||'resident_only');
-          updateCounts();
         });
       });
       sel.addEventListener('change',function(e){
@@ -2331,6 +2360,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(currentUserType === 'resident') return;
     const wrap=document.getElementById('participantWrap');
     if(!wrap) return;
+    wrap.style.display='none';
     wrap.setAttribute('data-mode','guest_only');
     const bookingForField=document.getElementById('bookingForField');
     if(bookingForField) bookingForField.value='guest';

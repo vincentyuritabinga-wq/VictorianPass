@@ -87,17 +87,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *{font-family:'Poppins',sans-serif}
+    *,*:before,*:after{box-sizing:border-box}
     body{margin:0;background:#fafbfc;color:#111827;min-height:100vh;display:flex;align-items:center;justify-content:center}
     .wrap{max-width:520px;margin:0 auto;padding:0 16px}
     .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;box-shadow:0 4px 16px rgba(15,23,42,0.08)}
     .title{font-weight:700;font-size:1.5rem;margin:0 0 6px;color:#111827}
     .meta{color:#4b5563;font-size:.95rem;margin-bottom:8px}
     .input{width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:.95rem}
+    .input:focus{outline:none;border-color:#23412e;box-shadow:0 0 0 3px rgba(35,65,46,0.15)}
+    .input.error{border-color:#fecaca;box-shadow:0 0 0 3px rgba(254,202,202,0.35)}
     .btn{background:#23412e;color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease;font-size:.95rem}
     .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,0.4);opacity:.95}
+    .btn[disabled]{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
     .notice{padding:12px 14px;border-radius:8px;margin-bottom:10px}
     .ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
     .err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+    .field-msg{color:#991b1b;font-size:.85rem;margin-top:8px}
+    @media (max-width:480px){
+      .card{padding:18px;border-radius:12px}
+      .title{font-size:1.35rem}
+      .meta{font-size:.9rem}
+      .btn{width:100%}
+    }
   </style>
 </head>
 <body>
@@ -107,16 +118,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($msg !== '') { ?>
         <div class="notice <?php echo $ok ? 'ok' : 'err'; ?>"><?php echo htmlspecialchars($msg); ?></div>
       <?php } ?>
-      <form method="post" action="forgot_password.php">
+      <form method="post" action="forgot_password.php" id="fpForm">
         <div class="meta">Enter your account email to receive a temporary password.</div>
-        <input type="email" name="email" class="input" placeholder="you@example.com" required>
+        <input type="email" name="email" id="email" class="input" placeholder="you@example.com" required autocomplete="email" inputmode="email">
+        <div id="emailError" class="field-msg" style="display:none"></div>
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
         <div style="margin-top:12px">
-          <button type="submit" class="btn">Send Temporary Password</button>
+          <button type="submit" class="btn" id="submitBtn">Send Temporary Password</button>
         </div>
       </form>
     </div>
   </div>
+  <script>
+    (function(){
+      var form = document.getElementById('fpForm');
+      var email = document.getElementById('email');
+      var btn = document.getElementById('submitBtn');
+      var emailErr = document.getElementById('emailError');
+      function isValidEmail(v){
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      }
+      function updateEmailState(){
+        var v = (email.value || '').trim();
+        var ok = v !== '' && isValidEmail(v);
+        if (!ok){
+          email.classList.add('error');
+          emailErr.style.display = 'block';
+          emailErr.textContent = 'Enter a valid email address.';
+        } else {
+          email.classList.remove('error');
+          emailErr.style.display = 'none';
+          emailErr.textContent = '';
+        }
+        btn.disabled = !ok;
+      }
+      if (email){
+        email.addEventListener('input', updateEmailState);
+        email.addEventListener('blur', updateEmailState);
+        updateEmailState();
+      }
+      if (form && btn){
+        form.addEventListener('submit', function(){
+          btn.disabled = true;
+          btn.textContent = 'Sending...';
+        });
+      }
+    })();
+  </script>
   <?php if (!empty($ok)) { echo '<script>setTimeout(function(){window.location.href="login.php"},10000)</script>'; } ?>
 </body>
 </html>

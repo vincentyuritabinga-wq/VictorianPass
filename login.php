@@ -6,12 +6,29 @@ $loginError = '';
 $loginErrorMessage = '';
 $loginSuccessMessage = '';
 $loginRedirect = '';
+$prefillEmail = '';
+$cooldownRemaining = 0;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['vp_account']) && isset($_POST['password'])) {
         $email = trim($_POST['vp_account']);
         $password = trim($_POST['password']);
+        $prefillEmail = $email;
 
+        $cooldownActive = false;
+        if (isset($_SESSION['login_cooldown_until'])) {
+            $remain = intval($_SESSION['login_cooldown_until']) - time();
+            if ($remain > 0) {
+                $cooldownActive = true;
+                $loginError = 'cooldown';
+                $loginErrorMessage = 'Too many failed attempts. Try again in ' . max(0, $remain) . ' seconds.';
+            } else {
+                unset($_SESSION['login_cooldown_until']);
+                $_SESSION['login_failure_count'] = 0;
+            }
+        }
+
+        if (!$cooldownActive) {
         // Step 1: Check if account exists in staff (admin/guard)
         $sql_staff = "SELECT * FROM staff WHERE email = ?";
         $stmt_staff = $con->prepare($sql_staff);
@@ -52,6 +69,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             } else {
                 $loginError = 'invalid_password';
                 $loginErrorMessage = 'Incorrect password.';
+                $_SESSION['login_failure_count'] = intval($_SESSION['login_failure_count'] ?? 0) + 1;
+                if (intval($_SESSION['login_failure_count']) >= 3) {
+                    $_SESSION['login_cooldown_until'] = time() + 60;
+                    $loginError = 'cooldown';
+                    $loginErrorMessage = 'Too many failed attempts. Try again in 60 seconds.';
+                }
                 $skipUserCheck = true;
             }
         }
@@ -91,10 +114,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             $loginSuccessMessage = 'Login successful!';
                             $loginRedirect = 'mainpage.php';
                         }
+                        $_SESSION['login_failure_count'] = 0;
+                        unset($_SESSION['login_cooldown_until']);
                     }
                 } else {
                     $loginError = 'invalid_password';
                     $loginErrorMessage = 'Incorrect password.';
+                    $_SESSION['login_failure_count'] = intval($_SESSION['login_failure_count'] ?? 0) + 1;
+                    if (intval($_SESSION['login_failure_count']) >= 3) {
+                        $_SESSION['login_cooldown_until'] = time() + 60;
+                        $loginError = 'cooldown';
+                        $loginErrorMessage = 'Too many failed attempts. Try again in 60 seconds.';
+                    }
                 }
             } else {
                 $loginError = 'account_not_found';
@@ -102,12 +133,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             $stmt_user->close();
         }
+        } // end cooldown check
 
     } else {
         $loginError = 'missing_fields';
         $loginErrorMessage = 'Please enter both email and password.';
     }
 }
+$cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_SESSION['login_cooldown_until']) - time()) : 0;
 ?>
 
 <!DOCTYPE html>
@@ -478,7 +511,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         <form action="login.php" method="POST">
           <label for="vp_account">Email</label>
-          <input type="email" id="vp_account" name="vp_account" placeholder="Email*" required>
+          <input type="email" id="vp_account" name="vp_account" placeholder="Email*" required value="<?php echo htmlspecialchars($prefillEmail, ENT_QUOTES); ?>">
 
           <label for="password">Password</label>
           <div class="password-field">
@@ -492,7 +525,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <a href="forgot_password.php">Forgot Password?</a>
           </div>
 
-          <button type="submit" class="btn-login">Login</button>
+          <button type="submit" class="btn-login" id="btnLogin">Login</button>
+          <div id="cooldownInfo" style="text-align:center;margin-top:8px;font-size:0.9rem;color:#c0392b;"></div>
         </form>
 
         <p class="signup-link">
@@ -561,12 +595,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       const errMsg = "<?php echo htmlspecialchars($loginErrorMessage, ENT_QUOTES); ?>";
       if (errMsg) {
         openLoginError(errMsg);
+        const pwd = document.getElementById('password');
+        if (pwd) pwd.value = '';
       }
       const successMsg = "<?php echo htmlspecialchars($loginSuccessMessage, ENT_QUOTES); ?>";
       const redirectTo = "<?php echo htmlspecialchars($loginRedirect, ENT_QUOTES); ?>";
       if (successMsg) {
         window._loginRedirect = redirectTo || '';
         openLoginSuccess(successMsg);
+      }
+      const btn = document.getElementById('btnLogin');
+      const info = document.getElementById('cooldownInfo');
+      let remain = parseInt("<?php echo intval($cooldownRemaining); ?>", 10);
+      if (btn && info && remain > 0) {
+        btn.disabled = true;
+        const tick = function(){
+          if (remain <= 0) {
+            btn.disabled = false;
+            info.textContent = '';
+            clearInterval(timer);
+            return;
+          }
+          info.textContent = 'Please wait ' + remain + ' seconds before retrying.';
+          remain -= 1;
+        };
+        tick();
+        const timer = setInterval(tick, 1000);
       }
     });
   </script>

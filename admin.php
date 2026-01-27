@@ -52,6 +52,22 @@ function ensureDownpaymentColumn($con){
          @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL");
      }
  }
+function ensureHouseRange($con){
+  if(!($con instanceof mysqli)) return;
+  @$con->begin_transaction();
+  @$con->query("DELETE FROM houses WHERE house_number NOT REGEXP '^VH-[0-9]{4}$' OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) < 1 OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) > 2200");
+  $stmt = $con->prepare("INSERT IGNORE INTO houses (house_number, address) VALUES (?, ?)");
+  if ($stmt) {
+    $addr = 'Victorian Heights Subdivision';
+    for ($i=1; $i<=2200; $i++){
+      $hn = 'VH-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
+      $stmt->bind_param('ss', $hn, $addr);
+      $stmt->execute();
+    }
+    $stmt->close();
+  }
+  @$con->commit();
+}
 function ensureEmailStatusColumns($con){ if(!($con instanceof mysqli)) return; $tables=['reservations','guest_forms']; foreach($tables as $t){ $c1=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent'"); if(!$c1||$c1->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0"); } $c2=$con->query("SHOW COLUMNS FROM $t LIKE 'email_sent_at'"); if(!$c2||$c2->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_sent_at DATETIME NULL"); } $c3=$con->query("SHOW COLUMNS FROM $t LIKE 'email_error'"); if(!$c3||$c3->num_rows===0){ @$con->query("ALTER TABLE $t ADD COLUMN email_error TEXT NULL"); } }
 }
 function send_status_email_template($to,$code){
@@ -107,6 +123,7 @@ ensureGuestFormsWantsAmenityColumn($con);
 ensureGuestFormsAmenityColumns($con);
 ensureEmailStatusColumns($con);
 ensureDownpaymentColumn($con);
+ensureHouseRange($con);
 
 // Handle AJAX request for user details (admin resident profile)
 if (isset($_GET['action']) && $_GET['action'] == 'get_user_details' && isset($_GET['id'])) {
@@ -649,6 +666,114 @@ function getRecentNotifications($con){
     return ($eb > $ea) ? 1 : -1;
   });
   return array_slice($items,0,8);
+}
+
+function getEntryPassesCount($con){
+  $q = "SELECT COUNT(*) AS c FROM entry_passes";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getReservationsTotalCount($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getResidentAmenityReservationsTotal($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getVisitorLegacyRequestsTotal($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getGuestFormsTotal($con){
+  $q = "SELECT COUNT(*) AS c FROM guest_forms";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getIncidentReportsTotal($con){
+  $q = "SELECT COUNT(*) AS c FROM incident_reports";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getReservationsApprovalBreakdown($con){
+  $map = [];
+  $q = "SELECT COALESCE(approval_status,'pending') AS s, COUNT(*) AS c FROM reservations GROUP BY s";
+  if($r=$con->query($q)){ while($row=$r->fetch_assoc()){ $map[strtolower($row['s'])] = intval($row['c']); } }
+  return $map;
+}
+function getGuestFormsApprovalBreakdown($con){
+  $map = [];
+  $q = "SELECT COALESCE(approval_status,'pending') AS s, COUNT(*) AS c FROM guest_forms GROUP BY s";
+  if($r=$con->query($q)){ while($row=$r->fetch_assoc()){ $map[strtolower($row['s'])] = intval($row['c']); } }
+  return $map;
+}
+function getIncidentStatusBreakdown($con){
+  $map = [];
+  $q = "SELECT COALESCE(status,'new') AS s, COUNT(*) AS c FROM incident_reports GROUP BY s";
+  if($r=$con->query($q)){ while($row=$r->fetch_assoc()){ $map[strtolower($row['s'])] = intval($row['c']); } }
+  return $map;
+}
+function getPaymentStatusBreakdown($con){
+  $map = [];
+  $q = "SELECT COALESCE(payment_status,'pending') AS s, COUNT(*) AS c FROM reservations GROUP BY s";
+  if($r=$con->query($q)){ while($row=$r->fetch_assoc()){ $map[strtolower($row['s'])] = intval($row['c']); } }
+  return $map;
+}
+
+function formatGuardNameFromEmail($email){
+  $local = explode('@', $email)[0] ?? '';
+  $s = $local;
+  if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+  if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+  $s = preg_replace('/[^a-zA-Z]/', '', $s);
+  $surname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+  return $surname;
+}
+function getGuestFormsActivity($con){
+  $q = "SELECT gf.id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name, gf.created_at, gf.approval_status,
+               u.first_name AS res_first_name, u.middle_name AS res_middle_name, u.last_name AS res_last_name
+        FROM guest_forms gf
+        LEFT JOIN users u ON gf.resident_user_id = u.id
+        ORDER BY gf.created_at DESC
+        LIMIT 50";
+  $r = $con->query($q);
+  return $r ?: false;
+}
+function getReservationsActivity($con){
+  $q = "SELECT r.id, r.ref_code, r.amenity, r.approval_status, r.approval_date, r.booked_by_name, r.booked_by_role, r.booking_for, r.created_at,
+               u.first_name, u.middle_name, u.last_name,
+               ep.full_name, ep.middle_name AS ep_middle, ep.last_name AS ep_last
+        FROM reservations r
+        LEFT JOIN users u ON r.user_id = u.id
+        LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
+        WHERE r.approval_status IN ('approved','denied')
+        ORDER BY COALESCE(r.approval_date, r.created_at) DESC
+        LIMIT 50";
+  $r = $con->query($q);
+  return $r ?: false;
+}
+function getIncidentReportsActivity($con){
+  $q = "SELECT ir.id, ir.complainant, ir.nature, ir.other_concern, ir.created_at,
+               u.first_name, u.middle_name, u.last_name,
+               s.email AS guard_email
+        FROM incident_reports ir
+        LEFT JOIN users u ON ir.user_id = u.id
+        LEFT JOIN staff s ON s.id = ir.escalated_by_guard_id
+        ORDER BY ir.created_at DESC
+        LIMIT 50";
+  $r = $con->query($q);
+  return $r ?: false;
+}
+
+function getPaymentActivity($con){
+  $q = "SELECT r.ref_code, r.account_type, r.entry_pass_id, r.user_id,
+               r.receipt_uploaded_at, r.created_at, r.payment_status,
+               u.user_type
+        FROM reservations r
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE r.receipt_path IS NOT NULL
+           OR r.payment_status IN ('submitted','verified','rejected')
+        ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC
+        LIMIT 50";
+  $r = $con->query($q);
+  return $r ?: false;
 }
 
 // Functions to get data for different sections
@@ -2677,8 +2802,9 @@ body.modal-open { overflow: hidden; }
        <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
        <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
        <a href="?page=visitors" class="nav-item <?php echo $currentPage == 'visitors' ? 'active' : ''; ?>" data-page="visitors"><img src="images/dashboard.svg"><span>Visitors</span></a>
-    <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><img src="images/dashboard.svg"><span>Archived Requests</span></a>
     <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
+    <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><img src="images/dashboard.svg"><span>Archived Requests</span></a>
+    <a href="?page=summary" class="nav-item <?php echo $currentPage == 'summary' ? 'active' : ''; ?>" data-page="summary"><img src="images/dashboard.svg"><span>Summary Report</span></a>
      </nav>
     <div class="sidebar-footer">
       <a href="?logout=1" class="text-muted-link">Log Out</a>
@@ -2739,6 +2865,7 @@ body.modal-open { overflow: hidden; }
         'verify' => 'Verify Payment Receipts',
         'residents' => 'Residents',
         'cancelled' => 'Cancelled Requests',
+        'summary' => 'Summary Report',
         'dashboard' => 'Dashboard'
       ];
       $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
@@ -2894,7 +3021,7 @@ body.modal-open { overflow: hidden; }
     </div>
     <div class="dashboard-widget">
       <div class="dashboard-widget-value"><?php echo getPendingResidentRequestsCountNew($con); ?></div>
-      <div class="dashboard-widget-label">Pending Resident Requests</div>
+      <div class="dashboard-widget-label">Pending Resident Guests Requests</div>
     </div>
     <div class="dashboard-widget">
       <div class="dashboard-widget-value"><?php echo getPendingVisitorRequestsCountNew($con); ?></div>
@@ -2906,7 +3033,7 @@ body.modal-open { overflow: hidden; }
     </div>
     <div class="dashboard-widget">
       <div class="dashboard-widget-value"><?php echo getPendingResidentAccountsCount($con); ?></div>
-      <div class="dashboard-widget-label">Pending Resident Accounts</div>
+      <div class="dashboard-widget-label">Resident Accounts</div>
     </div>
     <div class="dashboard-widget">
       <div class="dashboard-widget-value"><?php echo getVisitorAccountsCount($con); ?></div>
@@ -2914,6 +3041,185 @@ body.modal-open { overflow: hidden; }
     </div>
   </div>
 </section>
+<?php endif; ?>
+
+<?php if ($currentPage == 'summary'): ?>
+<section class="panel" id="summary-panel">
+  <h3>Summary Report</h3>
+  <?php
+    $totals = [
+      'Residents' => getResidentCount($con),
+      'Visitors' => getVisitorAccountsCount($con),
+      'Entry Passes' => getEntryPassesCount($con),
+      'All Reservations' => getReservationsTotalCount($con),
+      'Resident Amenity' => getResidentAmenityReservationsTotal($con),
+      'Visitor Requests' => getVisitorLegacyRequestsTotal($con),
+      'Guest Forms' => getGuestFormsTotal($con),
+      'Incident Reports' => getIncidentReportsTotal($con),
+      'Verified Receipts' => getPaymentReceiptsCount($con),
+      'Pending Receipts' => getPendingPaymentCount($con),
+    ];
+  ?>
+  <div class="dashboard-grid">
+    <?php foreach ($totals as $label => $value): ?>
+      <div class="dashboard-widget">
+        <div class="dashboard-widget-value"><?php echo intval($value); ?></div>
+        <div class="dashboard-widget-label"><?php echo htmlspecialchars($label); ?></div>
+      </div>
+    <?php endforeach; ?>
+  </div>
+  <div class="content-row">
+    <div class="card-box" style="margin-top:20px;">
+      <h3>Guest Forms Activity</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Resident</th>
+            <th>Guest Name</th>
+            <th>Date Added</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+            $gfa = getGuestFormsActivity($con);
+            if ($gfa && $gfa->num_rows > 0) {
+              while ($row = $gfa->fetch_assoc()) {
+                $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_middle_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
+                $name = trim(($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_middle_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? ''));
+                $dateAdded = !empty($row['created_at']) ? date('M d, Y', strtotime($row['created_at'])) : '-';
+                $st = strtolower($row['approval_status'] ?? 'pending');
+                $cls = ($st === 'approved') ? 'badge-approved' : (($st === 'denied' || $st === 'cancelled') ? 'badge-rejected' : 'badge-pending');
+                echo "<tr>";
+                echo "<td><strong>" . htmlspecialchars($residentName ?: '-') . "</strong></td>";
+                echo "<td><strong>" . htmlspecialchars($name) . "</strong></td>";
+                echo "<td>" . htmlspecialchars($dateAdded) . "</td>";
+                echo "<td><span class='badge $cls'>" . htmlspecialchars(ucfirst($st)) . "</span></td>";
+                echo "</tr>";
+              }
+            } else {
+              echo "<tr><td colspan='4' style='text-align:center;'>No guest forms found</td></tr>";
+            }
+          ?>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-box" style="margin-top:20px;">
+      <h3>Reservations Activity</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Amenity</th>
+            <th>Booked By</th>
+            <th>Status</th>
+            <th>Decision Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+            $ra = getReservationsActivity($con);
+            if ($ra && $ra->num_rows > 0) {
+              while ($row = $ra->fetch_assoc()) {
+                $amen = $row['amenity'] ?? '';
+                $bookedName = $row['booked_by_name'] ?? '';
+                if (!$bookedName) {
+                  if (!empty($row['full_name'])) {
+                    $bookedName = trim(($row['full_name'] ?? '') . ' ' . ($row['ep_middle'] ?? '') . ' ' . ($row['ep_last'] ?? ''));
+                  } else {
+                    $bookedName = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                  }
+                }
+                $st = strtolower($row['approval_status'] ?? 'pending');
+                $cls = ($st === 'approved') ? 'badge-approved' : (($st === 'denied') ? 'badge-rejected' : 'badge-pending');
+                $dtRaw = $row['approval_date'] ?: $row['created_at'];
+                $decDate = !empty($dtRaw) ? date('M d, Y', strtotime($dtRaw)) : '-';
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars($amen ?: '-') . "</td>";
+                echo "<td><strong>" . htmlspecialchars($bookedName ?: '-') . "</strong></td>";
+                echo "<td><span class='badge $cls'>" . htmlspecialchars(ucfirst($st)) . "</span></td>";
+                echo "<td>" . htmlspecialchars($decDate) . "</td>";
+                echo "</tr>";
+              }
+            } else {
+              echo "<tr><td colspan='4' style='text-align:center;'>No reservations found</td></tr>";
+            }
+          ?>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-box" style="margin-top:20px;">
+      <h3>Incident Reports Activity</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Guard</th>
+            <th>Resident</th>
+            <th>Date Added</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+            $ia = getIncidentReportsActivity($con);
+            if ($ia && $ia->num_rows > 0) {
+              while ($row = $ia->fetch_assoc()) {
+                $guardEmail = $row['guard_email'] ?? '';
+                $guardName = $guardEmail ? formatGuardNameFromEmail($guardEmail) : 'Guard';
+                $residentName = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                $dateAdded = !empty($row['created_at']) ? date('M d, Y', strtotime($row['created_at'])) : '-';
+                $nature = $row['nature'] ?? '';
+                $other = $row['other_concern'] ?? '';
+                $details = $nature ?: $other ?: '';
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars($guardName) . "</td>";
+                echo "<td><strong>" . htmlspecialchars($residentName ?: '-') . "</strong></td>";
+                echo "<td>" . htmlspecialchars($dateAdded) . "</td>";
+                echo "<td>" . htmlspecialchars($details ?: '-') . "</td>";
+                echo "</tr>";
+              }
+            } else {
+              echo "<tr><td colspan='4' style='text-align:center;'>No incident reports found</td></tr>";
+            }
+          ?>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-box" style="margin-top:20px;">
+      <h3>Payment Transactions Activity</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>User Type</th>
+            <th>Date Added</th>
+            <th>Reference Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+            $pa = getPaymentActivity($con);
+            if ($pa && $pa->num_rows > 0) {
+              while ($row = $pa->fetch_assoc()) {
+                $acct = $row['account_type'] ?? '';
+                $ut = $row['user_type'] ?? '';
+                $userType = $acct ?: $ut ?: 'unknown';
+                $dtRaw = !empty($row['receipt_uploaded_at']) ? $row['receipt_uploaded_at'] : $row['created_at'];
+                $dateAdded = !empty($dtRaw) ? date('M d, Y', strtotime($dtRaw)) : '-';
+                $refCode = $row['ref_code'] ?? '';
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars(ucfirst($userType)) . "</td>";
+                echo "<td>" . htmlspecialchars($dateAdded) . "</td>";
+                echo "<td><strong>" . htmlspecialchars($refCode ?: '-') . "</strong></td>";
+                echo "</tr>";
+              }
+            } else {
+              echo "<tr><td colspan='3' style='text-align:center;'>No payment transactions found</td></tr>";
+            }
+          ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  </section>
 <?php endif; ?>
 
 
@@ -3220,7 +3526,6 @@ body.modal-open { overflow: hidden; }
       <tr>
         <th>Name</th>
         <th>House Number</th>
-        <th>Status</th>
         <th>Registered On</th>
         <th>Actions</th>
       </tr>
@@ -3233,40 +3538,21 @@ body.modal-open { overflow: hidden; }
               echo "<tr>";
               echo "<td>" . $resident['first_name'] . " " . $resident['last_name'] . "</td>";
               echo "<td>" . $resident['house_number'] . "</td>";
-              $status = strtolower($resident['status'] ?? 'active');
-              $statusLabel = ucfirst($status);
-              $statusClass = ($status === 'active') ? 'badge-approved' : (($status === 'pending') ? 'badge-pending' : 'badge-rejected');
-              echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'>View Details</button>";
-              if ($status === 'disabled') {
-                  echo "<form method='post' class='delete-form show' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='delete_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='residents'>";
-                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-                  echo "</form>";
-              } else {
-                  echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='suspend_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='residents'>";
-                  echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
-                  echo "</form>";
-                  echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='delete_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='residents'>";
-                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-                  echo "</form>";
-              }
+              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Are you sure? This resident will now be deleted\")'>";
+              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+              echo "<input type='hidden' name='user_action' value='suspend_user'>";
+              echo "<input type='hidden' name='redirect_page' value='residents'>";
+              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
+              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+              echo "</form>";
               echo "</td>";
               echo "</tr>";
           }
       } else {
-          echo "<tr><td colspan='5' style='text-align:center;'>No residents found</td></tr>";
+          echo "<tr><td colspan='4' style='text-align:center;'>No residents found</td></tr>";
       }
       ?>
     </tbody>
@@ -3301,28 +3587,12 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'>View Details</button>";
-              if ($status === 'disabled') {
-                  echo "<form method='post' class='delete-form show' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='delete_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
-                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-                  echo "</form>";
-              } else {
-                  echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Suspend this account?\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='suspend_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
-                  echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
-                  echo "</form>";
-                  echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")'>";
-                  echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-                  echo "<input type='hidden' name='user_action' value='delete_user'>";
-                  echo "<input type='hidden' name='redirect_page' value='visitors'>";
-                  echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
-                  echo "</form>";
-              }
+              echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")' style='display:inline;'>";
+              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+              echo "<input type='hidden' name='user_action' value='delete_user'>";
+              echo "<input type='hidden' name='redirect_page' value='visitors'>";
+              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+              echo "</form>";
               echo "</td>";
               echo "</tr>";
           }

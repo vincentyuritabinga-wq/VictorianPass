@@ -79,11 +79,16 @@ if ((!is_array($pending) || empty($pending)) && $ref_code !== '' && ($con instan
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
     $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
+    $user_ref_code = isset($_POST['user_ref_code']) ? trim($_POST['user_ref_code']) : '';
+    if ($user_ref_code !== '') { $ref_code = $user_ref_code; }
+    if ($user_ref_code === '' || !preg_match('/^\d{1,12}$/', $user_ref_code)) {
+      $msg = 'Reference number must be 1-12 digits.';
+    }
     $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
     $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
     if (!is_string($tokenPosted) || !hash_equals($_SESSION['csrf_token'] ?? '', $tokenPosted)) {
       $msg = 'Invalid submission.';
-    } else if ($ref_code !== '') {
+    } else if ($ref_code !== '' && empty($msg)) {
       $receiptPath = null;
       if(!isset($_FILES['receipt']) || !is_array($_FILES['receipt']) || ($_FILES['receipt']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK){
         $msg = 'Please upload your payment receipt before confirming.';
@@ -361,13 +366,22 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           <div class="upload-preview" id="uploadPreview" style="display:none"></div>
           <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
         </div>
+        <input type="text" name="user_ref_code" id="userRefCodeInput" placeholder="Please Input the Reference Number" required inputmode="numeric" pattern="\\d{1,12}" maxlength="12">
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <?php if (($continue ?? '') === 'reserve_resident') { ?>
+            <a href="profileresident.php" class="btn btn-outline">Return</a>
+          <?php } else { ?>
+            <a href="dashboardvisitor.php" class="btn btn-outline">Return</a>
+          <?php } ?>
+        </div>
       </form>
     </div>
   </div>
   <script>
     (function(){
       const input=document.getElementById('receiptInput');
+      const refInput=document.getElementById('userRefCodeInput');
       const btn=document.getElementById('confirmBtn');
       const preview=document.getElementById('uploadPreview');
       const removeBtn=document.getElementById('removeFileBtn');
@@ -395,11 +409,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       }
       function update(){
         const hasFile=!!(input && input.files && input.files.length>0);
-        btn.disabled=!hasFile;
+        const refVal=(refInput && (refInput.value||'').trim())||'';
+        const validRef=/^\\d{1,12}$/.test(refVal);
+        btn.disabled=!(hasFile && validRef);
         removeBtn.disabled=!hasFile;
         renderPreview(hasFile?input.files[0]:null);
       }
       if(input){ input.addEventListener('change', update); }
+      if(refInput){ refInput.addEventListener('input', update); }
       if(removeBtn){ removeBtn.addEventListener('click', function(){ input.value=''; update(); }); }
       update();
     })();

@@ -535,56 +535,6 @@ body.account-blocked { overflow: hidden; }
   color: #555;
 }
 
-#guestPassModal {
-  overflow: hidden;
-}
-#guestPassModal .modal-content {
-  max-width: 360px;
-  padding: 22px 20px 24px;
-  margin: 0 auto;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-#guestPassModal .close {
-  top: 10px;
-  right: 12px;
-}
-#guestPassModal h3 {
-  margin: 0 0 12px;
-  color: #111827;
-  font-size: 1.05rem;
-}
-#guestPassContent {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-#guestPassContent h4 {
-  margin: 0;
-  font-size: 1rem;
-  color: #111827;
-}
-#guestPassContent p {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.85rem;
-}
-#guestPassContent img {
-  width: 200px;
-  height: 200px;
-  border: 1px solid #e5e7eb;
-  padding: 8px;
-  border-radius: 10px;
-  background: #fff;
-  box-sizing: border-box;
-}
-#guestPassContent a {
-  color: #4f46e5;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
 .report-wait-content {
   max-width: 520px;
   padding: 28px 30px;
@@ -1517,17 +1467,6 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
-      if(type==='reservation' && isApproved && ref){
-        var previewStatusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
-        var previewQrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(previewStatusLink);
-        html+='<div style="margin-top:12px;text-align:center;">';
-        html+='<div style="font-weight:700;color:#23412e;margin-bottom:6px;">Victorian Pass</div>';
-        html+='<div style="background:#fff;padding:10px;border:1px solid #ddd;display:inline-block;border-radius:0;box-shadow:0 2px 8px rgba(0,0,0,0.05);">';
-        html+='<img src="'+previewQrSrc+'" alt="QR Code" style="width:200px;height:200px;object-fit:contain;display:block;">';
-        html+='</div>';
-        html+='<div style="margin-top:8px;font-size:0.8rem;color:#a83b3b;">Do not scan. One-time use only.</div>';
-        html+='</div>';
-      }
       
       html+='<div class="item-actions">';
       if(type==='guest_form' && isApproved){
@@ -1621,58 +1560,77 @@ body.account-blocked { overflow: hidden; }
              var template = document.getElementById('amenityPassTemplate');
              var qrContainer = document.getElementById('amenityPassQR');
              if(template && qrContainer) {
+                 // Extract the data from the URL (qrserver url format: data=...)
                  var qrData = '';
                  try {
                      var urlObj = new URL(url);
                      qrData = urlObj.searchParams.get('data');
                  } catch(e) {
+                     // If URL parsing fails, try to construct from ref if available
                      if(ref) {
                          var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
                          qrData = location.origin + basePath + '/status_view.php?code=' + encodeURIComponent(ref);
                      }
                  }
+                 
                  if(qrData) {
-                     // Always use image via base64 to guarantee html2canvas capture
-                     var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(qrData);
-                     fetch(qrImgUrl)
-                       .then(function(resp){ return resp.blob(); })
-                       .then(function(blob){
-                         var reader = new FileReader();
-                         reader.onload = function(){
-                           var img = document.createElement('img');
-                           img.src = reader.result; // dataURL -> same-origin
-                           img.style.width = '100%';
-                           img.style.height = '100%';
-                           img.style.objectFit = 'contain';
-                           img.style.display = 'block';
-                           qrContainer.innerHTML = '';
-                           qrContainer.appendChild(img);
-                           img.onload = function(){
-                             html2canvas(template.querySelector('div'), {
-                               backgroundColor: null,
-                               scale: 2,
-                               logging: false,
-                               useCORS: true
-                             }).then(function(canvas){
-                               var a = document.createElement('a');
-                               a.href = canvas.toDataURL('image/png');
-                               a.download = 'VictorianPass_' + (ref || 'amenity') + '.png';
-                               document.body.appendChild(a);
-                               a.click();
-                               document.body.removeChild(a);
-                               if(canvas && canvas.style) canvas.style.display = '';
-                               qrContainer.innerHTML = '';
-                             }).catch(function(e){
-                               console.error(e);
-                               downloadRaw();
-                             });
-                           };
-                           img.onerror = function(){ downloadRaw(); };
-                         };
-                         reader.onerror = function(){ downloadRaw(); };
-                         reader.readAsDataURL(blob);
-                       })
-                       .catch(function(){ downloadRaw(); });
+                     qrContainer.innerHTML = ''; // Clear previous
+                     new QRCode(qrContainer, {
+                         text: qrData,
+                         width: 200,
+                         height: 200,
+                         colorDark : "#000000",
+                         colorLight : "#ffffff",
+                         correctLevel : QRCode.CorrectLevel.H
+                     });
+                     
+                     // Small delay to ensure QR is rendered
+                     setTimeout(function() {
+                         // Ensure we have an image for html2canvas to capture
+                         var qrImg = qrContainer.querySelector('img');
+                         var canvas = qrContainer.querySelector('canvas');
+                         
+                         // If qrcode.js replaced canvas with img
+                         if (qrImg && qrImg.src) {
+                            qrImg.style.width = '100%';
+                            qrImg.style.height = '100%';
+                            qrImg.style.objectFit = 'contain';
+                            qrImg.style.display = 'block';
+                         } 
+                         // If still canvas (sometimes happens depending on browser/library version)
+                         else if (canvas) {
+                             // Manually convert to image to be safe for html2canvas
+                             var img = document.createElement('img');
+                             img.src = canvas.toDataURL('image/png');
+                             img.style.width = '100%';
+                             img.style.height = '100%';
+                             img.style.objectFit = 'contain';
+                             img.style.display = 'block';
+                             canvas.style.display = 'none';
+                             qrContainer.appendChild(img);
+                         }
+
+                          html2canvas(template.querySelector('div'), {
+                              backgroundColor: null,
+                              scale: 2,
+                              logging: false,
+                              useCORS: true
+                          }).then(function(canvas) {
+                              var a = document.createElement('a');
+                              a.href = canvas.toDataURL('image/png');
+                              a.download = 'VictorianPass_' + (ref || 'amenity') + '.png';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              // Cleanup
+                              if(canvas && canvas.style) canvas.style.display = '';
+                              // Clear QR for next use
+                              qrContainer.innerHTML = ''; 
+                          }).catch(function(e){
+                              console.error(e);
+                              downloadRaw();
+                          });
+                      }, 1000); // Increased timeout to 1s for better reliability
                  } else {
                      downloadRaw();
                  }
