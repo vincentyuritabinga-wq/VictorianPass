@@ -1135,7 +1135,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       img:'images/clubhouse.png',
       desc:'A flexible indoor venue for birthdays, meetings, and celebrations. Air‑conditioned function hall with tables, chairs, and sound‑ready space so you can focus on your event while we provide the venue.',
       days:'Available Monday – Sunday',
-      priceLabel:'₱200 per hour (minimum 3 hours)',
+      priceLabel:'₱200 per hour',
       capacity:200
     },
     basketball:{
@@ -1581,7 +1581,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     if(amen==='Clubhouse'){
       const rate=isResidentSelfBooking()?100:200;
-      return `₱${formatPesoAmount(rate)} per hour (minimum 3 hours)`;
+      return `₱${formatPesoAmount(rate)} per hour`;
     }
     if(amen==='Basketball Court' || amen==='Tennis Court'){
       const rate=isResidentSelfBooking()?75:150;
