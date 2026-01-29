@@ -101,7 +101,7 @@ if (empty($error)) {
 
     // 2. Check RESERVATIONS (Amenity)
     if (!$data) {
-        $stmtRes = $con->prepare("SELECT r.*, a.amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM reservations r LEFT JOIN amenities a ON r.amenity_id = a.id LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
+        $stmtRes = $con->prepare("SELECT r.*, r.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
         $stmtRes->bind_param('s', $code);
         $stmtRes->execute();
         $resRes = $stmtRes->get_result();
@@ -112,8 +112,9 @@ if (empty($error)) {
 
             $id = $row['id'];
             $table = 'reservations';
-            $statusVal = $row['status'] ?? 'pending';
-            $rDate = $row['reservation_date'] ?? null;
+            $statusVal = $row['approval_status'] ?? ($row['status'] ?? 'pending');
+            $startDate = $row['start_date'] ?? ($row['reservation_date'] ?? null);
+            $endDate = $row['end_date'] ?? null;
             $startTime = $row['start_time'] ?? null;
             $endTime = $row['end_time'] ?? null;
             $scannedAt = $row['scanned_at'] ?? null;
@@ -121,20 +122,38 @@ if (empty($error)) {
             $nowDt = new DateTime('now');
             $startAt = null;
             $endAt = null;
-            if (!empty($rDate) && !empty($startTime)) { $startAt = new DateTime($rDate . ' ' . $startTime); }
-            if (!empty($rDate) && !empty($endTime)) { $endAt = new DateTime($rDate . ' ' . $endTime); }
+            $dateForTime = $startDate ?: $endDate;
+            if (!empty($dateForTime) && !empty($startTime)) { $startAt = new DateTime($dateForTime . ' ' . $startTime); }
+            if (!empty($dateForTime) && !empty($endTime)) { $endAt = new DateTime($dateForTime . ' ' . $endTime); }
 
             $isExpired = false;
             if ($statusVal === 'approved') {
                 if ($startAt && $endAt) {
                     if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
-                } elseif (!empty($rDate) && $rDate < $today) {
+                } elseif (!empty($endDate) && $endDate < $today) {
+                    $isExpired = true;
+                } elseif (empty($endDate) && !empty($startDate) && $startDate < $today) {
                     $isExpired = true;
                 }
                 if ($isExpired) { $statusVal = 'expired'; }
             }
 
             $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
+
+            $validityLabel = '';
+            if (!empty($startDate) && !empty($endDate)) {
+                $validityLabel = (date('M d, Y', strtotime($startDate)) !== date('M d, Y', strtotime($endDate)))
+                    ? (date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate)))
+                    : date('M d, Y', strtotime($startDate));
+            } elseif (!empty($startDate)) {
+                $validityLabel = date('M d, Y', strtotime($startDate));
+            }
+            $timeRange = '';
+            if (!empty($startTime) && !empty($endTime)) {
+                $timeRange = date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime));
+            } elseif (!empty($startTime)) {
+                $timeRange = date('H:i', strtotime($startTime));
+            }
 
             $data = [
                 'id' => $id,
@@ -143,8 +162,8 @@ if (empty($error)) {
                 'type_label' => "Amenity",
                 'name' => $fullName,
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
-                'validity_label' => date('M d, Y', strtotime($rDate)),
-                'time_range' => date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime)),
+                'validity_label' => $validityLabel,
+                'time_range' => $timeRange,
                 'pax' => $row['number_of_persons'] ?? 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt
@@ -154,7 +173,7 @@ if (empty($error)) {
     
     // 3. Check RESIDENT RESERVATIONS (Amenity for Resident)
     if (!$data) {
-        $stmtRR = $con->prepare("SELECT rr.*, a.amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM resident_reservations rr LEFT JOIN amenities a ON rr.amenity_id = a.id LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
+        $stmtRR = $con->prepare("SELECT rr.*, rr.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
         $stmtRR->bind_param('s', $code);
         $stmtRR->execute();
         $resRR = $stmtRR->get_result();
@@ -165,8 +184,9 @@ if (empty($error)) {
 
             $id = $row['id'];
             $table = 'resident_reservations';
-            $statusVal = $row['status'] ?? 'pending';
-            $rDate = $row['reservation_date'] ?? null;
+            $statusVal = $row['approval_status'] ?? ($row['status'] ?? 'pending');
+            $startDate = $row['start_date'] ?? ($row['reservation_date'] ?? null);
+            $endDate = $row['end_date'] ?? null;
             $startTime = $row['start_time'] ?? null;
             $endTime = $row['end_time'] ?? null;
             $scannedAt = $row['scanned_at'] ?? null;
@@ -174,20 +194,38 @@ if (empty($error)) {
             $nowDt = new DateTime('now');
             $startAt = null;
             $endAt = null;
-            if (!empty($rDate) && !empty($startTime)) { $startAt = new DateTime($rDate . ' ' . $startTime); }
-            if (!empty($rDate) && !empty($endTime)) { $endAt = new DateTime($rDate . ' ' . $endTime); }
+            $dateForTime = $startDate ?: $endDate;
+            if (!empty($dateForTime) && !empty($startTime)) { $startAt = new DateTime($dateForTime . ' ' . $startTime); }
+            if (!empty($dateForTime) && !empty($endTime)) { $endAt = new DateTime($dateForTime . ' ' . $endTime); }
 
             $isExpired = false;
             if ($statusVal === 'approved') {
                 if ($startAt && $endAt) {
                     if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
-                } elseif (!empty($rDate) && $rDate < $today) {
+                } elseif (!empty($endDate) && $endDate < $today) {
+                    $isExpired = true;
+                } elseif (empty($endDate) && !empty($startDate) && $startDate < $today) {
                     $isExpired = true;
                 }
                 if ($isExpired) { $statusVal = 'expired'; }
             }
 
             $fullName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
+
+            $validityLabel = '';
+            if (!empty($startDate) && !empty($endDate)) {
+                $validityLabel = (date('M d, Y', strtotime($startDate)) !== date('M d, Y', strtotime($endDate)))
+                    ? (date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate)))
+                    : date('M d, Y', strtotime($startDate));
+            } elseif (!empty($startDate)) {
+                $validityLabel = date('M d, Y', strtotime($startDate));
+            }
+            $timeRange = '';
+            if (!empty($startTime) && !empty($endTime)) {
+                $timeRange = date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime));
+            } elseif (!empty($startTime)) {
+                $timeRange = date('H:i', strtotime($startTime));
+            }
 
             $data = [
                 'id' => $id,
@@ -196,8 +234,8 @@ if (empty($error)) {
                 'type_label' => "Amenity",
                 'name' => $fullName,
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
-                'validity_label' => date('M d, Y', strtotime($rDate)),
-                'time_range' => date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime)),
+                'validity_label' => $validityLabel,
+                'time_range' => $timeRange,
                 'pax' => 1, // Usually 1 for resident reservation? Or check column? Assuming 1.
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt

@@ -72,7 +72,7 @@ function ensureEmailStatusColumns($con){ if(!($con instanceof mysqli)) return; $
 }
 function send_status_email_template($to,$code){
   if(!$to||!filter_var($to,FILTER_VALIDATE_EMAIL)) return ['ok'=>false,'err'=>'invalid_email'];
-  $subject='Your VictorianPass Status Code & QR Approval';
+  $subject='Your VictorianPass QR Reference Code & QR Approval';
   $link=admin_status_link($code);
   $body='<div style="font-family:Poppins,Arial,sans-serif;color:#222;background:#f7f7f7;padding:20px">'
        .'<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,0.08);overflow:hidden">'
@@ -80,7 +80,7 @@ function send_status_email_template($to,$code){
        .'<div style="padding:20px">'
        .'<p style="margin:0 0 10px">Hello,</p>'
        .'<p style="margin:0 0 14px;line-height:1.6">Your payment has been confirmed, and your EntryPass QR code has been approved.</p>'
-       .'<p style="margin:0 0 8px">Your status code:</p>'
+       .'<p style="margin:0 0 8px">Your QR Reference Code (VP-XXXXXX):</p>'
        .'<div style="display:inline-block;background:#f3f3f3;border:1px solid #e0e0e0;padding:12px 16px;border-radius:10px;font-weight:700">'.htmlspecialchars($code).'</div>'
        .'<p style="margin:16px 0 12px;line-height:1.6">Use this code on the Check Status page to view your reservation details and access your EntryPass QR code.</p>'
        .'<p style="margin:0 0 16px"><a href="'.htmlspecialchars($link).'" style="background:#23412e;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Open Status Page</a></p>'
@@ -763,7 +763,7 @@ function getIncidentReportsActivity($con){
 }
 
 function getPaymentActivity($con){
-  $q = "SELECT r.ref_code, r.account_type, r.entry_pass_id, r.user_id,
+  $q = "SELECT r.ref_code, r.gcash_reference_number, r.account_type, r.entry_pass_id, r.user_id,
                r.receipt_uploaded_at, r.created_at, r.payment_status,
                u.user_type
         FROM reservations r
@@ -774,6 +774,120 @@ function getPaymentActivity($con){
         LIMIT 50";
   $r = $con->query($q);
   return $r ?: false;
+}
+
+function renderVerifyReceiptsCard($con){
+?>
+    <div class="card-box" style="margin-top: 20px;">
+      <h3>Verify Payment Receipts</h3>
+      <div class="notice">Use View All Details to jump to the matching request. Verify or reject the receipt below.</div>
+      <table class="table table-verify">
+        <thead>
+          <tr>
+            <th>User Type</th>
+            <th>Name</th>
+            <th>Receipt</th>
+            <th>Proof of Payment Upload Date</th>
+            <th>Price Details</th>
+            <th>Payment Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php
+            $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
+                                           r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
+                                           ep.full_name, ep.middle_name, ep.last_name,
+                                           u.first_name AS res_first_name, u.last_name AS res_last_name, u.user_type,
+                                           gf.id AS gf_id
+                                      FROM reservations r
+                                      LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
+                                      LEFT JOIN users u ON r.user_id = u.id
+                                      LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
+                                      WHERE r.receipt_path IS NOT NULL
+                                      ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC");
+            if ($resList && $resList->num_rows > 0) {
+              while ($row = $resList->fetch_assoc()) {
+                echo '<tr data-ref="' . htmlspecialchars($row['ref_code'] ?? '') . '">';
+                $userType = 'Resident';
+                if (!empty($row['user_type'])) {
+                    $userType = ucfirst($row['user_type']);
+                } elseif (!empty($row['entry_pass_id'])) {
+                    $userType = 'Visitor';
+                }
+                if (!empty($row['gf_id'])) {
+                    $userType = "Resident’s Guest";
+                }
+                echo '<td>' . $userType . '</td>';
+                $fullName = !empty($row['entry_pass_id'])
+                  ? trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))
+                  : trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
+                if ($fullName === '') { $fullName = $userType; }
+                echo '<td>' . htmlspecialchars($fullName) . '</td>';
+                
+                if (!empty($row['receipt_path'])) {
+                  $rp = $row['receipt_path'];
+                  $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
+                  if ($isPdf) {
+                    echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank">Open Receipt (PDF)</a></td>';
+                  } else {
+                    echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
+                  }
+                } else {
+                  echo '<td><span class="muted">No receipt</span></td>';
+                }
+                $uploadedAt = !empty($row['receipt_uploaded_at']) ? $row['receipt_uploaded_at'] : ($row['created_at'] ?? null);
+                $uploadedStr = $uploadedAt ? date('Y-m-d H:i', strtotime($uploadedAt)) : '-';
+                echo '<td>' . htmlspecialchars($uploadedStr) . '</td>';
+                $tp = isset($row['price']) ? floatval($row['price']) : 0.0;
+                $dpRaw = (isset($row['downpayment']) && $row['downpayment'] !== null) ? floatval($row['downpayment']) : null;
+                echo '<td>';
+                if ($tp > 0) {
+                  $tpStr = number_format($tp, 2, '.', '');
+                  $dpStr = $dpRaw !== null ? number_format($dpRaw, 2, '.', '') : '';
+                  echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')">View Price Details</button>';
+                } else {
+                  echo '<span class="muted">-</span>';
+                }
+                echo '</td>';
+                $ps = strtolower($row['payment_status'] ?? 'pending');
+                $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
+                echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
+                echo '<td class="actions">';
+                $ref = urlencode($row['ref_code']);
+                if (!empty($row['gf_id'])) {
+                  $targetPage = 'resident_guest_forms';
+                } else if (!empty($row['entry_pass_id']) || strtolower($row['user_type'] ?? '') === 'visitor') {
+                  $targetPage = 'visitor_requests';
+                } else {
+                  $targetPage = 'requests';
+                }
+                  echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
+                  if($ps!=='verified'){
+                    echo '<form method="post">';
+                    echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
+                    echo '<input type="hidden" name="action" value="verify_receipt">';
+                    echo '<button type="submit" class="btn btn-approve">Verify Payment Receipt</button>';
+                    echo '</form>';
+
+                    echo '<form method="post">';
+                    echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
+                    echo '<input type="hidden" name="action" value="reject_receipt">';
+                    echo '<button type="submit" class="btn btn-reject">Reject</button>';
+                    echo '</form>';
+                  } else {
+                  }
+                echo '</td>';
+                echo '</tr>';
+              }
+            } else {
+              echo '<tr><td colspan="7" style="text-align:center;">No receipts to verify</td></tr>';
+            }
+          ?>
+        </tbody>
+      </table>
+    </div>
+<?php
 }
 
 // Functions to get data for different sections
@@ -991,6 +1105,12 @@ function ensureReceiptUploadedAtColumn($con) {
         $con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL AFTER receipt_path");
     }
 }
+function ensureReservationGcashReferenceColumn($con) {
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'gcash_reference_number'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN gcash_reference_number VARCHAR(30) NULL AFTER receipt_path");
+    }
+}
 function ensureReservationBookerColumns($con){
     if(!($con instanceof mysqli)) return;
     $c0 = $con->query("SHOW COLUMNS FROM reservations LIKE 'booking_for'");
@@ -1064,6 +1184,7 @@ ensureReservationStatusColumn($con);
 autoExpireReservations($con);
 ensureIncidentTables($con);
 ensureReceiptUploadedAtColumn($con);
+ensureReservationGcashReferenceColumn($con);
 ensureReservationBookerColumns($con);
 // Ensure resident reservations have necessary columns
 function ensureResidentApprovalColumns($con) {
@@ -1731,19 +1852,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (!empty($amenityName)) { $msg .= ' Amenity: ' . $amenityName . '.'; }
                 notifyUser($con, $notifUserId, $title, $msg, ($payment_status === 'verified' ? 'success' : 'error'));
             }
-            $redirect = 'admin.php?page=verify';
-            if ($payment_status === 'verified' && !empty($refCode)) {
-              $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
-              $stmtGF->bind_param('s', $refCode);
-              $stmtGF->execute();
-              $resGF = $stmtGF->get_result();
-              $stmtGF->close();
-              if ($resGF && $resGF->num_rows > 0) {
-                $redirect = 'admin.php?page=resident_guest_forms&ref=' . urlencode($refCode);
-              } else {
-                $isVisitor = (!empty($entryId) || $userType === 'visitor');
-                $redirectPage = $isVisitor ? 'visitor_requests' : 'requests';
-                $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
+            $redirectPage = isset($_POST['redirect_page']) ? preg_replace('/[^a-z_]/', '', $_POST['redirect_page']) : '';
+            if (!empty($redirectPage)) {
+              $redirect = 'admin.php?page=' . $redirectPage;
+              if (!empty($refCode)) { $redirect .= '&ref=' . urlencode($refCode); }
+            } else {
+              $redirect = 'admin.php?page=verify';
+              if ($payment_status === 'verified' && !empty($refCode)) {
+                $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+                $stmtGF->bind_param('s', $refCode);
+                $stmtGF->execute();
+                $resGF = $stmtGF->get_result();
+                $stmtGF->close();
+                if ($resGF && $resGF->num_rows > 0) {
+                  $redirect = 'admin.php?page=resident_guest_forms&ref=' . urlencode($refCode);
+                } else {
+                  $isVisitor = (!empty($entryId) || $userType === 'visitor');
+                  $redirectPage = $isVisitor ? 'visitor_requests' : 'requests';
+                  $redirect = 'admin.php?page=' . $redirectPage . '&ref=' . urlencode($refCode);
+                }
               }
             }
             header("Location: $redirect");
@@ -1754,6 +1881,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 // Get current page from URL parameter or default to dashboard
 $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
+$verifyContext = isset($_GET['verify_context']) ? $_GET['verify_context'] : '';
 ?>
 
 <!DOCTYPE html>
@@ -2795,7 +2923,6 @@ body.modal-open { overflow: hidden; }
 
     <nav class="nav-list">
        <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
-       <a href="?page=verify" class="nav-item <?php echo $currentPage == 'verify' ? 'active' : ''; ?>" data-page="verify"><img src="images/dashboard.svg"><span>Verify Payment Receipts</span></a>
        <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
        <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><img src="images/dashboard.svg"><span>Resident's Guest Request</span></a>
        <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
@@ -3191,7 +3318,7 @@ body.modal-open { overflow: hidden; }
           <tr>
             <th>User Type</th>
             <th>Date Added</th>
-            <th>Reference Number</th>
+            <th>GCash Reference Number</th>
           </tr>
         </thead>
         <tbody>
@@ -3204,11 +3331,11 @@ body.modal-open { overflow: hidden; }
                 $userType = $acct ?: $ut ?: 'unknown';
                 $dtRaw = !empty($row['receipt_uploaded_at']) ? $row['receipt_uploaded_at'] : $row['created_at'];
                 $dateAdded = !empty($dtRaw) ? date('M d, Y', strtotime($dtRaw)) : '-';
-                $refCode = $row['ref_code'] ?? '';
+                $gcashRef = $row['gcash_reference_number'] ?? '';
                 echo "<tr>";
                 echo "<td>" . htmlspecialchars(ucfirst($userType)) . "</td>";
                 echo "<td>" . htmlspecialchars($dateAdded) . "</td>";
-                echo "<td><strong>" . htmlspecialchars($refCode ?: '-') . "</strong></td>";
+                echo "<td><strong>" . htmlspecialchars($gcashRef ?: '-') . "</strong></td>";
                 echo "</tr>";
               }
             } else {
@@ -3280,6 +3407,35 @@ body.modal-open { overflow: hidden; }
                     $stmtPay2->close();
                   }
                   echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\">View More Details</button>";
+                  if ($isAmenity) {
+                    $payStatusLower = strtolower($payStatus ?? '');
+                    if (!empty($receiptPath)) {
+                      $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                      if ($isPdf) {
+                        echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                      } else {
+                        echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                      }
+                    } else {
+                      echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                    }
+                    if ($resIdMatch && !empty($receiptPath) && $payStatusLower !== 'verified') {
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
+                      echo "<input type='hidden' name='action' value='verify_receipt'>";
+                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                      echo "</form>";
+                      echo "<form method='post' style='display:inline;'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
+                      echo "<input type='hidden' name='action' value='reject_receipt'>";
+                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                      echo "</form>";
+                    } elseif ($payStatusLower === 'verified') {
+                      echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
+                    }
+                  }
                   if ($approval_status == 'pending') {
                       $disabled = ($isAmenity && $payStatus !== 'verified');
                   echo "<form method='post' class='action-form action-approve'>";
@@ -3380,6 +3536,34 @@ body.modal-open { overflow: hidden; }
                   
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  $payStatusLower = strtolower($gar['payment_status'] ?? '');
+                  $receiptPath = $gar['receipt_path'] ?? null;
+                  if (!empty($receiptPath)) {
+                    $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                    if ($isPdf) {
+                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                    } else {
+                      echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                    }
+                  } else {
+                    echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                  }
+                  if (!empty($gar['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
+                    echo "<form method='post' style='display:inline;'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='verify_receipt'>";
+                    echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                    echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                    echo "</form>";
+                    echo "<form method='post' style='display:inline;'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='reject_receipt'>";
+                    echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                    echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                    echo "</form>";
+                  } elseif ($payStatusLower === 'verified') {
+                    echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
+                  }
                   
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $gar['ref_code'] ?? '');
@@ -3850,6 +4034,34 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button><br>";
+                $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                $receiptPath = $rr['receipt_path'] ?? null;
+                if (!empty($receiptPath)) {
+                  $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                  if ($isPdf) {
+                    echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                  } else {
+                    echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                  }
+                } else {
+                  echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                }
+                if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
+                  echo "<form method='post' style='display:inline;'>";
+                  echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                  echo "<input type='hidden' name='action' value='verify_receipt'>";
+                  echo "<input type='hidden' name='redirect_page' value='requests'>";
+                  echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                  echo "</form>";
+                  echo "<form method='post' style='display:inline;'>";
+                  echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                  echo "<input type='hidden' name='action' value='reject_receipt'>";
+                  echo "<input type='hidden' name='redirect_page' value='requests'>";
+                  echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                  echo "</form>";
+                } elseif ($payStatusLower === 'verified') {
+                  echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
+                }
                 if ($approval_status == 'pending') {
                     $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                     echo "<form method='post' style='display:inline;'>";
@@ -3874,6 +4086,9 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "</form>";
                 } else {
                     $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
+                    if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
+                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                    }
                     echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                 }
                 echo "</td>";
@@ -4026,6 +4241,34 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                  $receiptPath = $rr['receipt_path'] ?? null;
+                  if (!empty($receiptPath)) {
+                    $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                    if ($isPdf) {
+                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                    } else {
+                      echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                    }
+                  } else {
+                    echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                  }
+                  if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
+                    echo "<form method='post' style='display:inline;'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='verify_receipt'>";
+                    echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                    echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                    echo "</form>";
+                    echo "<form method='post' style='display:inline;'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='reject_receipt'>";
+                    echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                    echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                    echo "</form>";
+                  } elseif ($payStatusLower === 'verified') {
+                    echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
+                  }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -4050,6 +4293,9 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "</form>";
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
+                      if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                      }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   echo "</td>";

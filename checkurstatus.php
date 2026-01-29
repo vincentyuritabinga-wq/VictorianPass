@@ -182,8 +182,8 @@ session_start();
   <div class="status-box">
     <h2>Check Your Status</h2>
     <form id="statusForm" action="status_view.php" method="GET">
-      <label for="code">Status Code:</label>
-      <input type="text" id="code" name="code" placeholder="Enter your code*" required>
+      <label for="code">QR Reference Code:</label>
+      <input type="text" id="code" name="code" placeholder="Enter your QR reference code*" required>
       <button type="submit" class="btn-confirm">Confirm</button>
     </form>
 
@@ -191,7 +191,7 @@ session_start();
 
     <div class="form-note">
       <strong>Instructions:</strong><br>
-      • All visitors should use their <strong>Status Code</strong> to check status.<br>
+      • All visitors should use their <strong>QR Reference Code</strong> to check status.<br>
       • If you are a resident, go to your Profile Page to check your status.
     </div>
   </div>

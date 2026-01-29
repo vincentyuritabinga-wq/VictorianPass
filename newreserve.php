@@ -391,7 +391,7 @@ $stmtGate = $con->prepare("SELECT payment_status, amenity, start_date FROM reser
   $resGate = $stmtGate->get_result();
   if ($resGate && ($rw = $resGate->fetch_assoc())) {
     if (!empty($rw['amenity']) && !empty($rw['start_date'])) {
-      $_SESSION['flash_notice'] = 'A reservation already exists for this status code. Please wait for email notification.';
+      $_SESSION['flash_notice'] = 'A reservation already exists for this QR reference code. Please wait for email notification.';
       if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
         header('Location: profileresident.php');
       } else {

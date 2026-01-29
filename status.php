@@ -778,7 +778,7 @@ if ($res2 && $res2->num_rows > 0) {
     exit;
 }
 
-echo json_encode(['success' => false, 'message' => 'Invalid status code.']);
+echo json_encode(['success' => false, 'message' => 'Invalid QR reference code.']);
 exit;
       // Override status to rejected if payment is rejected
       if ($pay === 'rejected') { $statusVal = 'rejected'; $statusMessage = 'Rejected: Payment was rejected.'; }

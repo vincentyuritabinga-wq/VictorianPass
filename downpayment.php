@@ -18,7 +18,7 @@ if($entry_pass_id > 0){
 
 // Helpers and CSRF
 if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); }
-function ensureReservationsCommonColumns($con){ if(!($con instanceof mysqli)) return; $cols=['downpayment','receipt_path','payment_status','account_type','booking_for','receipt_uploaded_at']; foreach($cols as $col){ $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'"); if(!$c || $c->num_rows===0){ if($col==='downpayment'){ @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL"); } else if($col==='receipt_path'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL"); } else if($col==='payment_status'){ @$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL"); } else if($col==='account_type'){ @$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL"); } else if($col==='booking_for'){ @$con->query("ALTER TABLE reservations ADD COLUMN booking_for ENUM('resident','guest') NULL"); } else if($col==='receipt_uploaded_at'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL"); } } } }
+function ensureReservationsCommonColumns($con){ if(!($con instanceof mysqli)) return; $cols=['downpayment','receipt_path','payment_status','account_type','booking_for','receipt_uploaded_at','gcash_reference_number']; foreach($cols as $col){ $c=$con->query("SHOW COLUMNS FROM reservations LIKE '".$con->real_escape_string($col)."'"); if(!$c || $c->num_rows===0){ if($col==='downpayment'){ @$con->query("ALTER TABLE reservations ADD COLUMN downpayment DECIMAL(10,2) NULL"); } else if($col==='receipt_path'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_path VARCHAR(255) NULL"); } else if($col==='payment_status'){ @$con->query("ALTER TABLE reservations ADD COLUMN payment_status ENUM('pending','submitted','verified') NULL"); } else if($col==='account_type'){ @$con->query("ALTER TABLE reservations ADD COLUMN account_type ENUM('visitor','resident') NULL"); } else if($col==='booking_for'){ @$con->query("ALTER TABLE reservations ADD COLUMN booking_for ENUM('resident','guest') NULL"); } else if($col==='receipt_uploaded_at'){ @$con->query("ALTER TABLE reservations ADD COLUMN receipt_uploaded_at DATETIME NULL"); } else if($col==='gcash_reference_number'){ @$con->query("ALTER TABLE reservations ADD COLUMN gcash_reference_number VARCHAR(30) NULL"); } } } }
 ensureReservationsCommonColumns($con);
 
 function ensureReservationBookerColumns($con){
@@ -79,10 +79,9 @@ if ((!is_array($pending) || empty($pending)) && $ref_code !== '' && ($con instan
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
     $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
-    $user_ref_code = isset($_POST['user_ref_code']) ? trim($_POST['user_ref_code']) : '';
-    if ($user_ref_code !== '') { $ref_code = $user_ref_code; }
-    if ($user_ref_code === '' || !preg_match('/^\d{1,12}$/', $user_ref_code)) {
-      $msg = 'Reference number must be 1-12 digits.';
+    $gcashReferenceNumber = isset($_POST['gcashreferencenumber']) ? trim($_POST['gcashreferencenumber']) : '';
+    if ($gcashReferenceNumber === '' || !preg_match('/^\d{1,30}$/', $gcashReferenceNumber)) {
+      $msg = 'GCash reference number is required.';
     }
     $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
     $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
@@ -93,11 +92,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       if(!isset($_FILES['receipt']) || !is_array($_FILES['receipt']) || ($_FILES['receipt']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK){
         $msg = 'Please upload your payment receipt before confirming.';
       } else {
-        $allowedExt=['png','jpg','jpeg','gif','webp','bmp','pdf'];
+        $allowedExt=['png','jpg','jpeg','pdf'];
         $origName=$_FILES['receipt']['name']??'';
         $ext=strtolower(pathinfo($origName,PATHINFO_EXTENSION));
         if(!in_array($ext,$allowedExt,true)){
-          $msg='Unsupported receipt file type.';
+          $msg='Unsupported receipt file type. Please upload a JPG, PNG, or PDF.';
         } else if(($_FILES['receipt']['size']??0) > 10*1024*1024){
           $msg='Receipt file is too large (max 10MB).';
         } else {
@@ -179,14 +178,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         $acct = ($continue_post === 'reserve_resident') ? 'resident' : 'visitor';
         $hadLegacy = false;
         if($con instanceof mysqli){ $chk=$con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1"); $chk->bind_param('s',$ref_code); $chk->execute(); $cr=$chk->get_result(); $hadLegacy = ($cr && $cr->num_rows>0); $chk->close(); }
-        $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), booking_for = COALESCE(?, booking_for), booked_by_role = COALESCE(?, booked_by_role), booked_by_name = COALESCE(?, booked_by_name), account_type = COALESCE(account_type, ?), payment_status='submitted', approval_status='pending', receipt_uploaded_at = COALESCE(receipt_uploaded_at, NOW()) WHERE ref_code = ?");
-        $stmt->bind_param('sssssiddsiisssss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct, $ref_code);
+        $stmt = $con->prepare("UPDATE reservations SET amenity = COALESCE(?, amenity), start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time), persons = COALESCE(?, persons), price = COALESCE(?, price), downpayment = COALESCE(?, downpayment), receipt_path = COALESCE(?, receipt_path), gcash_reference_number = COALESCE(?, gcash_reference_number), user_id = COALESCE(?, user_id), entry_pass_id = COALESCE(?, entry_pass_id), booking_for = COALESCE(?, booking_for), booked_by_role = COALESCE(?, booked_by_role), booked_by_name = COALESCE(?, booked_by_name), account_type = COALESCE(account_type, ?), payment_status='submitted', approval_status='pending', receipt_uploaded_at = COALESCE(receipt_uploaded_at, NOW()) WHERE ref_code = ?");
+        $stmt->bind_param('sssssiddssiisssss', $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $gcashReferenceNumber, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct, $ref_code);
         $stmt->execute();
         $affected = $stmt->affected_rows;
         $stmt->close();
         if ($affected === 0) {
-          $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, user_id, entry_pass_id, booking_for, booked_by_role, booked_by_name, account_type, payment_status, approval_status, receipt_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending', NOW())");
-          $ins->bind_param('ssssssiddsiissss', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct);
+          $ins = $con->prepare("INSERT INTO reservations (ref_code, amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, receipt_path, gcash_reference_number, user_id, entry_pass_id, booking_for, booked_by_role, booked_by_name, account_type, payment_status, approval_status, receipt_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', 'pending', NOW())");
+          $ins->bind_param('ssssssiddssiissss', $ref_code, $amenity, $start, $end, $startTime, $endTime, $persons, $price, $downpayment, $receiptPath, $gcashReferenceNumber, $uid, $entry_pass_id_post, $booking_for, $booked_by_role, $booked_by_name, $acct);
           $ins->execute();
           $ins->close();
         }
@@ -354,6 +353,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
         <div class="row"><span class="label">Onsite Payment (Remaining)</span><span class="amount">₱<?php echo number_format($remaining, 2); ?></span></div>
+        <div class="row"><span class="label">QR Reference Code (for matching only)</span><span class="amount"><?php echo htmlspecialchars($ref_code ?: 'N/A'); ?></span></div>
       </div>
       <form method="POST" enctype="multipart/form-data" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
@@ -361,12 +361,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         <input type="hidden" name="continue" value="<?php echo htmlspecialchars($continue); ?>">
         <input type="hidden" name="entry_pass_id" value="<?php echo intval($entry_pass_id); ?>">
         <div class="upload-area">
-          <label for="receiptInput" class="label">Upload Payment Receipt (image or PDF)</label>
-          <input type="file" name="receipt" id="receiptInput" accept="image/*,.pdf" required>
+          <label for="receiptInput" class="label">Upload GCash Receipt (JPG, PNG, PDF)</label>
+          <input type="file" name="receipt" id="receiptInput" accept="image/jpeg,image/png,.pdf" required>
           <div class="upload-preview" id="uploadPreview" style="display:none"></div>
           <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
         </div>
-        <input type="text" name="user_ref_code" id="userRefCodeInput" placeholder="Please Input the Reference Number" required inputmode="numeric" pattern="\d{12}" minlength="12" maxlength="12">
+        <label for="gcashReferenceNumber" class="label">GCash Reference Number (from receipt)</label>
+        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d+" maxlength="30">
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
         <div style="display:flex;justify-content:flex-end;gap:8px;">
           <?php if (($continue ?? '') === 'reserve_resident') { ?>
@@ -381,7 +382,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
   <script>
     (function(){
       const input=document.getElementById('receiptInput');
-      const refInput=document.getElementById('userRefCodeInput');
+      const refInput=document.getElementById('gcashReferenceNumber');
       const btn=document.getElementById('confirmBtn');
       const preview=document.getElementById('uploadPreview');
       const removeBtn=document.getElementById('removeFileBtn');
@@ -410,7 +411,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       function update(){
         const hasFile=!!(input && input.files && input.files.length>0);
         const refVal=(refInput && (refInput.value||'').trim())||'';
-        const validRef=/^\d{12}$/.test(refVal);
+        const validRef=/^\d{1,30}$/.test(refVal);
         btn.disabled=!(hasFile && validRef);
         removeBtn.disabled=!hasFile;
         renderPreview(hasFile?input.files[0]:null);
