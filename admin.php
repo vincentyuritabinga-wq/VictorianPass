@@ -3635,13 +3635,6 @@ body.modal-open { overflow: hidden; }
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                      echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
@@ -3725,13 +3718,6 @@ body.modal-open { overflow: hidden; }
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                      echo "<input type='hidden' name='redirect_page' value='reservations'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                      echo "</form>";
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
@@ -4020,15 +4006,121 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <div id="denyReasonModal" class="modal modal-top">
   <div class="modal-content" style="max-width:520px;">
     <span class="close" id="denyReasonClose">&times;</span>
-    <h3>Provide a reason</h3>
-    <div style="margin:10px 0 14px;color:#5a6b7c;font-size:0.9rem;">This reason will appear in the user’s notifications and requests.</div>
+    <h3 id="denyReasonTitle">Confirm Rejection</h3>
+    <div id="denyReasonMessage" style="margin:10px 0 10px;color:#5a6b7c;font-size:0.9rem;">Are you sure you want to reject this item?</div>
+    <div id="denyReasonLabel" style="font-weight:600;margin-top:4px;">Reason</div>
     <textarea id="denyReasonInput" rows="4" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-family:Poppins,Arial,sans-serif;"></textarea>
+    <div id="denyReasonError" style="display:none;color:#b91c1c;font-size:0.85rem;margin-top:6px;">Please enter a reason to continue.</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
       <button type="button" class="btn btn-view" id="denyReasonCancel">Cancel</button>
       <button type="button" class="btn btn-reject" id="denyReasonSubmit">Submit</button>
     </div>
   </div>
 </div>
+<script>
+(function(){
+  var modal = document.getElementById('denyReasonModal');
+  var input = document.getElementById('denyReasonInput');
+  var btnCancel = document.getElementById('denyReasonCancel');
+  var btnClose = document.getElementById('denyReasonClose');
+  var btnSubmit = document.getElementById('denyReasonSubmit');
+  var titleEl = document.getElementById('denyReasonTitle');
+  var msgEl = document.getElementById('denyReasonMessage');
+  var labelEl = document.getElementById('denyReasonLabel');
+  var errorEl = document.getElementById('denyReasonError');
+  var pendingForm = null;
+  var requireReason = false;
+
+  function resolveRejectMessage(form){
+    var actionInput = form.querySelector('input[name="action"]');
+    var incidentInput = form.querySelector('input[name="incident_action"]');
+    var actionVal = actionInput ? String(actionInput.value || '') : '';
+    var incidentVal = incidentInput ? String(incidentInput.value || '') : '';
+    if (incidentVal === 'reject') return 'Are you sure you want to reject this incident report?';
+    if (actionVal === 'reject_receipt') return 'Are you sure you want to reject this payment receipt?';
+    if (actionVal === 'deny_request') return 'Are you sure you want to deny this request?';
+    if (actionVal === 'deny_resident_reservation') return 'Are you sure you want to deny this reservation?';
+    if (actionVal === 'reject_reservation') return 'Are you sure you want to reject this reservation?';
+    if (actionVal === 'deny_user') return 'Are you sure you want to deny this account?';
+    return 'Are you sure you want to reject this item?';
+  }
+
+  function openModal(form, mustHaveReason){
+    pendingForm = form;
+    requireReason = !!mustHaveReason;
+    if (titleEl) titleEl.textContent = 'Confirm Rejection';
+    if (msgEl) msgEl.textContent = resolveRejectMessage(form);
+    if (labelEl) labelEl.textContent = requireReason ? 'Reason' : 'Reason (optional)';
+    if (input) {
+      var existing = form.querySelector('input[name="denial_reason"]');
+      input.value = existing ? String(existing.value || '') : '';
+      input.placeholder = requireReason ? 'Enter reason' : 'Optional reason';
+      input.style.borderColor = '#e2e8f0';
+    }
+    if (errorEl) errorEl.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+    }
+  }
+
+  function closeModal(){
+    if (modal) modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    pendingForm = null;
+    requireReason = false;
+  }
+
+  function submitModal(){
+    if (!pendingForm) { closeModal(); return; }
+    var reasonVal = input ? String(input.value || '').trim() : '';
+    if (requireReason && reasonVal === '') {
+      if (input) input.style.borderColor = '#b91c1c';
+      if (errorEl) errorEl.style.display = 'block';
+      if (input) input.focus();
+      return;
+    }
+    var reasonInput = pendingForm.querySelector('input[name="denial_reason"]');
+    if (reasonInput) reasonInput.value = reasonVal;
+    pendingForm.dataset.rejectConfirmed = '1';
+    pendingForm.submit();
+    closeModal();
+  }
+
+  function bindRejectForm(form){
+    if (!form || form.dataset.rejectBound === '1') return;
+    var actionInput = form.querySelector('input[name="action"]');
+    var incidentInput = form.querySelector('input[name="incident_action"]');
+    var actionVal = actionInput ? String(actionInput.value || '') : '';
+    var incidentVal = incidentInput ? String(incidentInput.value || '') : '';
+    var isRejectAction = (actionVal && /reject|deny/i.test(actionVal)) || (incidentVal && /reject/i.test(incidentVal));
+    if (!isRejectAction) return;
+    var reasonInput = form.querySelector('input[name="denial_reason"]');
+    if (reasonInput) {
+      reasonInput.required = false;
+      reasonInput.type = 'hidden';
+    }
+    form.dataset.rejectBound = '1';
+    form.addEventListener('submit', function(e){
+      if (form.dataset.rejectConfirmed === '1') {
+        form.dataset.rejectConfirmed = '0';
+        return;
+      }
+      e.preventDefault();
+      openModal(form, !!reasonInput);
+    });
+  }
+
+  if (btnCancel) btnCancel.addEventListener('click', closeModal);
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  if (btnSubmit) btnSubmit.addEventListener('click', submitModal);
+  window.addEventListener('click', function(e){
+    if (e.target === modal) closeModal();
+  });
+
+  document.querySelectorAll('form').forEach(bindRejectForm);
+})();
+</script>
 
 <!-- SECURITY GUARDS -->
 <?php if ($currentPage == 'security'): ?>
@@ -4149,13 +4241,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                     echo "</form>";
 
-                    echo "<form method='post' style='display:inline;'>";
-                    echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                    echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                    echo "<input type='hidden' name='redirect_page' value='requests'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                    echo "</form>";
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                     echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
@@ -4358,13 +4443,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                       echo "</form>";
 
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
-                      echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
-                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
-                      echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
