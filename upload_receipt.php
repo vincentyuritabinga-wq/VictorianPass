@@ -52,15 +52,32 @@ if (!move_uploaded_file($file['tmp_name'], $filePath)) {
     exit;
 }
 
+$currentStatus = '';
+if ($con instanceof mysqli) {
+    $stmtCheck = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+    if ($stmtCheck) {
+        $stmtCheck->bind_param('s', $ref_code);
+        if ($stmtCheck->execute()) {
+            $res = $stmtCheck->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $currentStatus = strtolower(trim($row['payment_status'] ?? ''));
+            }
+        }
+        $stmtCheck->close();
+    }
+}
+$newStatus = ($currentStatus === 'rejected') ? 'pending_update' : 'pending';
+
 // Update database with receipt path and reset payment verification
-$stmt = $con->prepare("UPDATE reservations SET receipt_path = ?, payment_status = 'pending', verified_by = NULL, verification_date = NULL, receipt_uploaded_at = NOW() WHERE ref_code = ?");
-$stmt->bind_param('ss', $filePath, $ref_code);
+$stmt = $con->prepare("UPDATE reservations SET receipt_path = ?, payment_status = ?, verified_by = NULL, verification_date = NULL, receipt_uploaded_at = NOW() WHERE ref_code = ?");
+$stmt->bind_param('sss', $filePath, $newStatus, $ref_code);
 
 if ($stmt->execute()) {
     echo json_encode([
         'success' => true, 
         'message' => 'Receipt uploaded successfully',
-        'file_path' => $filePath
+        'file_path' => $filePath,
+        'payment_status' => $newStatus
     ]);
 } else {
     // Delete uploaded file if database update fails

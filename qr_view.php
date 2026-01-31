@@ -142,17 +142,17 @@ if (empty($error)) {
 
             $validityLabel = '';
             if (!empty($startDate) && !empty($endDate)) {
-                $validityLabel = (date('M d, Y', strtotime($startDate)) !== date('M d, Y', strtotime($endDate)))
-                    ? (date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate)))
-                    : date('M d, Y', strtotime($startDate));
+                $validityLabel = (date('m.d.y', strtotime($startDate)) !== date('m.d.y', strtotime($endDate)))
+                    ? (date('m.d.y', strtotime($startDate)) . ' - ' . date('m.d.y', strtotime($endDate)))
+                    : date('m.d.y', strtotime($startDate));
             } elseif (!empty($startDate)) {
-                $validityLabel = date('M d, Y', strtotime($startDate));
+                $validityLabel = date('m.d.y', strtotime($startDate));
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
-                $timeRange = date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime));
+                $timeRange = date('h:i A', strtotime($startTime)) . ' - ' . date('h:i A', strtotime($endTime));
             } elseif (!empty($startTime)) {
-                $timeRange = date('H:i', strtotime($startTime));
+                $timeRange = date('h:i A', strtotime($startTime));
             }
 
             $data = [
@@ -214,17 +214,17 @@ if (empty($error)) {
 
             $validityLabel = '';
             if (!empty($startDate) && !empty($endDate)) {
-                $validityLabel = (date('M d, Y', strtotime($startDate)) !== date('M d, Y', strtotime($endDate)))
-                    ? (date('M d, Y', strtotime($startDate)) . ' - ' . date('M d, Y', strtotime($endDate)))
-                    : date('M d, Y', strtotime($startDate));
+                $validityLabel = (date('m.d.y', strtotime($startDate)) !== date('m.d.y', strtotime($endDate)))
+                    ? (date('m.d.y', strtotime($startDate)) . ' - ' . date('m.d.y', strtotime($endDate)))
+                    : date('m.d.y', strtotime($startDate));
             } elseif (!empty($startDate)) {
-                $validityLabel = date('M d, Y', strtotime($startDate));
+                $validityLabel = date('m.d.y', strtotime($startDate));
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
-                $timeRange = date('H:i', strtotime($startTime)) . ' - ' . date('H:i', strtotime($endTime));
+                $timeRange = date('h:i A', strtotime($startTime)) . ' - ' . date('h:i A', strtotime($endTime));
             } elseif (!empty($startTime)) {
-                $timeRange = date('H:i', strtotime($startTime));
+                $timeRange = date('h:i A', strtotime($startTime));
             }
 
             $data = [

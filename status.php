@@ -34,6 +34,7 @@ function ensureEnumHasValues($con, $table, $column, $enumValues, $defaultValue){
 function ensureStatusEnums($con){
     ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
     ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'payment_status', ['pending','submitted','verified','rejected','pending_update'], 'pending');
     ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
     ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
 }
@@ -391,6 +392,7 @@ if ($resGF && $resGF->num_rows > 0) {
     switch ($statusVal) {
         case 'approved': $statusMessage = 'Approved: Your guest entry is confirmed.'; break;
         case 'pending': $statusMessage = 'Pending: Awaiting admin review.'; break;
+        case 'pending_update': $statusMessage = 'Pending Update: Your payment proof was resubmitted.'; break;
         case 'expired': $statusMessage = 'Expired: This pass has reached its validity end.'; break;
         case 'denied': $statusMessage = 'Denied: Your request was not approved.'; break;
         case 'cancelled': $statusMessage = 'Cancelled: This request was cancelled by the user.'; break;
@@ -448,6 +450,11 @@ if ($resGF && $resGF->num_rows > 0) {
         }
         $stmtE->close();
       }
+    }
+    if ($pay === 'rejected') {
+        $statusVal = 'rejected';
+    } elseif ($pay === 'pending_update') {
+        $statusVal = 'pending_update';
     }
     $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
     // Build base response
@@ -557,6 +564,7 @@ if ($result && $result->num_rows > 0) {
     // Reflect rejected payment as rejected overall status
     $pay = strtolower($row['payment_status'] ?? '');
     if ($pay === 'rejected') { $statusVal = 'rejected'; }
+    elseif ($pay === 'pending_update') { $statusVal = 'pending_update'; }
 
     // Map status to message
     $statusMessage = '';
@@ -566,6 +574,9 @@ if ($result && $result->num_rows > 0) {
             break;
         case 'pending':
             $statusMessage = 'Pending: Awaiting admin review.';
+            break;
+        case 'pending_update':
+            $statusMessage = 'Pending Update: Your payment proof was resubmitted.';
             break;
         case 'expired':
             $statusMessage = 'Expired: This pass has reached its validity end.';

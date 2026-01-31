@@ -231,6 +231,11 @@
 
   
   <script>
+    function formatMDY(d){
+      if(!d) return '';
+      var p=String(d).split('-'); if(p.length!==3) return d;
+      return [p[1].padStart(2,'0'), p[2].padStart(2,'0'), String(p[0]).slice(-2)].join('.');
+    }
     function fmtTime(t){
       if(!t) return '';
       const parts = String(t).split(':');
@@ -267,18 +272,21 @@
               }
               try { if (sessionStorage.getItem('cancelled:'+code)==='1') { data.status = 'cancelled'; } } catch(_){}
               const status = (data.status || '').toLowerCase();
+              const statusClass = (status === 'pending_update') ? 'pending' : status;
+              const statusLabel = String(data.status || '').replace(/[_-]+/g,' ').toLowerCase().replace(/\b\w/g,function(m){ return m.toUpperCase(); });
               let bannerText = '';
               switch (status) {
                 case 'approved': bannerText = '✅ Valid Entry Pass'; break;
                 case 'expired': bannerText = '❌ Expired Entry Pass'; break;
                 case 'pending': bannerText = '⏳ Pending Review'; break;
+                case 'pending_update': bannerText = '⏳ Pending Update'; break;
                 case 'denied': bannerText = '❌ Denied Entry Pass'; break;
                 case 'rejected': bannerText = 'Rejected'; break;
                 case 'cancelled': bannerText = '❌ Cancelled Reservation'; break;
                 default: bannerText = `⚠️ ${data.message || 'Unknown status'}`;
               }
               statusDiv.textContent = bannerText;
-              statusDiv.className = `status-message ${status}`;
+              statusDiv.className = `status-message ${statusClass}`;
 
               // Update Document Title and Dashboard Header
               document.title = `${bannerText.replace(/^[✅❌⏳⚠️]\s*/, '')} - VictorianPass`;
@@ -316,10 +324,10 @@
                   }
                 }catch(_){ }
                 const dateDisplay = (data.start_date && data.end_date)
-                  ? `${data.start_date} → ${data.end_date}`
+                  ? `${formatMDY(data.start_date)} → ${formatMDY(data.end_date)}`
                   : (data.start_date && data.expires_at)
-                    ? `${data.start_date} → ${data.expires_at}`
-                    : (data.start_date || '-')
+                    ? `${formatMDY(data.start_date)} → ${formatMDY(data.expires_at)}`
+                    : (data.start_date ? formatMDY(data.start_date) : '-')
                 const timeDisplay = (data.start_time || data.end_time) ? (`<div class="date-time">${fmtTime(data.start_time)}${data.end_time?(' → '+fmtTime(data.end_time)):''}</div>`) : '';
                 const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(data.persons);
                 const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
@@ -333,7 +341,7 @@
                     <td>${dateDisplay}${timeDisplay}</td>
                     <td>${personsDisplay}</td>
                     <td>${priceDisplay}</td>
-                    <td><span class="status-badge status-${(data.status||'').toLowerCase()}">${data.status}</span></td>
+                    <td><span class="status-badge status-${statusClass}">${statusLabel}</span></td>
                     <td><button class="qr-btn" onclick="openDetails()">View More Details</button></td>
                     <td>
                       ${((data.status||'').toLowerCase() === 'approved')
@@ -384,7 +392,7 @@
       const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
       document.getElementById("qrImage").src = useStoredQR ? qrPath : dynamicQR;
       
-      const accessWindow = `${data.start_date || '-'}${data.expires_at ? ' → ' + data.expires_at : ''}`;
+      const accessWindow = `${formatMDY(data.start_date || '') || '-'}${data.expires_at ? ' → ' + formatMDY(data.expires_at) : ''}`;
       const statusLower = (status || '').toLowerCase();
       const banner = statusLower === 'approved' ? '✅ Valid Entry Pass'
                     : statusLower === 'expired' ? '❌ Expired Entry Pass'

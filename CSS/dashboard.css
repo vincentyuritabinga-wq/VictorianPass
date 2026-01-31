@@ -223,7 +223,7 @@ body {
     background: none;
     border: none;
     font-size: 1.2rem;
-    color: #eee;
+    color: #f5f5f5;
     cursor: pointer;
     position: relative;
 }
@@ -715,11 +715,12 @@ body {
     top: 100%;
     right: 0;
     margin-top: 8px;
-    width: 280px;
-    max-height: 320px;
-    background: #111827;
+    width: 300px;
+    max-height: 340px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.12);
     overflow-y: auto;
     padding: 0;
     z-index: 50;
@@ -732,21 +733,21 @@ body {
     padding: 10px 14px;
     position: sticky;
     top: 0;
-    background: #111827;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: #ffffff;
+    border-bottom: 1px solid #eee;
     z-index: 1;
 }
 
 .notif-panel-title {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #f9fafb;
+    color: #333;
 }
 
 .notif-panel-close {
     border: none;
     background: transparent;
-    color: #9ca3af;
+    color: #888;
     font-size: 1rem;
     cursor: pointer;
     line-height: 1;
@@ -754,7 +755,7 @@ body {
 }
 
 .notif-panel-close:hover {
-    color: #f9fafb;
+    color: #333;
 }
 
 .notif-panel-body {
@@ -768,7 +769,9 @@ body {
     right: 18px;
     width: 12px;
     height: 12px;
-    background: #111827;
+    background: #ffffff;
+    border-left: 1px solid #e5e7eb;
+    border-top: 1px solid #e5e7eb;
     transform: rotate(45deg);
 }
 
@@ -781,7 +784,7 @@ body {
 }
 
 .notif-item:hover {
-    background-color: #1f2937;
+    background-color: #f9fafb;
 }
 
 .notif-item-main {
@@ -792,25 +795,71 @@ body {
 .notif-item-title {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #f9fafb;
+    color: #333;
     margin-bottom: 2px;
 }
 
 .notif-item-sub {
     font-size: 0.8rem;
-    color: #d1d5db;
+    color: #555;
 }
 
 .notif-item-time {
     font-size: 0.75rem;
-    color: #9ca3af;
+    color: #777;
     margin-top: 2px;
 }
 
 .notif-empty {
     padding: 10px 14px;
     font-size: 0.8rem;
-    color: #9ca3af;
+    color: #777;
+}
+
+/* New notifications popup anchored to notification icon */
+.notif-popup {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    width: 300px;
+    max-height: 240px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+    overflow-y: auto;
+    z-index: 60;
+    padding: 6px 0;
+}
+.notif-popup::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    right: 18px;
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    border-left: 1px solid #e5e7eb;
+    border-top: 1px solid #e5e7eb;
+    transform: rotate(45deg);
+}
+.notif-popup-item {
+    padding: 8px 14px;
+    border-bottom: 1px solid #f3f4f6;
+}
+.notif-popup-item:last-child {
+    border-bottom: 0;
+}
+.notif-popup-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #333;
+}
+.notif-popup-sub {
+    font-size: 0.8rem;
+    color: #555;
+    margin-top: 2px;
 }
 
 /* Profile Modal */

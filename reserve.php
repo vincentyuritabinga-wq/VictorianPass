@@ -8,6 +8,10 @@ $canSubmit = true;
 if (empty($_SESSION['csrf_token'])) {
   $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
+$resetReservation = isset($_GET['reset_reservation']) && $_GET['reset_reservation'] === '1';
+if ($resetReservation) {
+  unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code']);
+}
 
 // Unified reservation page for residents and visitors
 
@@ -98,12 +102,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $booking_for_post = isset($_POST['booking_for']) ? trim($_POST['booking_for']) : '';
     $guest_id_post = isset($_POST['guest_id']) ? trim($_POST['guest_id']) : '';
     $guest_ref_code_post = isset($_POST['guest_ref_code']) ? trim($_POST['guest_ref_code']) : '';
+    $residentsCount = max(0, intval($_POST['residents_count'] ?? 0));
+    $guestsCount = max(0, intval($_POST['guests_count'] ?? 0));
+    if ($residentsCount + $guestsCount <= 0) { $guestsCount = max(1, $persons); }
     if (in_array($amenity, ['Basketball Court','Tennis Court'], true)) {
-      $basePrice = max(1, $hours) * 150;
+      $perHourTotal = ($residentsCount * (150 * 0.5)) + ($guestsCount * 150);
+      $basePrice = max(1, $hours) * $perHourTotal;
     } else if ($amenity === 'Clubhouse') {
-      $basePrice = max(1, $hours) * 200;
+      $perHourTotal = ($residentsCount * (200 * 0.5)) + ($guestsCount * 200);
+      $basePrice = max(1, $hours) * $perHourTotal;
     } else if ($amenity === 'Pool') {
-      $basePrice = max(1, $persons) * 175;
+      $basePrice = ($residentsCount * (175 * 0.5)) + ($guestsCount * 175);
     } else {
       $basePrice = 0;
     }
@@ -137,10 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
     if ($booking_for === '') { $booking_for = null; }
-    $price = $basePrice;
-    if ($acct === 'resident' && $booking_for === 'resident') {
-      $price = round($basePrice * 0.5, 2);
-    }
+    $price = round($basePrice, 2);
+    $downpayment = round($price * 0.5, 2);
     $allowedAmenities = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
     if (!in_array($amenity, $allowedAmenities, true)) { $errorMsg = 'Please select an amenity.'; }
     $sdObj = $start ? DateTime::createFromFormat('Y-m-d', $start) : false;
@@ -155,8 +162,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Start date must be before end date.';
     } else if ($start === $end && $stObj && $etObj && $stObj >= $etObj) {
       $errorMsg = 'Start time must be before end time.';
-    } else if (($sdObj && $edObj) && (($sdObj < new DateTime('today')) || ($edObj < new DateTime('today')))) {
-      $errorMsg = 'Selected dates must be today or later.';
+    } else if (($sdObj && $edObj)) {
+      $minDate = new DateTime('today');
+      $minDate->modify('+1 day');
+      if ($sdObj < $minDate || $edObj < $minDate) {
+        $errorMsg = 'Reservations must be made at least 1 day in advance.';
+      }
     } else {
       $maxPersons = 0;
       if ($amenity === 'Pool') { $maxPersons = 20; }
@@ -768,6 +779,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div id="dateError" class="time-error" style="display:none;"></div>
                     <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div id="timeError" class="time-error" style="display:none;"></div>
+                    <div class="note">Reservations must be made at least 1 day in advance. Same-day bookings are not allowed.</div>
                     <div class="res-item persons">
                       <div class="res-label"><small>Total Participants</small></div>
                       <div class="counter">
@@ -892,8 +904,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     <h2>Confirm Details</h2>
     <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
-      <button type="button" class="btn-secondary" id="verifyConfirmBtn">Proceed</button>
+      <button type="button" class="btn-secondary" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="close-btn" id="verifyConfirmBtn">Confirm</button>
     </div>
   </div>
   </div>
@@ -926,6 +938,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   let today=new Date(),currentMonth=today.getMonth(),currentYear=today.getFullYear();
   const monthAndYear=document.getElementById("monthAndYear"),calendarBody=document.getElementById("calendar-body");
   const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const minDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth()+1).padStart(2,'0')}-${String(minDate.getDate()).padStart(2,'0')}`;
   const currentUserType="<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
   let selectedStart=null,selectedEnd=null;
   let bookedDates=new Set();
@@ -963,7 +977,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           cell.textContent=date;
           let ds=`${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
           cell.setAttribute('data-date', ds);
-          if(ds < todayStr) { cell.classList.add('disabled'); }
+          if(ds < minDateStr) { cell.classList.add('disabled'); }
           cell.addEventListener('click',()=>handleDateClick(cell,ds));
           if(date===today.getDate()&&year===today.getFullYear()&&month===today.getMonth()) cell.classList.add('today');
           row.appendChild(cell);date++;
@@ -997,7 +1011,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       for(const cell of cells){
         const ds=cell.getAttribute('data-date');
         if(!ds) continue;
-        if(ds < todayStr){ cell.classList.add('disabled'); cell.title='Past date — cannot be booked.'; continue; }
+        if(ds < minDateStr){
+          cell.classList.add('disabled');
+          cell.title = ds < todayStr ? 'Past date — cannot be booked.' : 'Reservations must be made at least 1 day in advance.';
+          continue;
+        }
         
         cell.classList.remove('disabled','partly','available');
         
@@ -1016,7 +1034,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
 
   function handleDateClick(cell,dateString){
-    if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
+    if(cell.classList.contains('disabled')){
+      if(cell.classList.contains('fully-booked')){
+        showStartDateError('Fully Booked — no time slots available for this date.');
+      } else if(dateString && dateString < todayStr){
+        showStartDateError('Past date — cannot be booked.');
+      } else if(dateString && dateString < minDateStr){
+        showStartDateError('Reservations must be made at least 1 day in advance.');
+      } else {
+        showStartDateError('Unavailable date — cannot be booked.');
+      }
+      return;
+    }
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
     const single = document.getElementById('singleDayToggle')?.checked;
@@ -1931,6 +1960,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const s=document.getElementById('startDateInput').value;
     const e=document.getElementById('endDateInput').value;
     if(!s||!e){ showStartDateError(''); showDateError(''); return false; }
+    if(s < minDateStr || e < minDateStr){ showStartDateError('Reservations must be made at least 1 day in advance.'); showDateError(''); return false; }
     if(e < s){ showDateError('End date cannot be earlier than start date.'); showStartDateError(''); return false; }
     if(s > e){ showStartDateError('Start date cannot be later than end date.'); showDateError(''); return false; }
     const sD=new Date(s), eD=new Date(e); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return false; }
@@ -1975,7 +2005,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(!s){ if(force||isDirty('startDateInput')) showStartDateError('Start date is required.'); } else { showStartDateError(''); }
     if(!eD){ if(force||isDirty('endDateInput')) showDateError('End date is required.'); }
     else {
-      const sDVal=s; const eDVal=eD; if(sDVal){ const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); } else { showDateError(''); } } else { showDateError(''); }
+      const sDVal=s; const eDVal=eD;
+      if(sDVal){
+        if(sDVal < minDateStr || eDVal < minDateStr){
+          showStartDateError('Reservations must be made at least 1 day in advance.');
+          showDateError('');
+        } else {
+          const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); } else { showDateError(''); }
+        }
+      } else { showDateError(''); }
     }
     if(!st){ if(force||isDirty('startTimeInput')) setFieldWarning('startTimeInput','Start time is required.'); } else { setFieldWarning('startTimeInput',''); }
     // End time is auto-computed from start time + hours; no manual warning
@@ -2130,6 +2168,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const persons=parseInt(document.getElementById('personsInput').value||'0');
       const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
       showIncompleteWarnings(true);
+      if(s && eD && (s < minDateStr || eD < minDateStr)){
+        showStartDateError('Reservations must be made at least 1 day in advance.');
+        showDateError('');
+        return;
+      }
       if(s && eD){ const sDate=new Date(s); const eDate=new Date(eD); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return; } }
       if(s && eD && s===eD && st && et){
         const [sh,sm]=(st||'').split(':');
@@ -2554,6 +2597,20 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function closeModal(){document.getElementById('refModal').style.display='none'}
   function closeHint(){document.getElementById('hintModal').style.display='none'}
 </script>
+<?php if ($resetReservation) { ?>
+<script>
+  (function(){
+    try{ sessionStorage.removeItem('reserve_form'); }catch(_){}
+    if(typeof clearBookingFormState === 'function'){
+      document.addEventListener('DOMContentLoaded', function(){
+        clearBookingFormState();
+        if(typeof updateBookingSummary === 'function'){ updateBookingSummary(); }
+        if(typeof updateActionStates === 'function'){ updateActionStates(); }
+      });
+    }
+  })();
+</script>
+<?php } ?>
 
 <script>
   function formatTimeSlot(h){ const ampm = h>=12 ? 'PM' : 'AM'; let hh=h%12; if(hh===0) hh=12; return `${hh}:00 ${ampm}`; }

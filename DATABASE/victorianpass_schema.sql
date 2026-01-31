@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   approval_date TIMESTAMP NULL,
   receipt_path VARCHAR(255) NULL,
   qr_path VARCHAR(255) NULL,
-  payment_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
+  payment_status ENUM('pending', 'submitted', 'verified', 'rejected', 'pending_update') DEFAULT 'pending',
   verified_by INT NULL,
   verification_date DATETIME NULL,
   receipt_uploaded_at DATETIME NULL,

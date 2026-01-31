@@ -13,7 +13,7 @@ $user_data = [];
 
 // Fetch visitor data
 if ($con) {
-    $stmt = $con->prepare("SELECT first_name, last_name, email, phone, sex, birthdate FROM users WHERE id = ?");
+    $stmt = $con->prepare("SELECT first_name, last_name, email, phone, sex, birthdate, status, suspension_reason FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -26,6 +26,10 @@ $firstName = $user_data['first_name'] ?? 'Visitor';
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 $birthdate = $user_data['birthdate'] ?? '';
 $birthdateDisplay = $birthdate ? date('M d, Y', strtotime($birthdate)) : '';
+$userStatus = $user_data['status'] ?? 'pending';
+$normalizedUserStatus = strtolower(trim($userStatus));
+$isAccountBlocked = in_array($normalizedUserStatus, ['denied', 'disabled'], true);
+$suspensionReason = trim((string)($user_data['suspension_reason'] ?? ''));
 $flashNotice = $_SESSION['flash_notice'] ?? '';
 if ($flashNotice !== '') {
     unset($_SESSION['flash_notice'], $_SESSION['flash_ref_code']);
@@ -175,7 +179,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $activities = [];
 
 // Reservations
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+if ($con instanceof mysqli) {
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'denial_reason'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
+    }
+}
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -188,9 +198,9 @@ if ($stmt) {
         
         $dateStr = '';
         if (!empty($start) && !empty($end)) {
-            $dateStr = date('M d, Y', strtotime($start)) . ' - ' . date('M d, Y', strtotime($end));
+            $dateStr = date('m.d.y', strtotime($start)) . ' - ' . date('m.d.y', strtotime($end));
         } elseif (!empty($start)) {
-            $dateStr = date('M d, Y', strtotime($start));
+            $dateStr = date('m.d.y', strtotime($start));
         } else {
             $dateStr = 'Date not set';
         }
@@ -203,6 +213,9 @@ if ($stmt) {
         if ($statusVal === '' || $statusVal === null) {
             $statusVal = $row['status'] ?? 'pending';
         }
+        $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
+        if ($paymentStatusLower === 'rejected') { $statusVal = 'rejected'; }
+        elseif ($paymentStatusLower === 'pending_update') { $statusVal = 'pending_update'; }
         
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal, 'cancel') !== false) {
@@ -225,6 +238,13 @@ if ($stmt) {
              else $eventTs = strtotime($row['created_at']);
         }
 
+        $reason = trim((string)($row['denial_reason'] ?? ''));
+        $statusLower = strtolower((string)($statusVal ?? ''));
+        $isDenied = (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'rejected') !== false);
+        if (strtolower((string)($row['payment_status'] ?? '')) === 'rejected') { $isDenied = true; }
+        if ($isDenied && $reason !== '') {
+            $dateStr = trim($dateStr . ' Reason: ' . $reason);
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
@@ -246,7 +266,6 @@ usort($activities, function($a, $b) {
 // Split into Active and History
 $activeActivities = [];
 $historyActivities = [];
-$now = time();
 
 foreach ($activities as $act) {
     $s = strtolower($act['status']);
@@ -254,19 +273,8 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    // 1. Explicit history statuses
-    if (strpos($s, 'cancel') !== false || 
-        strpos($s, 'denied') !== false || 
-        strpos($s, 'reject') !== false || 
-        strpos($s, 'expired') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false) {
         $isHistory = true;
-    } 
-    // 2. Approved/Resolved but passed date
-    else if ((strpos($s, 'approv') !== false || strpos($s, 'resolved') !== false)) {
-        // If event timestamp is in the past
-        if ($act['event_timestamp'] < $now) {
-            $isHistory = true;
-        }
     }
 
     if ($isHistory) {
@@ -343,9 +351,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   #submitNoticeModal { display: flex; align-items: center; justify-content: center; }
   #submitNoticeModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; height: auto; min-height: unset; }
   #submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #eef2f0; color: #23412e; display: flex; align-items: center; justify-content: center; }
+  body.account-blocked { overflow: hidden; }
+  .account-blocked-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; z-index: 3000; }
+  .account-blocked-content { background: #fff; border-radius: 14px; padding: 28px 30px; width: 92%; max-width: 420px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+  .account-blocked-content h3 { margin: 0 0 10px; color: #a83b3b; font-size: 1.2rem; }
+  .account-blocked-content p { margin: 0 0 20px; color: #333; font-size: 0.95rem; line-height: 1.5; }
+  .account-blocked-content .btn-logout-only { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #c0392b; color: #fff; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; }
+  .account-blocked-content .btn-logout-only:hover { filter: brightness(0.95); }
 </style>
 </head>
-<body>
+<body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
 <?php if ($flashNotice !== '') { ?>
   <div id="submitNoticeModal" class="modal" style="display:flex;">
     <div class="modal-content" style="max-width:420px;text-align:center;padding:24px;">
@@ -402,6 +417,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       <div class="header-actions">
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
+        <div id="notifPopup" class="notif-popup" style="display:none;"></div>
         <a href="#" class="user-profile" id="profileTrigger">
           <span class="user-name">Hi, <?php echo htmlspecialchars($firstName); ?></span>
           <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
@@ -432,7 +448,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
-                  $displayStatus = ucfirst($act['status']);
+                  $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -477,7 +493,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
-                  $displayStatus = ucfirst($act['status']);
+                  $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -488,7 +504,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                        <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
                        <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
                      </div>
-                     <div class="item-time"><?php echo date('M d, Y', strtotime($act['date'])); ?></div>
+                     <div class="item-time"><?php echo date('m.d.y', strtotime($act['date'])); ?></div>
                    </div>
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
@@ -529,6 +545,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button type="button" class="cancel-modal-confirm">Confirm Cancel</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="account-blocked-modal" id="accountBlockedModal" data-show="<?php echo $isAccountBlocked ? '1' : '0'; ?>">
+  <div class="account-blocked-content">
+    <h3>Account Suspended</h3>
+    <p>Your account is suspended. Please log out.</p>
+    <?php if ($suspensionReason !== '') { ?>
+      <p>Reason: <?php echo htmlspecialchars($suspensionReason); ?></p>
+    <?php } ?>
+    <button type="button" class="btn-logout-only" id="accountBlockedLogoutBtn" data-logout-href="logout.php">Log Out</button>
   </div>
 </div>
 
@@ -707,16 +734,61 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     return 'status-pending';
   }
   function fmtLabel(s){
-    s=String(s||'').toLowerCase();
-    return s.charAt(0).toUpperCase()+s.slice(1);
+    s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+    return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
 
   // Notification Logic
   var notifCountEl=document.getElementById('notifCount');
   var notifBtn=document.getElementById('notifBtn');
   var notifPanel=document.getElementById('notifPanel');
+  var notifPopup=document.getElementById('notifPopup');
   var notifItems=[];
+  var notifKnownIds={};
+  var notifBootstrapped=false;
+  var notifPopupTimer=null;
   
+  function formatNotifDateTime(value){
+    if(!value) return '';
+    var d=new Date(value);
+    if(isNaN(d.getTime())) return String(value);
+    var mm=String(d.getMonth()+1).padStart(2,'0');
+    var dd=String(d.getDate()).padStart(2,'0');
+    var yy=String(d.getFullYear()).slice(-2);
+    var h=d.getHours();
+    var mi=String(d.getMinutes()).padStart(2,'0');
+    var ampm=h>=12?'PM':'AM';
+    h=h%12; if(h===0) h=12;
+    return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
+  }
+  function notifTimeValue(it){
+    var v=it.created_at||it.time||'';
+    var d=new Date(v);
+    if(isNaN(d.getTime())) return 0;
+    return d.getTime();
+  }
+  function renderNotifPopup(items){
+    if(!notifPopup) return;
+    if(!items || !items.length){
+      notifPopup.style.display='none';
+      notifPopup.innerHTML='';
+      return;
+    }
+    var html='';
+    for(var i=0;i<items.length;i++){
+      var it=items[i]||{};
+      var title=String(it.title||'').replace(/[<>]/g,'');
+      var message=String(it.message||'').replace(/[<>]/g,'');
+      var time=formatNotifDateTime(it.created_at||it.time||'');
+      html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
+    }
+    notifPopup.innerHTML=html;
+    notifPopup.style.display='block';
+    if(notifPopupTimer) clearTimeout(notifPopupTimer);
+    notifPopupTimer=setTimeout(function(){
+      if(notifPopup){ notifPopup.style.display='none'; }
+    },5000);
+  }
   function addNotificationEntry(code,status,li){
     if(!code) return;
     var key=code+'|'+String(status||'');
@@ -725,7 +797,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var titleEl=li.querySelector('.item-title');
     var title=titleEl?titleEl.textContent.trim():(type==='reservation'?'Reservation Schedule':'Request Update');
     var timeText='';
-    try{ timeText=new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'}); }catch(e){ timeText=''; }
+    var now=new Date();
+    try{ timeText=formatNotifDateTime(now); }catch(e){ timeText=''; }
     notifItems.push({
       key:key,
       code:code,
@@ -733,6 +806,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       title:title,
       type:type,
       time:timeText,
+      created_at: now.toISOString(),
       message:'Code: '+code+' • '+fmtLabel(status)
     });
   }
@@ -744,13 +818,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       notifPanel.innerHTML=header+'<div class="notif-panel-body"><div class="notif-empty">No recent updates</div></div>';
     } else {
       var html='';
-      for(var i=notifItems.length-1;i>=0;i--){
-        var it=notifItems[i]||{};
+      var sorted=notifItems.slice().sort(function(a,b){ return notifTimeValue(b)-notifTimeValue(a); });
+      for(var i=0;i<sorted.length;i++){
+        var it=sorted[i]||{};
         var code=String(it.code||'').replace(/[<>]/g,'');
         var title=String(it.title||'').replace(/[<>]/g,'');
         var status=String(it.status||'').replace(/[<>]/g,'');
         var message=String(it.message||'').replace(/[<>]/g,'');
-        var time=String(it.created_at||it.time||'').replace(/[<>]/g,'');
+        var time=formatNotifDateTime(it.created_at||it.time||'');
         var subText=message || ('Code: '+code+' • '+status);
         html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+subText+'</div>';
         if(time) html+='<div class="notif-item-time">'+time+'</div>';
@@ -780,8 +855,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         if(!data||!data.active||!data.history) return;
         
         function fmtLabel(s){
-          s=String(s||'').toLowerCase();
-          return s.charAt(0).toUpperCase()+s.slice(1);
+          s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+          return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
         }
         
         function updateList(items,listId,panelId){
@@ -861,6 +936,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 if(isApproved || isDenied){
                   li.classList.add('status-updated');
                   addNotificationEntry(code,newStatus,li);
+                  renderNotifPopup(notifItems.slice(-1));
                   if(notifCountEl){
                     var c=parseInt(notifCountEl.textContent||'0')+1;
                     notifCountEl.textContent=c;
@@ -937,8 +1013,38 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         if(data.history) moveHistoryItems(data.history);
         
         if(Array.isArray(data.notifications)){
-          notifItems = data.notifications;
+          var incoming = data.notifications.map(function(n){
+            return {
+              id: n.id,
+              title: n.title||'',
+              message: n.message||'',
+              type: n.type||'info',
+              is_read: n.is_read||0,
+              created_at: n.created_at||'',
+              time: n.time||''
+            };
+          });
+          var newOnes=[];
+          if(notifBootstrapped){
+            var known = notifKnownIds;
+            incoming.forEach(function(n){
+              var idStr=String(n.id||'');
+              if(idStr && !known[idStr]){
+                newOnes.push(n);
+              }
+            });
+          }
+          notifKnownIds={};
+          incoming.forEach(function(n){
+            var idStr=String(n.id||'');
+            if(idStr) notifKnownIds[idStr]=true;
+          });
+          notifBootstrapped=true;
+          notifItems = incoming;
           renderNotifPanel();
+          if(newOnes.length){
+            renderNotifPopup(newOnes.slice(0,3));
+          }
         }
         if(notifCountEl){
           var uc = parseInt(data.unread_count||'0',10);
@@ -949,7 +1055,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   
   refreshStatuses();
-  setInterval(refreshStatuses,10000);
+  setInterval(refreshStatuses,3000);
   
   // Modal Logic
   var cancelModal=document.getElementById('cancelModal');
@@ -1221,6 +1327,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   if(notifBtn && notifPanel){
     notifBtn.addEventListener('click',function(e){
       e.stopPropagation();
+      if(notifPopup){ notifPopup.style.display='none'; }
       notifPanel.style.display=(notifPanel.style.display==='block'?'none':'block');
       if(notifPanel.style.display==='block') renderNotifPanel();
       document.querySelectorAll('.item-list .list-item.status-updated').forEach(function(li){
@@ -1237,9 +1344,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   document.addEventListener('click',function(e){
     if(!notifPanel || !notifBtn) return;
-    if(notifPanel.style.display!=='block') return;
-    if(notifPanel.contains(e.target) || notifBtn.contains(e.target)) return;
+    if(notifPanel.style.display!=='block' && (!notifPopup || notifPopup.style.display!=='block')) return;
+    if((notifPanel && notifPanel.contains(e.target)) || (notifPopup && notifPopup.contains(e.target)) || notifBtn.contains(e.target)) return;
     notifPanel.style.display='none';
+    if(notifPopup){ notifPopup.style.display='none'; }
   });
   
   // Close modals when clicking outside
@@ -1278,6 +1386,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
     if(type==='reservation' && paymentStatus==='rejected'){
         statusNote='Payment proof was rejected. Please update your proof of payment.';
+    } else if (type==='reservation' && paymentStatus==='pending_update'){
+        statusNote='Payment proof resubmitted. Awaiting verification.';
     }
 
     var titleEl=li.querySelector('.item-title');
@@ -1394,7 +1504,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               alert(data && data.message ? data.message : 'Upload failed.');
               return;
             }
-            li.setAttribute('data-payment-status','pending');
+            li.setAttribute('data-payment-status','pending_update');
+            li.setAttribute('data-status','pending_update');
+            var badge=li.querySelector('.status-badge');
+            if(badge){
+              badge.textContent=fmtLabel('pending_update');
+              badge.className='status-badge '+statusClassFor('pending_update');
+            }
             extra.setAttribute('data-loaded','0');
             extra.innerHTML='';
             if(li.classList.contains('expanded')){
@@ -1414,6 +1530,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var accountModal = document.getElementById('accountBlockedModal');
+    if (accountModal && accountModal.getAttribute('data-show') === '1') {
+        accountModal.style.display = 'flex';
+        document.body.classList.add('account-blocked');
+    }
     var profileModal = document.getElementById("profileModal");
     var profileTrigger = document.getElementById("profileTrigger");
     var profileClose = document.getElementsByClassName("close-profile-modal")[0];

@@ -121,6 +121,7 @@ function isAmenityPaymentVerified($con, $refCode){
 ensureGuestFormsTable($con);
 ensureGuestFormsWantsAmenityColumn($con);
 ensureGuestFormsAmenityColumns($con);
+ensureDenialReasonColumns($con);
 ensureEmailStatusColumns($con);
 ensureDownpaymentColumn($con);
 ensureHouseRange($con);
@@ -313,7 +314,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $newreqs = getNewRequestsCount($con);
     $requests = [];
     $receipts = [];
-    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
+    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
@@ -588,7 +589,7 @@ function getPaymentReceiptsCount($con) {
 }
 
 function getPendingPaymentCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status = 'pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
   $r = $con->query($q);
   if($r){ $row = $r->fetch_assoc(); if($row){ return intval($row['c']); } }
   return 0;
@@ -638,7 +639,7 @@ function getUnreadSystemNotificationsCount($con){
 }
 function getRecentNotifications($con){
   $items = [];
-  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status='pending') AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
+  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
   if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
@@ -769,7 +770,7 @@ function getPaymentActivity($con){
         FROM reservations r
         LEFT JOIN users u ON r.user_id = u.id
         WHERE r.receipt_path IS NOT NULL
-           OR r.payment_status IN ('submitted','verified','rejected')
+           OR r.payment_status IN ('submitted','verified','rejected','pending_update')
         ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC
         LIMIT 50";
   $r = $con->query($q);
@@ -852,7 +853,8 @@ function renderVerifyReceiptsCard($con){
                 echo '</td>';
                 $ps = strtolower($row['payment_status'] ?? 'pending');
                 $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
-                echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
+                $psLabel = ucwords(str_replace('_',' ', $ps));
+                echo '<td><span class="badge ' . $psClass . '">' . $psLabel . '</span></td>';
                 echo '<td class="actions">';
                 $ref = urlencode($row['ref_code']);
                 if (!empty($row['gf_id'])) {
@@ -873,6 +875,7 @@ function renderVerifyReceiptsCard($con){
                     echo '<form method="post">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
+                    echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
                     echo '<button type="submit" class="btn btn-reject">Reject</button>';
                     echo '</form>';
                   } else {
@@ -1273,6 +1276,7 @@ function ensureGuestFormsTable($con) {
       approval_status ENUM('pending','approved','denied') DEFAULT 'pending',
       approved_by INT NULL,
       approval_date DATETIME NULL,
+      denial_reason TEXT NULL,
       qr_path VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NULL,
@@ -1298,6 +1302,16 @@ function ensureGuestFormsAmenityColumns($con) {
             if ($c === 'start_date') $con->query("ALTER TABLE guest_forms ADD COLUMN start_date DATE NULL AFTER amenity");
             if ($c === 'end_date') $con->query("ALTER TABLE guest_forms ADD COLUMN end_date DATE NULL AFTER start_date");
             if ($c === 'price') $con->query("ALTER TABLE guest_forms ADD COLUMN price DECIMAL(10,2) NULL AFTER persons");
+        }
+    }
+}
+function ensureDenialReasonColumns($con) {
+    if (!($con instanceof mysqli)) { return; }
+    $tables = ['guest_forms','reservations','resident_reservations'];
+    foreach ($tables as $t) {
+        $check = @$con->query("SHOW COLUMNS FROM $t LIKE 'denial_reason'");
+        if ($check && $check->num_rows === 0) {
+            @$con->query("ALTER TABLE $t ADD COLUMN denial_reason TEXT NULL");
         }
     }
 }
@@ -1433,12 +1447,19 @@ function generateQrForResidentReservation($con, $rrId) {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['action'])) {
         $action = $_POST['action'];
+        $denialReason = trim($_POST['denial_reason'] ?? '');
+        if ($denialReason !== '') {
+            $denialReason = substr($denialReason, 0, 1000);
+        } else {
+            $denialReason = null;
+        }
         
         // Handle visitor request approval/denial (guest_forms first)
         if ($action == 'approve_request' || $action == 'deny_request') {
             $reservation_id = intval($_POST['reservation_id']);
             $approval_status = ($action == 'approve_request') ? 'approved' : 'denied';
             $staff_id = $_SESSION['staff_id'] ?? null;
+            $reasonToSave = ($approval_status === 'denied') ? $denialReason : null;
             $conflict = false; $amenity = ''; $start = ''; $end = ''; $st = ''; $et = '';
 
             // Try updating guest_forms
@@ -1492,8 +1513,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $conflict = ($cnt > 0);
                     // Do NOT override approval_status. Just warn admin via redirect if conflict.
                 }
-                $stmtUp = $con->prepare("UPDATE guest_forms SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?");
-                $stmtUp->bind_param('sii', $approval_status, $staff_id, $reservation_id);
+                $stmtUp = $con->prepare("UPDATE guest_forms SET approval_status = ?, approved_by = ?, approval_date = NOW(), denial_reason = ? WHERE id = ?");
+                $stmtUp->bind_param('sisi', $approval_status, $staff_id, $reasonToSave, $reservation_id);
                 $stmtUp->execute();
                 $stmtUp->close();
                 if ($approval_status === 'approved') {
@@ -1515,6 +1536,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($notifUserId) {
                     $title = ($approval_status === 'approved') ? 'Request Approved' : 'Request Denied';
                     $msg = ($approval_status === 'approved') ? 'Your request has been approved.' : 'Your request has been denied.';
+                    if ($approval_status !== 'approved' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                     if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
                     if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
                     notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
@@ -1572,9 +1594,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   header("Location: admin.php?page=visitor_requests&msg=payment_required");
                   exit;
                 }
-                $query = "UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ?";
+                $query = "UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW(), denial_reason = ? WHERE id = ?";
                 $stmt = $con->prepare($query);
-                $stmt->bind_param("sii", $approval_status, $staff_id, $reservation_id);
+                $stmt->bind_param("sisi", $approval_status, $staff_id, $reasonToSave, $reservation_id);
                 $stmt->execute();
                 $stmt->close();
                 if ($approval_status === 'approved') {
@@ -1596,6 +1618,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($notifUserId) {
                     $title = ($approval_status === 'approved') ? 'Reservation Approved' : 'Reservation Denied';
                     $msg = ($approval_status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been denied.';
+                    if ($approval_status !== 'approved' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                     if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
                     if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
                     notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
@@ -1611,11 +1634,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($action == 'approve_reservation' || $action == 'reject_reservation') {
             $reservation_id = $_POST['reservation_id'];
             $status = ($action == 'approve_reservation') ? 'approved' : 'rejected';
+            $reasonToSave = ($status === 'rejected') ? $denialReason : null;
             
             // Update reservation status (column ensured above)
-            $query = "UPDATE reservations SET status = ? WHERE id = ?";
+            $query = "UPDATE reservations SET status = ?, denial_reason = ? WHERE id = ?";
             $stmt = $con->prepare($query);
-            $stmt->bind_param("si", $status, $reservation_id);
+            $stmt->bind_param("ssi", $status, $reasonToSave, $reservation_id);
             $stmt->execute();
 
             // Generate QR code upon approval
@@ -1638,6 +1662,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($notifUserId) {
                 $title = ($status === 'approved') ? 'Reservation Approved' : 'Reservation Rejected';
                 $msg = ($status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been rejected.';
+                if ($status !== 'approved' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                 if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
                 if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
                 notifyUser($con, $notifUserId, $title, $msg, ($status === 'approved' ? 'success' : 'error'));
@@ -1721,14 +1746,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($action == 'approve_user' || $action == 'deny_user') {
             $user_id = intval($_POST['user_id'] ?? 0);
             $new_status = ($action == 'approve_user') ? 'active' : 'denied';
+            $reasonToSave = ($action == 'deny_user') ? $denialReason : null;
             
             if ($user_id > 0) {
-                $stmt = $con->prepare("UPDATE users SET status = ? WHERE id = ?");
-                $stmt->bind_param('si', $new_status, $user_id);
+                $stmt = $con->prepare("UPDATE users SET status = ?, suspension_reason = ? WHERE id = ?");
+                $stmt->bind_param('ssi', $new_status, $reasonToSave, $user_id);
                 $stmt->execute();
                 $stmt->close();
                 if ($action == 'deny_user') {
                     $msg = 'Your account has been denied and suspended. Please log out.';
+                    if ($denialReason) { $msg .= ' Reason: ' . $denialReason; }
                     notifyUser($con, $user_id, 'Account Denied', $msg, 'error');
                 } else {
                     $msg = 'Your account has been approved. You can now log in.';
@@ -1746,6 +1773,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $rr_id = intval($_POST['rr_id'] ?? 0);
             $approval_status = ($action == 'approve_resident_reservation') ? 'approved' : 'denied';
             $staff_id = $_SESSION['staff_id'] ?? null;
+            $reasonToSave = ($approval_status === 'denied') ? $denialReason : null;
 
             if ($rr_id > 0) {
                 // Ensure reservations has approval metadata
@@ -1754,8 +1782,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $c2 = $con->query("SHOW COLUMNS FROM reservations LIKE 'approval_date'");
                 if($c2 && $c2->num_rows===0){ @$con->query("ALTER TABLE reservations ADD COLUMN approval_date DATETIME NULL"); }
 
-                $stmt = $con->prepare("UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW() WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0)");
-                $stmt->bind_param('sii', $approval_status, $staff_id, $rr_id);
+                $stmt = $con->prepare("UPDATE reservations SET approval_status = ?, approved_by = ?, approval_date = NOW(), denial_reason = ? WHERE id = ? AND (entry_pass_id IS NULL OR entry_pass_id = 0)");
+                $stmt->bind_param('sisi', $approval_status, $staff_id, $reasonToSave, $rr_id);
                 $stmt->execute();
                 $stmt->close();
 
@@ -1778,6 +1806,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($notifUserId) {
                     $title = ($approval_status === 'approved') ? 'Reservation Approved' : 'Reservation Denied';
                     $msg = ($approval_status === 'approved') ? 'Your reservation has been approved.' : 'Your reservation has been denied.';
+                    if ($approval_status !== 'approved' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                     if (!empty($notifRef)) { $msg .= ' Code: ' . $notifRef . '.'; }
                     if (!empty($notifAmenity)) { $msg .= ' Amenity: ' . $notifAmenity . '.'; }
                     notifyUser($con, $notifUserId, $title, $msg, ($approval_status === 'approved' ? 'success' : 'error'));
@@ -1829,11 +1858,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $reservation_id = $_POST['reservation_id'];
             $payment_status = ($action == 'verify_receipt') ? 'verified' : 'rejected';
             $staff_id = $_SESSION['staff_id'] ?? null;
+            $reasonToSave = ($payment_status === 'rejected') ? $denialReason : null;
             
             // Update payment status
-            $query = "UPDATE reservations SET payment_status = ?, verified_by = ?, verification_date = NOW() WHERE id = ?";
+            $query = "UPDATE reservations SET payment_status = ?, verified_by = ?, verification_date = NOW(), denial_reason = ? WHERE id = ?";
             $stmt = $con->prepare($query);
-            $stmt->bind_param("sii", $payment_status, $staff_id, $reservation_id);
+            $stmt->bind_param("sisi", $payment_status, $staff_id, $reasonToSave, $reservation_id);
             $stmt->execute();
             
             $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null;
@@ -1848,6 +1878,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($notifUserId) {
                 $title = ($payment_status === 'verified') ? 'Payment Verified' : 'Payment Rejected';
                 $msg = ($payment_status === 'verified') ? 'Your payment has been verified.' : 'Your payment proof was rejected. Please update your proof of payment.';
+                if ($payment_status !== 'verified' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                 if (!empty($refCode)) { $msg .= ' Code: ' . $refCode . '.'; }
                 if (!empty($amenityName)) { $msg .= ' Amenity: ' . $amenityName . '.'; }
                 notifyUser($con, $notifUserId, $title, $msg, ($payment_status === 'verified' ? 'success' : 'error'));
@@ -2268,9 +2299,24 @@ tr:hover { background-color: #f8fafc; }
     height: 32px;
     line-height: 1.2;
 }
+.actions .denial-reason {
+    width: 180px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: #fff;
+    height: 32px;
+    line-height: 1.2;
+}
 .actions .delete-form { display: none; }
 .actions .delete-form.show { display: inline-flex; }
 .actions .suspend-reason:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(35,65,46,0.12);
+}
+.actions .denial-reason:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(35,65,46,0.12);
@@ -2941,7 +2987,7 @@ body.modal-open { overflow: hidden; }
   <!-- MAIN CONTENT -->
   <main class="main">
     <header class="top-header">
-      <div class="header-brand">
+      <div class="header-brand"></div>
       <?php 
         $notifPayments = getPendingPaymentCount($con); 
         $notifAwaiting = getAmenityAwaitingPaymentCount($con); 
@@ -2952,32 +2998,31 @@ body.modal-open { overflow: hidden; }
         $notifTotal = $notifPayments + $notifAwaiting + $notifReady + $notifIncidents + $notifNewReqs + $notifSystem;
         $recent = getRecentNotifications($con);
       ?>
-      <div class="notifications">
-        <button id="notifToggle" class="notif-btn" aria-label="Notifications" title="Notifications">
-          <img alt="Notifications" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' fill='%23fff'/></svg>" />
-          <?php if($notifTotal>0){ $badgeText = ($notifTotal>99) ? '99+' : (string)intval($notifTotal); echo "<span class='notif-badge'>".$badgeText."</span>"; } ?>
-        </button>
-        <div id="notifPanel" class="notif-panel" style="display:none"></div>
-        <div id="notifModal" class="modal">
-          <div class="modal-content">
-            <span class="close" id="notifModalClose">&times;</span>
-            <h3>Notifications</h3>
-           <!--<div class="tabs">
-              <button class="tab-btn active" data-tab="req">Requests</button>
-              <button class="tab-btn" data-tab="rec">Payment Receipts</button>
-            </div> -->
-            <div id="tabReq" class="tab-body">
-              <div id="notifRequestsList"></div>
-            </div>
-            <div id="tabRec" class="tab-body" style="display:none">
-              <div id="notifReceiptsList"></div>
+      <div class="header-actions">
+        <div class="notifications">
+          <button id="notifToggle" class="notif-btn" aria-label="Notifications" title="Notifications">
+            <img alt="Notifications" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' fill='%23fff'/></svg>" />
+            <?php if($notifTotal>0){ $badgeText = ($notifTotal>99) ? '99+' : (string)intval($notifTotal); echo "<span class='notif-badge'>".$badgeText."</span>"; } ?>
+          </button>
+          <div id="notifPanel" class="notif-panel" style="display:none"></div>
+          <div id="notifModal" class="modal">
+            <div class="modal-content">
+              <span class="close" id="notifModalClose">&times;</span>
+              <h3>Notifications</h3>
+             <!--<div class="tabs">
+                <button class="tab-btn active" data-tab="req">Requests</button>
+                <button class="tab-btn" data-tab="rec">Payment Receipts</button>
+              </div> -->
+              <div id="tabReq" class="tab-body">
+                <div id="notifRequestsList"></div>
+              </div>
+              <div id="tabRec" class="tab-body" style="display:none">
+                <div id="notifReceiptsList"></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      </div>
-      <div class="header-actions">
-      <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
+        <img class="avatar" src="images/mainpage/profile'.jpg" alt="admin">
       </div>
     </header>
 
@@ -3039,6 +3084,19 @@ body.modal-open { overflow: hidden; }
           document.addEventListener('click',function(e){ if(m && e.target===m){ m.style.display='none'; } });
           var lastTotal = null;
           var dismissed = new Set();
+          function formatNotifDateTime(value){
+            if(!value) return '';
+            var d=new Date(value);
+            if(isNaN(d.getTime())) return String(value);
+            var mm=String(d.getMonth()+1).padStart(2,'0');
+            var dd=String(d.getDate()).padStart(2,'0');
+            var yy=String(d.getFullYear()).slice(-2);
+            var h=d.getHours();
+            var mi=String(d.getMinutes()).padStart(2,'0');
+            var ampm=h>=12?'PM':'AM';
+            h=h%12; if(h===0) h=12;
+            return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
+          }
           function keyFor(it){ return [String(it.type||''), String(it.ref||''), String(it.time||'')].join('|'); }
           function renderNotif(data){
             if(!data) return;
@@ -3061,8 +3119,8 @@ body.modal-open { overflow: hidden; }
               var html='';
               if(list.length===0){ html+="<div class='notif-item'><div class='notif-meta'>No items</div></div>"; }
               for(var i=0;i<list.length;i++){
-                var it=list[i]||{}; var typeUpper=String(it.type||'').toUpperCase(); var badge=(it.label?String(it.label):typeUpper); var typeLower=String(it.type||'').toLowerCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var time=String(it.time||''); var href = linkFor(it); var nid=it.id||'';
-                html += "<div class='notif-item' data-id='"+nid+"' data-type='"+typeLower+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+time+"'>"
+                var it=list[i]||{}; var typeUpper=String(it.type||'').toUpperCase(); var badge=(it.label?String(it.label):typeUpper); var typeLower=String(it.type||'').toLowerCase(); var title=String(it.title||''); var ref=it.ref?String(it.ref):''; var amen=it.amenity?String(it.amenity):''; var rawTime=String(it.time||''); var time=formatNotifDateTime(rawTime); var href = linkFor(it); var nid=it.id||'';
+                html += "<div class='notif-item' data-id='"+nid+"' data-type='"+typeLower+"' data-ref='"+ref.replace(/[<>]/g,'')+"' data-time='"+rawTime+"'>"
                   + "<a class='notif-item-link' href='"+href+"'>"
                   + "<div class='notif-type'>"+badge+"</div>"
                   + "<div class='notif-meta'><div><strong>"+title.replace(/[<>]/g,'')+"</strong>"+(amen?" — "+amen.replace(/[<>]/g,''):'')+"</div>"+(ref?"<div>Status Code: "+ref.replace(/[<>]/g,'')+"</div>":"")+"<div style='color:#888'>"+time+"</div></div>"
@@ -3430,6 +3488,7 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                       echo "<button type='submit' class='btn btn-reject'>Reject</button>";
                       echo "</form>";
                     } elseif ($payStatusLower === 'verified') {
@@ -3448,6 +3507,7 @@ body.modal-open { overflow: hidden; }
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                   echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                   echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -3559,6 +3619,7 @@ body.modal-open { overflow: hidden; }
                     echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                     echo "<button type='submit' class='btn btn-reject'>Reject</button>";
                     echo "</form>";
                   } elseif ($payStatusLower === 'verified') {
@@ -3578,6 +3639,7 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -3667,6 +3729,7 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='reservations'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -3888,6 +3951,7 @@ body.modal-open { overflow: hidden; }
                 echo '<form method="post">';
                 echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                 echo '<input type="hidden" name="action" value="reject_receipt">';
+                echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
                 echo '<button type="submit" class="btn btn-reject">Reject</button>';
                 echo '</form>';
               } else {
@@ -3952,6 +4016,19 @@ function openReceiptModal(src){ var m=document.getElementById('receiptModal'); v
 function closeReceiptModal(){ var m=document.getElementById('receiptModal'); if(m){ m.style.display='none'; } }
 window.addEventListener('click', function(e){ var m=document.getElementById('receiptModal'); if(e.target===m){ m.style.display='none'; } });
 </script>
+
+<div id="denyReasonModal" class="modal modal-top">
+  <div class="modal-content" style="max-width:520px;">
+    <span class="close" id="denyReasonClose">&times;</span>
+    <h3>Provide a reason</h3>
+    <div style="margin:10px 0 14px;color:#5a6b7c;font-size:0.9rem;">This reason will appear in the user’s notifications and requests.</div>
+    <textarea id="denyReasonInput" rows="4" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-family:Poppins,Arial,sans-serif;"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+      <button type="button" class="btn btn-view" id="denyReasonCancel">Cancel</button>
+      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Submit</button>
+    </div>
+  </div>
+</div>
 
 <!-- SECURITY GUARDS -->
 <?php if ($currentPage == 'security'): ?>
@@ -4057,6 +4134,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='reject_receipt'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
+                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                   echo "<button type='submit' class='btn btn-reject'>Reject</button>";
                   echo "</form>";
                 } elseif ($payStatusLower === 'verified') {
@@ -4075,6 +4153,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
                     echo "<input type='hidden' name='redirect_page' value='requests'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                     echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                     echo "</form>";
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -4264,6 +4343,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                     echo "<button type='submit' class='btn btn-reject'>Reject</button>";
                     echo "</form>";
                   } elseif ($payStatusLower === 'verified') {
@@ -4282,6 +4362,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                       echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
                       echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {

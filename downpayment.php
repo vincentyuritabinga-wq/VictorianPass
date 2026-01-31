@@ -35,6 +35,16 @@ function ensureReservationBookerColumns($con){
 ensureReservationBookerColumns($con);
 // Pull pending reservation context
 $continue = isset($_GET['continue']) ? $_GET['continue'] : 'reserve';
+$userType = isset($_SESSION['user_type']) ? $_SESSION['user_type'] : '';
+$backTarget = ($continue === 'reserve_resident' || $userType === 'resident') ? 'profileresident.php' : 'dashboardvisitor.php';
+if (isset($_GET['reset']) && $_GET['reset'] === '1') {
+    unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code']);
+    $to = isset($_GET['to']) ? basename($_GET['to']) : $backTarget;
+    $allowedTargets = ['dashboardvisitor.php', 'profileresident.php', 'mainpage.php'];
+    if (!in_array($to, $allowedTargets, true)) { $to = $backTarget; }
+    header('Location: ' . $to);
+    exit;
+}
 // capture ref_code from URL once, then remove from address bar
 $ref_code_url = isset($_GET['ref_code']) ? trim($_GET['ref_code']) : '';
 if ($ref_code_url !== '') {
@@ -80,7 +90,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
     $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
     $gcashReferenceNumber = isset($_POST['gcashreferencenumber']) ? trim($_POST['gcashreferencenumber']) : '';
-    if ($gcashReferenceNumber === '' || !preg_match('/^\d{1,30}$/', $gcashReferenceNumber)) {
+    if ($gcashReferenceNumber === '' || !preg_match('/^\d{12}$/', $gcashReferenceNumber)) {
       $msg = 'GCash reference number is required.';
     }
     $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
@@ -289,8 +299,16 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .upload-preview img{max-width:100%;height:auto;border-radius:8px}
     .upload-preview .file-name{color:#111827;font-weight:600;font-size:.9rem}
     .nonrefundable{background:#fee2e2;color:#b30000;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-weight:700;margin-top:10px;display:block;font-size:.9rem;border-left:4px solid #dc2626}
+    body.modal-open{overflow:hidden}
+    .proceed-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);align-items:center;justify-content:center;z-index:2000}
+    .proceed-content{background:#fff;border-radius:14px;padding:22px 24px;width:92%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.25)}
+    .proceed-content h3{margin:0;color:#111827;font-size:1.1rem}
+    .proceed-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
     .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,0.95);backdrop-filter:blur(10px);position:fixed;top:0;left:0;right:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
     .logo{display:flex;align-items:center;gap:12px}
+    .back-row{max-width:720px;margin:14px auto 0;padding:0 16px}
+    .back-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:#fff;color:#23412e;border:1px solid #e5e7eb;border-radius:999px;font-weight:700;text-decoration:none;font-size:1.1rem;box-shadow:0 4px 10px rgba(15,23,42,0.08);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+    .back-btn:hover{opacity:.92;transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,0.12)}
     .logo img{width:42px;height:42px}
     .brand-text h1{margin:0;font-size:1.3rem;font-weight:700;color:#f4f4f4}
     .brand-text p{margin:0;font-size:.85rem;color:#aaa}
@@ -315,6 +333,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $refDisplay = 'N/A';
     $qrUrl = 'images/downpayment.jpg';
     if ($ref_code === '' && $continue !== 'reserve_resident') { $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
+    $backParams = ['reset' => 1, 'to' => $backTarget];
+    $backLink = 'downpayment.php?' . http_build_query($backParams);
   ?>
   <header class="navbar">
     <div class="logo">
@@ -325,6 +345,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       </div>
     </div>
   </header>
+  <div class="back-row">
+    <a href="<?php echo htmlspecialchars($backLink); ?>" class="back-btn" id="backBtn" aria-label="Back">←</a>
+  </div>
   <div class="wrap">
     <div class="card">
       <h2 class="title">Downpayment</h2>
@@ -353,7 +376,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
         <div class="row"><span class="label">Onsite Payment (Remaining)</span><span class="amount">₱<?php echo number_format($remaining, 2); ?></span></div>
-        <div class="row"><span class="label">QR Reference Code (for matching only)</span><span class="amount"><?php echo htmlspecialchars($ref_code ?: 'N/A'); ?></span></div>
+        <div class="row"><span class="label">QR Reference Code</span><span class="amount"><?php echo htmlspecialchars($ref_code ?: 'N/A'); ?></span></div>
       </div>
       <form method="POST" enctype="multipart/form-data" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
@@ -367,16 +390,28 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
         </div>
         <label for="gcashReferenceNumber" class="label">GCash Reference Number (from receipt)</label>
-        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d+" maxlength="30">
+        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d{12}" minlength="12" maxlength="12">
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <?php if (($continue ?? '') === 'reserve_resident') { ?>
-            <a href="profileresident.php" class="btn btn-outline">Return</a>
-          <?php } else { ?>
-            <a href="dashboardvisitor.php" class="btn btn-outline">Return</a>
-          <?php } ?>
-        </div>
       </form>
+    </div>
+  </div>
+  <div class="proceed-modal" id="proceedModal">
+    <div class="proceed-content">
+      <h3>Do you want to proceed?</h3>
+      <div class="proceed-actions">
+        <button type="button" class="btn btn-outline" id="proceedNo">Cancel</button>
+        <button type="button" class="btn" id="proceedYes">Proceed</button>
+      </div>
+    </div>
+  </div>
+  <div class="proceed-modal" id="backModal">
+    <div class="proceed-content">
+      <h3>Going back will reset your reservation.</h3>
+      <p style="margin:10px 0 0;color:#4b5563;font-size:.95rem;">You will need to enter your details again.</p>
+      <div class="proceed-actions">
+        <button type="button" class="btn btn-outline" id="backCancel">Stay</button>
+        <button type="button" class="btn" id="backConfirm">Go Back</button>
+      </div>
     </div>
   </div>
   <script>
@@ -386,6 +421,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       const btn=document.getElementById('confirmBtn');
       const preview=document.getElementById('uploadPreview');
       const removeBtn=document.getElementById('removeFileBtn');
+      const form=btn ? btn.closest('form') : null;
+      const proceedModal=document.getElementById('proceedModal');
+      const proceedYes=document.getElementById('proceedYes');
+      const proceedNo=document.getElementById('proceedNo');
+      const backModal=document.getElementById('backModal');
+      const backConfirm=document.getElementById('backConfirm');
+      const backCancel=document.getElementById('backCancel');
+      let pendingSubmit=false;
       function renderPreview(file){
         if(!file){ preview.style.display='none'; preview.innerHTML=''; return; }
         const name=document.createElement('div');
@@ -411,14 +454,83 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       function update(){
         const hasFile=!!(input && input.files && input.files.length>0);
         const refVal=(refInput && (refInput.value||'').trim())||'';
-        const validRef=/^\d{1,30}$/.test(refVal);
+        const validRef=/^\d{12}$/.test(refVal);
         btn.disabled=!(hasFile && validRef);
         removeBtn.disabled=!hasFile;
         renderPreview(hasFile?input.files[0]:null);
       }
+      function openProceed(){
+        if(!proceedModal) return;
+        proceedModal.style.display='flex';
+        document.body.classList.add('modal-open');
+      }
+      function closeProceed(){
+        if(!proceedModal) return;
+        proceedModal.style.display='none';
+        document.body.classList.remove('modal-open');
+      }
+      function openBack(){
+        if(!backModal) return;
+        backModal.style.display='flex';
+        document.body.classList.add('modal-open');
+      }
+      function closeBack(){
+        if(!backModal) return;
+        backModal.style.display='none';
+        document.body.classList.remove('modal-open');
+      }
+      const backBtn=document.getElementById('backBtn');
+      if(backBtn){
+        backBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          openBack();
+        });
+      }
       if(input){ input.addEventListener('change', update); }
       if(refInput){ refInput.addEventListener('input', update); }
       if(removeBtn){ removeBtn.addEventListener('click', function(){ input.value=''; update(); }); }
+      if(form){
+        form.addEventListener('submit', function(e){
+          if(btn.disabled || pendingSubmit) return;
+          e.preventDefault();
+          openProceed();
+        });
+      }
+      if(proceedYes && form){
+        proceedYes.addEventListener('click', function(){
+          if(pendingSubmit) return;
+          pendingSubmit=true;
+          closeProceed();
+          form.submit();
+        });
+      }
+      if(proceedNo){
+        proceedNo.addEventListener('click', function(){
+          closeProceed();
+        });
+      }
+      if(proceedModal){
+        proceedModal.addEventListener('click', function(e){
+          if(e.target === proceedModal){ closeProceed(); }
+        });
+      }
+      if(backConfirm && backBtn){
+        backConfirm.addEventListener('click', function(){
+          try{ sessionStorage.removeItem('reserve_form'); }catch(_){}
+          closeBack();
+          window.location.href = backBtn.getAttribute('href') || 'reserve.php';
+        });
+      }
+      if(backCancel){
+        backCancel.addEventListener('click', function(){
+          closeBack();
+        });
+      }
+      if(backModal){
+        backModal.addEventListener('click', function(e){
+          if(e.target === backModal){ closeBack(); }
+        });
+      }
       update();
     })();
   </script>

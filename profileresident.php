@@ -238,7 +238,17 @@ foreach ($colsToCheck as $col => $def) {
         $con->query("ALTER TABLE reservations ADD COLUMN $col $def");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
+if ($con instanceof mysqli) {
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'denial_reason'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
+    }
+    $check = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'denial_reason'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
+    }
+}
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -252,6 +262,9 @@ if ($stmt) {
         if ($statusVal === '' || $statusVal === null) {
             $statusVal = $row['status'] ?? 'pending';
         }
+        $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
+        if ($paymentStatusLower === 'rejected') { $statusVal = 'rejected'; }
+        elseif ($paymentStatusLower === 'pending_update') { $statusVal = 'pending_update'; }
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
@@ -280,10 +293,18 @@ if ($stmt) {
         }
         $refCodeVal = $row['ref_code'] ?? 'RES';
         $reservationRefs[$refCodeVal] = true;
+        $details = trim(date('M d, Y', strtotime($start)) . ' ' . $timeStr);
+        $statusLower = strtolower((string)($statusVal ?? ''));
+        $reason = trim((string)($row['denial_reason'] ?? ''));
+        $isDenied = (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'rejected') !== false);
+        if (strtolower((string)($row['payment_status'] ?? '')) === 'rejected') { $isDenied = true; }
+        if ($isDenied && $reason !== '') {
+            $details = trim($details . ' Reason: ' . $reason);
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
-            'details' => date('M d, Y', strtotime($start)) . ' ' . $timeStr,
+            'details' => $details,
             'status' => $statusVal ?? 'pending',
             'date' => $row['created_at'],
             'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
@@ -303,7 +324,7 @@ if ($con instanceof mysqli) {
     $chk = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
     $hasGuestEndTime = $chk && $chk->num_rows > 0;
 }
-$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
+$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
 $stmt = $con->prepare($guestAmenitySelect);
 if ($stmt) {
     $stmt->bind_param("i", $userId);
@@ -328,6 +349,11 @@ if ($stmt) {
         }
         $details = trim($dateText . ($timeStr ? ' ' . $timeStr : ''));
         $statusVal = $row['approval_status'] ?? 'pending';
+        $reason = trim((string)($row['denial_reason'] ?? ''));
+        $statusLower = strtolower((string)$statusVal);
+        if ($reason !== '' && (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'reject') !== false)) {
+            $details = trim($details . ' Reason: ' . $reason);
+        }
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
@@ -375,7 +401,7 @@ if ($stmt) {
 }
 
 // 3. Guest Forms
-$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -387,10 +413,16 @@ if ($stmt) {
             $title .= ' - Cancelled';
         }
         $visitTs = strtotime(($row['visit_date']??date('Y-m-d')) . ' ' . ($row['visit_time']??'23:59:59'));
+        $details = '';
+        $reason = trim((string)($row['denial_reason'] ?? ''));
+        $statusLower = strtolower((string)($row['approval_status'] ?? ''));
+        if ($reason !== '' && (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'reject') !== false)) {
+            $details = 'Reason: ' . $reason;
+        }
         $activities[] = [
             'type' => 'guest_form',
             'title' => $title,
-            'details' => '',
+            'details' => $details,
             'status' => $row['approval_status'] ?? 'pending',
             'date' => $row['created_at'],
             'event_timestamp' => $visitTs,
@@ -407,7 +439,6 @@ usort($activities, function($a, $b) {
 // Split into Active and History
 $activeActivities = [];
 $historyActivities = [];
-$now = time();
 
 foreach ($activities as $act) {
     $s = strtolower($act['status']);
@@ -415,19 +446,8 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    // 1. Explicit history statuses
-    if (strpos($s, 'cancel') !== false || 
-        strpos($s, 'denied') !== false || 
-        strpos($s, 'reject') !== false || 
-        strpos($s, 'expired') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false) {
         $isHistory = true;
-    } 
-    // 2. Approved/Resolved but passed date
-    else if ((strpos($s, 'approv') !== false || strpos($s, 'resolved') !== false)) {
-        // If event timestamp is in the past
-        if ($act['event_timestamp'] < $now) {
-            $isHistory = true;
-        }
     }
 
     if ($isHistory) {
@@ -491,6 +511,13 @@ body.account-blocked { overflow: hidden; }
 .account-blocked-content p { margin: 0 0 20px; color: #333; font-size: 0.95rem; line-height: 1.5; }
 .account-blocked-content .btn-logout-only { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #c0392b; color: #fff; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; }
 .account-blocked-content .btn-logout-only:hover { filter: brightness(0.95); }
+.toast-stack { position: fixed; top: 16px; right: 16px; z-index: 2500; display: flex; flex-direction: column; gap: 8px; }
+.toast-item { background: #fff; border-left: 4px solid #23412e; box-shadow: 0 4px 12px rgba(0,0,0,0.18); border-radius: 10px; padding: 10px 12px; min-width: 260px; display: flex; align-items: flex-start; gap: 8px; color: #333; }
+.toast-item .toast-message { flex: 1; font-size: 0.85rem; }
+.toast-item .toast-close { background: transparent; border: 0; color: #888; font-size: 1rem; cursor: pointer; line-height: 1; }
+.toast-item.toast-success { border-left-color: #28a745; }
+.toast-item.toast-warning { border-left-color: #d97706; }
+.toast-item.toast-error { border-left-color: #c0392b; }
 .field-warning {
   color: #333;
   font-size: 0.85rem;
@@ -784,6 +811,7 @@ body.account-blocked { overflow: hidden; }
       <div class="header-actions">
         <button class="icon-btn" id="notifBtn"><i class="fa-regular fa-bell"></i><span id="notifCount" class="notif-count" style="display:none;">0</span></button>
         <div id="notifPanel" class="notif-panel" style="display:none;"></div>
+        <div id="notifPopup" class="notif-popup" style="display:none;"></div>
         <a href="#" class="user-profile" id="profileTrigger">
           <span class="user-name">Hi, <?php echo htmlspecialchars($user['first_name'] ?? 'Resident'); ?></span>
           <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="user-avatar" id="headerProfileImg">
@@ -813,7 +841,7 @@ body.account-blocked { overflow: hidden; }
                   elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
-                  $displayStatus = ucfirst($act['status']);
+                  $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -862,7 +890,7 @@ body.account-blocked { overflow: hidden; }
                   elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
-                  $displayStatus = ucfirst($act['status']);
+                  $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -999,7 +1027,7 @@ body.account-blocked { overflow: hidden; }
                         $contact = $g['visitor_contact'] ?? '';
                         $emailG = $g['visitor_email'] ?? '';
                         $created = $g['created_at'] ?? '';
-                        $createdLabel = $created ? date('M d, Y', strtotime($created)) : '';
+                        $createdLabel = $created ? date('m.d.y', strtotime($created)) : '';
                         $refCode = $g['ref_code'] ?? '';
                       ?>
                       <tr>
@@ -1177,13 +1205,17 @@ body.account-blocked { overflow: hidden; }
     return 'status-pending';
   }
   function fmtLabel(s){
-    s=String(s||'').toLowerCase();
-    return s.charAt(0).toUpperCase()+s.slice(1);
+    s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+    return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
   var notifCountEl=document.getElementById('notifCount');
   var notifBtn=document.getElementById('notifBtn');
   var notifPanel=document.getElementById('notifPanel');
   var notifItems=[];
+  var notifKnownIds={};
+  var notifBootstrapped=false;
+  var notifPopup=document.getElementById('notifPopup');
+  var notifPopupTimer=null;
   var cancelModal=document.getElementById('cancelModal');
   var cancelModalKeep=cancelModal?cancelModal.querySelector('.cancel-modal-keep'):null;
   var cancelModalConfirm=cancelModal?cancelModal.querySelector('.cancel-modal-confirm'):null;
@@ -1191,6 +1223,29 @@ body.account-blocked { overflow: hidden; }
   var cancelModalRef=null;
   var cancelModalLi=null;
   var modalAction = 'cancel';
+
+  function renderNotifPopup(items){
+    if(!notifPopup) return;
+    if(!items || !items.length){
+      notifPopup.style.display='none';
+      notifPopup.innerHTML='';
+      return;
+    }
+    var html='';
+    for(var i=0;i<items.length;i++){
+      var it=items[i]||{};
+      var title=String(it.title||'').replace(/[<>]/g,'');
+      var message=String(it.message||'').replace(/[<>]/g,'');
+      var time=formatNotifDateTime(it.created_at||'');
+      html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
+    }
+    notifPopup.innerHTML=html;
+    notifPopup.style.display='block';
+    if(notifPopupTimer) clearTimeout(notifPopupTimer);
+    notifPopupTimer=setTimeout(function(){
+      if(notifPopup){ notifPopup.style.display='none'; }
+    },5000);
+  }
 
   function openCancelModal(li,ref){
     if(!cancelModal) return;
@@ -1431,6 +1486,8 @@ body.account-blocked { overflow: hidden; }
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
     if(type==='reservation' && paymentStatus==='rejected'){
         statusNote='Payment proof was rejected. Please update your proof of payment.';
+    } else if (type==='reservation' && paymentStatus==='pending_update'){
+        statusNote='Payment proof resubmitted. Awaiting verification.';
     }
     var titleEl=li.querySelector('.item-title');
     var detailsEl=li.querySelector('.item-details');
@@ -1663,7 +1720,13 @@ body.account-blocked { overflow: hidden; }
               alert(data && data.message ? data.message : 'Upload failed.');
               return;
             }
-            li.setAttribute('data-payment-status','pending');
+            li.setAttribute('data-payment-status','pending_update');
+            li.setAttribute('data-status','pending_update');
+            var badge=li.querySelector('.status-badge');
+            if(badge){
+              badge.textContent=fmtLabel('pending_update');
+              badge.className='status-badge '+statusClassFor('pending_update');
+            }
             extra.setAttribute('data-loaded','0');
             extra.innerHTML='';
             if(li.classList.contains('expanded')){
@@ -1678,6 +1741,19 @@ body.account-blocked { overflow: hidden; }
       });
     }
   }
+  function formatNotifDateTime(value){
+    if(!value) return '';
+    var d=new Date(value);
+    if(isNaN(d.getTime())) return String(value);
+    var mm=String(d.getMonth()+1).padStart(2,'0');
+    var dd=String(d.getDate()).padStart(2,'0');
+    var yy=String(d.getFullYear()).slice(-2);
+    var h=d.getHours();
+    var mi=String(d.getMinutes()).padStart(2,'0');
+    var ampm=h>=12?'PM':'AM';
+    h=h%12; if(h===0) h=12;
+    return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
+  }
   function renderNotifPanel(){
     if(!notifPanel) return;
     var header='<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">&times;</button></div>';
@@ -1685,11 +1761,16 @@ body.account-blocked { overflow: hidden; }
       notifPanel.innerHTML=header+'<div class="notif-panel-body"><div class="notif-empty">No recent updates</div></div>';
     } else {
       var html='';
-      for(var i=notifItems.length-1;i>=0;i--){
+      notifItems.sort(function(a,b){
+        var ta = new Date(a.created_at||0).getTime();
+        var tb = new Date(b.created_at||0).getTime();
+        return tb - ta;
+      });
+      for(var i=0;i<notifItems.length;i++){
         var it=notifItems[i]||{};
         var title=String(it.title||'').replace(/[<>]/g,'');
         var message=String(it.message||'').replace(/[<>]/g,'');
-        var time=String(it.created_at||'').replace(/[<>]/g,'');
+        var time=formatNotifDateTime(it.created_at||'');
         html+='<div class="notif-item"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+message+'</div>';
         if(time) html+='<div class="notif-item-time">'+time+'</div>';
         html+='</div></div>';
@@ -1799,6 +1880,7 @@ body.account-blocked { overflow: hidden; }
   if(notifBtn){
     notifBtn.addEventListener('click',function(e){
       e.stopPropagation();
+      if(notifPopup){ notifPopup.style.display='none'; }
       if(notifPanel){
         notifPanel.style.display=(notifPanel.style.display==='block'?'none':'block');
         if(notifPanel.style.display==='block') renderNotifPanel();
@@ -1817,9 +1899,10 @@ body.account-blocked { overflow: hidden; }
   }
   document.addEventListener('click',function(e){
     if(!notifPanel || !notifBtn) return;
-    if(notifPanel.style.display!=='block') return;
-    if(notifPanel.contains(e.target) || notifBtn.contains(e.target)) return;
+    if(notifPanel.style.display!=='block' && (!notifPopup || notifPopup.style.display!=='block')) return;
+    if((notifPanel && notifPanel.contains(e.target)) || (notifPopup && notifPopup.contains(e.target)) || notifBtn.contains(e.target)) return;
     notifPanel.style.display='none';
+    if(notifPopup){ notifPopup.style.display='none'; }
   });
 
   var sections=document.querySelectorAll('.right-panel .panel-section');
@@ -2410,8 +2493,37 @@ body.account-blocked { overflow: hidden; }
         if(data.history) moveHistoryItems(data.history);
         
         if(Array.isArray(data.notifications)){
-          notifItems = data.notifications;
+          var incoming = data.notifications.map(function(n){
+            return {
+              id: n.id,
+              title: n.title||'',
+              message: n.message||'',
+              type: n.type||'info',
+              is_read: n.is_read||0,
+              created_at: n.created_at||''
+            };
+          });
+          var newOnes=[];
+          if(notifBootstrapped){
+            var known = notifKnownIds;
+            incoming.forEach(function(n){
+              var idStr=String(n.id||'');
+              if(idStr && !known[idStr]){
+                newOnes.push(n);
+              }
+            });
+          }
+          notifKnownIds={};
+          incoming.forEach(function(n){
+            var idStr=String(n.id||'');
+            if(idStr) notifKnownIds[idStr]=true;
+          });
+          notifBootstrapped=true;
+          notifItems = incoming;
           renderNotifPanel();
+          if(newOnes.length){
+            renderNotifPopup(newOnes.slice(0,3));
+          }
         }
         if(notifCountEl){
           var uc = parseInt(data.unread_count||'0',10);
@@ -2421,7 +2533,7 @@ body.account-blocked { overflow: hidden; }
       })["catch"](function(){});
   }
   refreshStatuses();
-  setInterval(refreshStatuses,10000);
+  setInterval(refreshStatuses,3000);
 })();
 </script>
 

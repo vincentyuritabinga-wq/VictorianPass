@@ -155,8 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $errorMsg = 'Start date must be before end date.';
     } else if ($start === $end && $stObj && $etObj && $stObj >= $etObj) {
       $errorMsg = 'Start time must be before end time.';
-    } else if (($sdObj && $edObj) && (($sdObj < new DateTime('today')) || ($edObj < new DateTime('today')))) {
-      $errorMsg = 'Selected dates must be today or later.';
+    } else if (($sdObj && $edObj)) {
+      $minDate = new DateTime('today');
+      $minDate->modify('+1 day');
+      if ($sdObj < $minDate || $edObj < $minDate) {
+        $errorMsg = 'Reservations must be made at least 1 day in advance.';
+      }
     } else if ($amenity === 'Pool' && $persons < 1) {
       $errorMsg = 'Persons must be at least 1.';
     } else if ($sdObj && $edObj) {
@@ -793,6 +797,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div id="dateError" class="time-error" style="display:none;"></div>
                     <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div id="timeError" class="time-error" style="display:none;"></div>
+                    <div class="note">Reservations must be made at least 1 day in advance. Same-day bookings are not allowed.</div>
                   </div>
                   <div class="res-item persons">
                       <div class="res-label"><small>Total Participants</small></div>
@@ -962,8 +967,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     </div>
     <?php endif; ?>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="close-btn" id="verifyCancelBtn">Cancel</button>
-      <button type="button" class="btn-secondary" id="verifyConfirmBtn">Proceed</button>
+      <button type="button" class="btn-secondary" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="close-btn" id="verifyConfirmBtn">Proceed</button>
     </div>
   </div>
   </div>
@@ -996,6 +1001,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   let today=new Date(),currentMonth=today.getMonth(),currentYear=today.getFullYear();
   const monthAndYear=document.getElementById("monthAndYear"),calendarBody=document.getElementById("calendar-body");
   const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const minDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth()+1).padStart(2,'0')}-${String(minDate.getDate()).padStart(2,'0')}`;
   let selectedStart=null,selectedEnd=null;
   let bookedDates=new Set();
   let selectedAmenity=document.getElementById('amenityField').value||'';
@@ -1031,7 +1038,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           cell.textContent=date;
           let ds=`${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
           cell.setAttribute('data-date', ds);
-          if(ds < todayStr) { cell.classList.add('disabled'); }
+          if(ds < minDateStr) { cell.classList.add('disabled'); }
           cell.addEventListener('click',()=>handleDateClick(cell,ds));
           if(date===today.getDate()&&year===today.getFullYear()&&month===today.getMonth()) cell.classList.add('today');
           row.appendChild(cell);date++;
@@ -1084,7 +1091,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
 
   function handleDateClick(cell,dateString){
-    if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
+    if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else if(dateString && dateString < minDateStr){ showStartDateError('Reservations must be made at least 1 day in advance.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
     const single = document.getElementById('singleDayToggle')?.checked;
