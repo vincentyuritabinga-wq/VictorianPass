@@ -288,7 +288,8 @@ if (empty($error)) {
         
         // Define UI States
         if ($s === 'approved') {
-            if ($data['scanned_at']) {
+            $oneTimeTables = ['reservations', 'resident_reservations'];
+            if ($data['scanned_at'] && in_array($data['table'], $oneTimeTables, true)) {
                 $data['ui_state'] = 'used';
                 $data['ui_title'] = 'PASS ALREADY USED';
                 $data['ui_color'] = '#f59e0b'; // Orange

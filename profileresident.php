@@ -753,38 +753,72 @@ body.account-blocked { overflow: hidden; }
 
     <!-- Hidden ID Card for Download Generation -->
     <?php if (!$isAccountBlocked): ?>
-    <div style="position:fixed; left:-9999px; top:0;">
-        <div class="resident-id-card" id="residentCard" style="width:360px; background:#fff; padding:20px; box-sizing:border-box; font-family:'Poppins',sans-serif;">
-          <div style="border: 2px solid #23412e; padding: 20px; border-radius: 12px; background: #f9f9f9; text-align: center;">
-            <div style="margin-bottom: 15px; font-weight: 700; color: #23412e; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.1rem;">
-               <img src="images/logo.svg" alt="Logo" style="width: 32px; height: 32px; margin: 0;">
-               <span>Victorian Pass</span>
+    <div id="residentCardWrap" style="position:fixed; left:-9999px; top:0; opacity:0;">
+        <div class="resident-id-card" id="residentCard">
+          <div class="card-header">
+            <div class="brand"><img src="images/logo.svg" alt="VictorianPass"><div class="text">Victorian Pass</div></div>
+          </div>
+          <div class="id-top">
+            <div class="avatar">
+              <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="Resident QR">
             </div>
-            <div style="background:#fff; padding:10px; border:1px solid #ddd; display:inline-block; border-radius:0;">
-              <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="QR" style="width:200px;height:200px;object-fit:contain;display:block;">
-            </div>
-            <div style="color: #d9534f; font-weight: 600; margin: 15px auto 5px auto; font-size: 0.85rem; line-height: 1.5; border: 1px dashed #d9534f; padding: 10px; border-radius: 8px; background: #fff5f5;">
-                Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.
+            <div class="top-info">
+              <div style="color:#e5ddc6; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">OFFICIAL PROOF OF RESIDENCY</div>
+              <div class="name"><?php echo htmlspecialchars($fullName); ?></div>
+              <div class="contact">
+                <?php echo htmlspecialchars($user['email'] ?? ''); ?>
+                <?php if(!empty($displayPhone)){ echo ' • ' . htmlspecialchars($displayPhone); } ?>
+              </div>
+              <div style="margin-top:6px;"><span class="badge active">Verified Resident</span></div>
             </div>
           </div>
+          <div class="divider"></div>
+          <div class="id-body">
+            <div class="row"><div class="label">Block</div><div class="value"><?php echo htmlspecialchars($user['house_number'] ?? '-'); ?></div></div>
+            <div class="row"><div class="label">Unit / Address</div><div class="value"><?php echo htmlspecialchars($user['address'] ?? '-'); ?></div></div>
+            <div class="row"><div class="label">Contact</div><div class="value"><?php echo htmlspecialchars($displayPhone ?: '-'); ?></div></div>
+            <div class="row"><div class="label">Email</div><div class="value"><?php echo htmlspecialchars($user['email'] ?? '-'); ?></div></div>
+          </div>
+          <div class="divider"></div>
+          <div class="foot">Scan QR to open this digital ID • Code linked to resident profile</div>
         </div>
     </div>
     <?php endif; ?>
 
     <script>
     function downloadPersonalQR(){
-      var qrUrl = <?php echo json_encode($qrRelPath); ?> || '';
-      if(!qrUrl) return;
+      var cardWrap = document.getElementById('residentCardWrap');
+      var card = document.getElementById('residentCard');
+      if(!cardWrap || !card) return;
       function doDownload(){
-        var link = document.createElement('a');
-        link.download = 'My_Personal_QR_Code.png';
-        link.href = qrUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        var prevLeft = cardWrap.style.left;
+        var prevOpacity = cardWrap.style.opacity;
+        var prevTop = cardWrap.style.top;
+        cardWrap.style.left = '0';
+        cardWrap.style.top = '0';
+        cardWrap.style.opacity = '0';
+        setTimeout(function(){
+          html2canvas(card, { backgroundColor: null, scale: 2 }).then(function(canvas){
+            var link = document.createElement('a');
+            link.download = 'My_Personal_QR_ID.png';
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }).finally(function(){
+            cardWrap.style.left = prevLeft;
+            cardWrap.style.top = prevTop;
+            cardWrap.style.opacity = prevOpacity;
+          });
+        }, 80);
       }
       if(typeof window.openQRWarning === 'function'){
-        window.openQRWarning(doDownload);
+        window.openQRWarning(doDownload, {
+          title: 'My QR Code',
+          message: 'This is your personal QR code used for identification and as an entry pass within the residence.',
+          cancelText: 'Close',
+          proceedText: 'Download'
+        });
       } else {
         doDownload();
       }
@@ -1108,8 +1142,8 @@ body.account-blocked { overflow: hidden; }
   </div>
   <div id="qrWarningModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
     <div style="background:#fff; border-radius:12px; padding:22px 20px; width:360px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
-      <div style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
-      <div style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.</div>
+      <div id="qrWarningTitle" style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
+      <div id="qrWarningMessage" style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. Authorized guards only.</div>
       <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
         <button type="button" id="qrWarningCancel" style="background:#e5e7eb; color:#111827; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
         <button type="button" id="qrWarningProceed" style="background:#23412e; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Proceed</button>
@@ -1171,8 +1205,19 @@ body.account-blocked { overflow: hidden; }
       }
     };
     if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
-    window.openQRWarning = function(cb){
+    var titleEl = document.getElementById('qrWarningTitle');
+    var msgEl = document.getElementById('qrWarningMessage');
+    var defaultTitle = titleEl ? titleEl.textContent : '';
+    var defaultMsg = msgEl ? msgEl.textContent : '';
+    var defaultCancel = cancelBtn ? cancelBtn.textContent : '';
+    var defaultProceed = proceedBtn ? proceedBtn.textContent : '';
+    window.openQRWarning = function(cb, message){
       window.qrWarningConfirm = typeof cb === 'function' ? cb : null;
+      var opts = message && typeof message === 'object' ? message : { message: message };
+      if(titleEl) titleEl.textContent = opts.title || defaultTitle;
+      if(msgEl) msgEl.textContent = opts.message || defaultMsg;
+      if(cancelBtn) cancelBtn.textContent = opts.cancelText || defaultCancel;
+      if(proceedBtn) proceedBtn.textContent = opts.proceedText || defaultProceed;
       if(modal) modal.style.display = 'flex';
     };
   })();
@@ -1643,8 +1688,11 @@ body.account-blocked { overflow: hidden; }
         function doDownload(){
           downloadRaw();
         }
+        var warningMsg = String(itemType || '').toLowerCase() === 'reservation'
+          ? 'Do not scan. One-time use only. Valid only on the selected date and time. Authorized guards only.'
+          : 'Do not scan. Authorized guards only.';
         if(typeof window.openQRWarning === 'function'){
-          window.openQRWarning(doDownload);
+          window.openQRWarning(doDownload, warningMsg);
         } else {
           doDownload();
         }

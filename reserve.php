@@ -920,6 +920,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     </div>
   </div>
 </div>
+<div id="resetReservationModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h2>Reservation reset</h2>
+    <p style="margin:8px 0 16px;color:#4b5563;">You need to make the reservation again since you clicked back on the downpayment page.</p>
+    <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" id="resetReservationOkBtn">OK</button>
+    </div>
+  </div>
+</div>
 
 <!--
 <div id="hintModal" class="modal" style="display:none;">
@@ -2608,6 +2617,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         if(typeof updateActionStates === 'function'){ updateActionStates(); }
       });
     }
+    document.addEventListener('DOMContentLoaded', function(){
+      var modal = document.getElementById('resetReservationModal');
+      var okBtn = document.getElementById('resetReservationOkBtn');
+      if(modal){ modal.style.display='flex'; }
+      if(okBtn){ okBtn.addEventListener('click', function(){ if(modal) modal.style.display='none'; }); }
+      if(modal){ modal.addEventListener('click', function(e){ if(e.target === modal){ modal.style.display='none'; } }); }
+    });
   })();
 </script>
 <?php } ?>

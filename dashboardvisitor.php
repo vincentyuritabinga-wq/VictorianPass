@@ -532,8 +532,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 </div>
 <div id="qrWarningModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
   <div style="background:#fff; border-radius:12px; padding:22px 20px; width:360px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
-    <div style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
-    <div style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.</div>
+  <div style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
+  <div id="qrWarningMessage" style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. Authorized guards only.</div>
     <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
       <button type="button" id="qrWarningCancel" style="background:#e5e7eb; color:#111827; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
       <button type="button" id="qrWarningProceed" style="background:#23412e; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Proceed</button>
@@ -1337,6 +1337,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var modal = document.getElementById('qrWarningModal');
     var cancelBtn = document.getElementById('qrWarningCancel');
     var proceedBtn = document.getElementById('qrWarningProceed');
+    var msgEl = document.getElementById('qrWarningMessage');
+    var defaultMsg = msgEl ? msgEl.textContent : '';
     function close(){ if(modal) modal.style.display='none'; }
     if(cancelBtn) cancelBtn.onclick = close;
     if(proceedBtn) proceedBtn.onclick = function(){
@@ -1348,8 +1350,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
     };
     if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
-    window.openQRWarning = function(cb){
+    window.openQRWarning = function(cb, message){
       window.qrWarningConfirm = typeof cb === 'function' ? cb : null;
+      if(msgEl) msgEl.textContent = message || defaultMsg;
       if(modal) modal.style.display = 'flex';
     };
   })();
@@ -1515,8 +1518,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             })
             .catch(function(){});
         }
+        var warningMsg = String(type || '').toLowerCase() === 'reservation'
+          ? 'Do not scan. One-time use only. Valid only on the selected date and time. Authorized guards only.'
+          : 'Do not scan. Authorized guards only.';
         if(typeof window.openQRWarning === 'function'){
-          window.openQRWarning(downloadRaw);
+          window.openQRWarning(downloadRaw, warningMsg);
         } else {
           downloadRaw();
         }
