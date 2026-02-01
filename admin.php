@@ -2,7 +2,7 @@
 session_start();
 include 'connect.php';
 
-function admin_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/status_view.php?code='.urlencode($code); }
+function admin_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/qr_view.php?code='.urlencode($code); }
 function admin_send_email($to,$subject,$body){
   if(!$to) return false;
   $fromName = getenv('MAIL_FROM_NAME') ?: 'VictorianPass';
@@ -1334,7 +1334,7 @@ function generateQrForGuestForm($con, $gfId) {
     $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/');
-    $statusLink = $scheme . '://' . $host . $basePath . '/status_view.php?code=' . urlencode($ref);
+    $statusLink = $scheme . '://' . $host . $basePath . '/qr_view.php?code=' . urlencode($ref);
 
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($statusLink);
     $img = @file_get_contents($qrUrl);
@@ -1389,7 +1389,7 @@ function generateQrForReservation($con, $reservationId) {
     $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/');
-    $statusLink = $scheme . '://' . $host . $basePath . '/status_view.php?code=' . urlencode($ref);
+    $statusLink = $scheme . '://' . $host . $basePath . '/qr_view.php?code=' . urlencode($ref);
 
     // Generate QR for the status link
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($statusLink);
@@ -1427,7 +1427,7 @@ function generateQrForResidentReservation($con, $rrId) {
     $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/');
-    $statusLink = $scheme . '://' . $host . $basePath . '/status_view.php?code=' . urlencode($ref);
+    $statusLink = $scheme . '://' . $host . $basePath . '/qr_view.php?code=' . urlencode($ref);
 
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($statusLink);
     $img = @file_get_contents($qrUrl);

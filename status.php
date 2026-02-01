@@ -380,24 +380,6 @@ if ($resGF && $resGF->num_rows > 0) {
     $row = $resGF->fetch_assoc();
     $today = date('Y-m-d');
     $statusVal = ($row['approval_status'] ?? 'pending');
-    $approvalDateYmd = !empty($row['approval_date']) ? date('Y-m-d', strtotime($row['approval_date'])) : null;
-    $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
-    if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) {
-        $statusVal = 'expired';
-    }
-
-    // If linked reservation's payment is rejected, show overall status as rejected
-    // (handled after payment lookup below)
-    $statusMessage = '';
-    switch ($statusVal) {
-        case 'approved': $statusMessage = 'Approved: Your guest entry is confirmed.'; break;
-        case 'pending': $statusMessage = 'Pending: Awaiting admin review.'; break;
-        case 'pending_update': $statusMessage = 'Pending Update: Your payment proof was resubmitted.'; break;
-        case 'expired': $statusMessage = 'Expired: This pass has reached its validity end.'; break;
-        case 'denied': $statusMessage = 'Denied: Your request was not approved.'; break;
-        case 'cancelled': $statusMessage = 'Cancelled: This request was cancelled by the user.'; break;
-        default: $statusMessage = ucfirst($statusVal);
-    }
 
     $fullName = '';
     if (!empty($row['full_name'])) {
@@ -456,6 +438,27 @@ if ($resGF && $resGF->num_rows > 0) {
     } elseif ($pay === 'pending_update') {
         $statusVal = 'pending_update';
     }
+    $expiryDateYmd = null;
+    if (!empty($rEnd)) {
+        $expiryDateYmd = date('Y-m-d', strtotime($rEnd));
+    } elseif (!empty($rStart)) {
+        $expiryDateYmd = date('Y-m-d', strtotime($rStart));
+    } elseif (!empty($row['visit_date'])) {
+        $expiryDateYmd = date('Y-m-d', strtotime($row['visit_date']));
+    }
+    if ($statusVal === 'approved' && $expiryDateYmd && $today > $expiryDateYmd) {
+        $statusVal = 'expired';
+    }
+    $statusMessage = '';
+    switch ($statusVal) {
+        case 'approved': $statusMessage = 'Approved: Your guest entry is confirmed.'; break;
+        case 'pending': $statusMessage = 'Pending: Awaiting admin review.'; break;
+        case 'pending_update': $statusMessage = 'Pending Update: Your payment proof was resubmitted.'; break;
+        case 'expired': $statusMessage = 'Expired: This pass has reached its validity end.'; break;
+        case 'denied': $statusMessage = 'Denied: Your request was not approved.'; break;
+        case 'cancelled': $statusMessage = 'Cancelled: This request was cancelled by the user.'; break;
+        default: $statusMessage = ucfirst($statusVal);
+    }
     $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
     // Build base response
     $resp = [
@@ -486,7 +489,7 @@ if ($resGF && $resGF->num_rows > 0) {
         'end_date' => $isAmenity && !empty($rEnd) ? date('m/d/y', strtotime($rEnd)) : (isset($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : ''),
         'start_time' => ($rStartTime ?: null),
         'end_time' => ($rEndTime ?: null),
-        'expires_at' => $expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : ''
+        'expires_at' => $expiryDateYmd ? date('m/d/y', strtotime($expiryDateYmd)) : ''
     ];
     // If a guard is scanning, record and annotate 'scanned_by'
     if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
@@ -548,17 +551,19 @@ if ($result && $result->num_rows > 0) {
     $today = date('Y-m-d');
     $statusVal = 'pending';
     
-    // Expiration logic: only expire 1 day after approval
-    $approvalDateYmd = !empty($row['approval_date']) ? date('Y-m-d', strtotime($row['approval_date'])) : null;
-    $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
-
     if (isset($row['approval_status']) && $row['approval_status'] !== '') {
         $statusVal = $row['approval_status'];
-        if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) {
-            $statusVal = 'expired';
-        }
     } else {
         $statusVal = 'pending';
+    }
+    $expiryDateYmd = null;
+    if (!empty($row['end_date'])) {
+        $expiryDateYmd = date('Y-m-d', strtotime($row['end_date']));
+    } elseif (!empty($row['start_date'])) {
+        $expiryDateYmd = date('Y-m-d', strtotime($row['start_date']));
+    }
+    if ($statusVal === 'approved' && $expiryDateYmd && $today > $expiryDateYmd) {
+        $statusVal = 'expired';
     }
 
     // Reflect rejected payment as rejected overall status
@@ -639,7 +644,7 @@ if ($result && $result->num_rows > 0) {
         'end_date' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : '',
         'start_time' => !empty($row['start_time']) ? $row['start_time'] : null,
         'end_time' => !empty($row['end_time']) ? $row['end_time'] : null,
-        'expires_at' => isset($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ''
+        'expires_at' => $expiryDateYmd ? date('m/d/y', strtotime($expiryDateYmd)) : ''
     ];
     // Guard scan logging
     if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {

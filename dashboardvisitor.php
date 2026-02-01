@@ -1410,7 +1410,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     html+='<div class="item-extra-section">';
     var qrSrcForDownload = '';
     if(isApproved && ref){
-        var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
+        var statusLink=location.origin+basePath+'/qr_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         qrSrcForDownload = qrSrc;
         html+='<div class="item-extra-title">Entry QR Pass</div>';

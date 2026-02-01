@@ -36,13 +36,17 @@ ensureReservationBookerColumns($con);
 // Pull pending reservation context
 $continue = isset($_GET['continue']) ? $_GET['continue'] : 'reserve';
 $userType = isset($_SESSION['user_type']) ? $_SESSION['user_type'] : '';
-$backTarget = ($continue === 'reserve_resident' || $userType === 'resident') ? 'profileresident.php' : 'dashboardvisitor.php';
+$backTarget = 'reserve.php';
 if (isset($_GET['reset']) && $_GET['reset'] === '1') {
-    unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code']);
+    unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code'], $_SESSION['reservation_submitted']);
     $to = isset($_GET['to']) ? basename($_GET['to']) : $backTarget;
-    $allowedTargets = ['dashboardvisitor.php', 'profileresident.php', 'mainpage.php'];
+    $allowedTargets = ['dashboardvisitor.php', 'profileresident.php', 'mainpage.php', 'reserve.php'];
     if (!in_array($to, $allowedTargets, true)) { $to = $backTarget; }
-    header('Location: ' . $to);
+    if ($to === 'reserve.php') {
+        header('Location: reserve.php?reset_reservation=1');
+    } else {
+        header('Location: ' . $to);
+    }
     exit;
 }
 // capture ref_code from URL once, then remove from address bar

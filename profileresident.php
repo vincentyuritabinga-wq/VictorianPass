@@ -1510,7 +1510,7 @@ body.account-blocked { overflow: hidden; }
       var qrSrcForDownload = '';
       if(type!=='guest_form' && isApproved && ref){
         var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
-        var statusLink=location.origin+basePath+'/status_view.php?code='+encodeURIComponent(ref);
+        var statusLink=location.origin+basePath+'/qr_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         qrSrcForDownload = qrSrc;
         html+='<div class="item-extra-title">Entry Request Status</div>';
@@ -1626,7 +1626,7 @@ body.account-blocked { overflow: hidden; }
                      // If URL parsing fails, try to construct from ref if available
                      if(ref) {
                          var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
-                         qrData = location.origin + basePath + '/status_view.php?code=' + encodeURIComponent(ref);
+                         qrData = location.origin + basePath + '/qr_view.php?code=' + encodeURIComponent(ref);
                      }
                  }
                  

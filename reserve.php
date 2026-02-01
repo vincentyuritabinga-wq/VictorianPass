@@ -10,7 +10,7 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $resetReservation = isset($_GET['reset_reservation']) && $_GET['reset_reservation'] === '1';
 if ($resetReservation) {
-  unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code']);
+  unset($_SESSION['pending_reservation'], $_SESSION['dp_ref_code'], $_SESSION['flash_ref_code'], $_SESSION['reservation_submitted']);
 }
 
 // Unified reservation page for residents and visitors

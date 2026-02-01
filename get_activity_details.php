@@ -26,9 +26,6 @@ $stmtGF->close();
 if ($resGF && $resGF->num_rows > 0) {
     $row = $resGF->fetch_assoc();
     $statusVal = ($row['approval_status'] ?? 'pending');
-    $approvalDateYmd = !empty($row['approval_date']) ? date('Y-m-d', strtotime($row['approval_date'])) : null;
-    $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
-    if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) { $statusVal = 'expired'; }
 
     $fullName = trim(implode(' ', array_filter([
         $row['visitor_first_name'] ?? '',
@@ -87,6 +84,15 @@ if ($resGF && $resGF->num_rows > 0) {
         }
         $stmtR->close();
     }
+    $expiryDateYmd = null;
+    if (!empty($rEndDate)) {
+        $expiryDateYmd = date('Y-m-d', strtotime($rEndDate));
+    } elseif (!empty($rStartDate)) {
+        $expiryDateYmd = date('Y-m-d', strtotime($rStartDate));
+    } elseif (!empty($row['visit_date'])) {
+        $expiryDateYmd = date('Y-m-d', strtotime($row['visit_date']));
+    }
+    if ($statusVal === 'approved' && $expiryDateYmd && $today > $expiryDateYmd) { $statusVal = 'expired'; }
 
     $data = [
         'code' => $row['ref_code'],
@@ -134,9 +140,7 @@ if (!$data) {
     if ($res && $res->num_rows > 0) {
         $row = $res->fetch_assoc();
         $statusVal = 'pending';
-        $approvalDateYmd = !empty($row['approval_date']) ? date('Y-m-d', strtotime($row['approval_date'])) : null;
-        $expireAfterApprovalYmd = $approvalDateYmd ? date('Y-m-d', strtotime($approvalDateYmd . ' +1 day')) : null;
-        if (!empty($row['approval_status'])) { $statusVal = $row['approval_status']; if ($statusVal === 'approved' && $expireAfterApprovalYmd && $today > $expireAfterApprovalYmd) { $statusVal = 'expired'; } }
+        if (!empty($row['approval_status'])) { $statusVal = $row['approval_status']; }
 
         $hasEntryPass = !empty($row['entry_pass_id']);
         $uType = isset($row['user_type']) ? strtolower($row['user_type']) : '';
@@ -189,8 +193,15 @@ if (!$data) {
             $birthdate = '';
             $address = '';
         }
+        $expiryDateYmd = null;
+        if (!empty($row['end_date'])) {
+            $expiryDateYmd = date('Y-m-d', strtotime($row['end_date']));
+        } elseif (!empty($row['start_date'])) {
+            $expiryDateYmd = date('Y-m-d', strtotime($row['start_date']));
+        }
+        if ($statusVal === 'approved' && $expiryDateYmd && $today > $expiryDateYmd) { $statusVal = 'expired'; }
         $publishDate = !empty($row['start_date']) ? date('m/d/y', strtotime($row['start_date'])) : '';
-        $expireDate = !empty($row['end_date']) ? date('m/d/y', strtotime($row['end_date'])) : ($expireAfterApprovalYmd ? date('m/d/y', strtotime($expireAfterApprovalYmd)) : '');
+        $expireDate = $expiryDateYmd ? date('m/d/y', strtotime($expiryDateYmd)) : '';
         $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
         $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
         $qrImg = $qrPath ? $qrPath : ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($verificationLink));
