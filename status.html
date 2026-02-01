@@ -189,7 +189,7 @@
                   <td>${data.name}</td>
                   <td>${data.type}</td>
                   <td><span class="status-badge status-${data.status.toLowerCase()}">${data.status}</span></td>
-                  <td><button class="qr-btn" onclick="openQR('${data.name}','${data.type}','${data.status}','${data.qr}')">View QR</button></td>
+                  <td><button class="qr-btn" onclick="openQR('${data.name}','${data.type}','${data.status}','${data.code}')">View QR</button></td>
                 </tr>`;
             }, 2000);
           } else {
@@ -207,9 +207,12 @@
       window.location.href = "qr.html";
     }
 
-    function openQR(name, type, status, qrPath) {
+    function openQR(name, type, status, refCode) {
       document.getElementById("qrModal").style.display = "flex";
-      document.getElementById("qrImage").src = qrPath || "images/mainpage/qr.png";
+      const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+      const verificationLink = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(refCode || '')}`;
+      const dynamicQR = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(verificationLink)}`;
+      document.getElementById("qrImage").src = dynamicQR;
       document.getElementById("qrDetails").innerHTML = `
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Type:</strong> ${type}</p>

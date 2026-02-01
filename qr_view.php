@@ -126,13 +126,16 @@ if (empty($error)) {
             if (!empty($dateForTime) && !empty($startTime)) { $startAt = new DateTime($dateForTime . ' ' . $startTime); }
             if (!empty($dateForTime) && !empty($endTime)) { $endAt = new DateTime($dateForTime . ' ' . $endTime); }
 
+            $startDateYmd = !empty($startDate) ? date('Y-m-d', strtotime($startDate)) : null;
+            $endDateYmd = !empty($endDate) ? date('Y-m-d', strtotime($endDate)) : null;
+
             $isExpired = false;
             if ($statusVal === 'approved') {
-                if ($startAt && $endAt) {
-                    if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
-                } elseif (!empty($endDate) && $endDate < $today) {
+                if ($endAt) {
+                    if ($nowDt > $endAt) { $isExpired = true; }
+                } elseif ($endDateYmd && $endDateYmd < $today) {
                     $isExpired = true;
-                } elseif (empty($endDate) && !empty($startDate) && $startDate < $today) {
+                } elseif (!$endDateYmd && $startDateYmd && $startDateYmd < $today) {
                     $isExpired = true;
                 }
                 if ($isExpired) { $statusVal = 'expired'; }
@@ -198,13 +201,16 @@ if (empty($error)) {
             if (!empty($dateForTime) && !empty($startTime)) { $startAt = new DateTime($dateForTime . ' ' . $startTime); }
             if (!empty($dateForTime) && !empty($endTime)) { $endAt = new DateTime($dateForTime . ' ' . $endTime); }
 
+            $startDateYmd = !empty($startDate) ? date('Y-m-d', strtotime($startDate)) : null;
+            $endDateYmd = !empty($endDate) ? date('Y-m-d', strtotime($endDate)) : null;
+
             $isExpired = false;
             if ($statusVal === 'approved') {
-                if ($startAt && $endAt) {
-                    if ($nowDt < $startAt || $nowDt > $endAt) { $isExpired = true; }
-                } elseif (!empty($endDate) && $endDate < $today) {
+                if ($endAt) {
+                    if ($nowDt > $endAt) { $isExpired = true; }
+                } elseif ($endDateYmd && $endDateYmd < $today) {
                     $isExpired = true;
-                } elseif (empty($endDate) && !empty($startDate) && $startDate < $today) {
+                } elseif (!$endDateYmd && $startDateYmd && $startDateYmd < $today) {
                     $isExpired = true;
                 }
                 if ($isExpired) { $statusVal = 'expired'; }

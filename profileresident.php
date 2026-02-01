@@ -754,43 +754,40 @@ body.account-blocked { overflow: hidden; }
     <!-- Hidden ID Card for Download Generation -->
     <?php if (!$isAccountBlocked): ?>
     <div style="position:fixed; left:-9999px; top:0;">
-        <div class="resident-id-card" id="residentCard" style="width:360px;">
-          <div class="card-header">
-            <div class="brand"><img src="images/logo.svg" alt="VP"><div class="text">VictorianPass</div></div>
-          </div>
-          <div class="id-top">
-            <div class="avatar"><img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="QR"></div>
-            <div class="top-info">
-              <div style="color:#e5ddc6; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Official Proof of Residency</div>
-              <div class="name"><?php echo htmlspecialchars($fullName); ?></div>
-              <div class="contact"><?php echo htmlspecialchars($user['email']); ?></div>
-              <div style="margin-top:6px;"><span class="badge active">Verified Resident</span></div>
+        <div class="resident-id-card" id="residentCard" style="width:360px; background:#fff; padding:20px; box-sizing:border-box; font-family:'Poppins',sans-serif;">
+          <div style="border: 2px solid #23412e; padding: 20px; border-radius: 12px; background: #f9f9f9; text-align: center;">
+            <div style="margin-bottom: 15px; font-weight: 700; color: #23412e; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.1rem;">
+               <img src="images/logo.svg" alt="Logo" style="width: 32px; height: 32px; margin: 0;">
+               <span>Victorian Pass</span>
+            </div>
+            <div style="background:#fff; padding:10px; border:1px solid #ddd; display:inline-block; border-radius:0;">
+              <img src="<?php echo htmlspecialchars($qrRelPath); ?>" alt="QR" style="width:200px;height:200px;object-fit:contain;display:block;">
+            </div>
+            <div style="color: #d9534f; font-weight: 600; margin: 15px auto 5px auto; font-size: 0.85rem; line-height: 1.5; border: 1px dashed #d9534f; padding: 10px; border-radius: 8px; background: #fff5f5;">
+                Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.
             </div>
           </div>
-          <div class="divider"></div>
-          <div class="id-body">
-            <div class="row"><div class="label">Block</div><div class="value"><?php echo htmlspecialchars($user['house_number']??'-'); ?></div></div>
-            <div class="row"><div class="label">Unit</div><div class="value"><?php echo htmlspecialchars($user['address']??'-'); ?></div></div>
-            <div class="row"><div class="label">Contact</div><div class="value"><?php echo htmlspecialchars($displayPhone?:'-'); ?></div></div>
-          </div>
-          <div class="foot">Scan to verify • Resident Access</div>
         </div>
     </div>
     <?php endif; ?>
 
     <script>
     function downloadPersonalQR(){
-      var element = document.getElementById('residentCard');
-      html2canvas(element, {
-        scale: 3, // High resolution
-        useCORS: true,
-        backgroundColor: null
-      }).then(function(canvas) {
+      var qrUrl = <?php echo json_encode($qrRelPath); ?> || '';
+      if(!qrUrl) return;
+      function doDownload(){
         var link = document.createElement('a');
         link.download = 'My_Personal_QR_Code.png';
-        link.href = canvas.toDataURL('image/png');
+        link.href = qrUrl;
+        document.body.appendChild(link);
         link.click();
-      });
+        document.body.removeChild(link);
+      }
+      if(typeof window.openQRWarning === 'function'){
+        window.openQRWarning(doDownload);
+      } else {
+        doDownload();
+      }
     }
     </script>
   </aside>
@@ -1109,6 +1106,16 @@ body.account-blocked { overflow: hidden; }
       <div id="guestPassContent"></div>
     </div>
   </div>
+  <div id="qrWarningModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
+    <div style="background:#fff; border-radius:12px; padding:22px 20px; width:360px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
+      <div style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
+      <div style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.</div>
+      <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
+        <button type="button" id="qrWarningCancel" style="background:#e5e7eb; color:#111827; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
+        <button type="button" id="qrWarningProceed" style="background:#23412e; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Proceed</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Hidden Template for Amenity Pass Download -->
   <div id="amenityPassTemplate" style="position:fixed; left:-9999px; top:0; z-index:-9999; width:400px; background:#fff; padding:20px; box-sizing:border-box; font-family:'Poppins',sans-serif;">
@@ -1149,6 +1156,26 @@ body.account-blocked { overflow: hidden; }
           guestPassModal.style.display = "none";
       }
   });
+  (function(){
+    var modal = document.getElementById('qrWarningModal');
+    var cancelBtn = document.getElementById('qrWarningCancel');
+    var proceedBtn = document.getElementById('qrWarningProceed');
+    function close(){ if(modal) modal.style.display='none'; }
+    if(cancelBtn) cancelBtn.onclick = close;
+    if(proceedBtn) proceedBtn.onclick = function(){
+      close();
+      if(typeof window.qrWarningConfirm === 'function'){
+        var cb = window.qrWarningConfirm;
+        window.qrWarningConfirm = null;
+        cb();
+      }
+    };
+    if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+    window.openQRWarning = function(cb){
+      window.qrWarningConfirm = typeof cb === 'function' ? cb : null;
+      if(modal) modal.style.display = 'flex';
+    };
+  })();
   function openGuestPassModal(ref, name, resident) {
       if(!guestPassModal) return;
       var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
@@ -1613,89 +1640,13 @@ body.account-blocked { overflow: hidden; }
               .catch(function(){});
         }
 
-        if(itemType === 'reservation') {
-             var template = document.getElementById('amenityPassTemplate');
-             var qrContainer = document.getElementById('amenityPassQR');
-             if(template && qrContainer) {
-                 // Extract the data from the URL (qrserver url format: data=...)
-                 var qrData = '';
-                 try {
-                     var urlObj = new URL(url);
-                     qrData = urlObj.searchParams.get('data');
-                 } catch(e) {
-                     // If URL parsing fails, try to construct from ref if available
-                     if(ref) {
-                         var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
-                         qrData = location.origin + basePath + '/qr_view.php?code=' + encodeURIComponent(ref);
-                     }
-                 }
-                 
-                 if(qrData) {
-                     qrContainer.innerHTML = ''; // Clear previous
-                     new QRCode(qrContainer, {
-                         text: qrData,
-                         width: 200,
-                         height: 200,
-                         colorDark : "#000000",
-                         colorLight : "#ffffff",
-                         correctLevel : QRCode.CorrectLevel.H
-                     });
-                     
-                     // Small delay to ensure QR is rendered
-                     setTimeout(function() {
-                         // Ensure we have an image for html2canvas to capture
-                         var qrImg = qrContainer.querySelector('img');
-                         var canvas = qrContainer.querySelector('canvas');
-                         
-                         // If qrcode.js replaced canvas with img
-                         if (qrImg && qrImg.src) {
-                            qrImg.style.width = '100%';
-                            qrImg.style.height = '100%';
-                            qrImg.style.objectFit = 'contain';
-                            qrImg.style.display = 'block';
-                         } 
-                         // If still canvas (sometimes happens depending on browser/library version)
-                         else if (canvas) {
-                             // Manually convert to image to be safe for html2canvas
-                             var img = document.createElement('img');
-                             img.src = canvas.toDataURL('image/png');
-                             img.style.width = '100%';
-                             img.style.height = '100%';
-                             img.style.objectFit = 'contain';
-                             img.style.display = 'block';
-                             canvas.style.display = 'none';
-                             qrContainer.appendChild(img);
-                         }
-
-                          html2canvas(template.querySelector('div'), {
-                              backgroundColor: null,
-                              scale: 2,
-                              logging: false,
-                              useCORS: true
-                          }).then(function(canvas) {
-                              var a = document.createElement('a');
-                              a.href = canvas.toDataURL('image/png');
-                              a.download = 'VictorianPass_' + (ref || 'amenity') + '.png';
-                              document.body.appendChild(a);
-                              a.click();
-                              document.body.removeChild(a);
-                              // Cleanup
-                              if(canvas && canvas.style) canvas.style.display = '';
-                              // Clear QR for next use
-                              qrContainer.innerHTML = ''; 
-                          }).catch(function(e){
-                              console.error(e);
-                              downloadRaw();
-                          });
-                      }, 1000); // Increased timeout to 1s for better reliability
-                 } else {
-                     downloadRaw();
-                 }
-             } else {
-                 downloadRaw();
-             }
+        function doDownload(){
+          downloadRaw();
+        }
+        if(typeof window.openQRWarning === 'function'){
+          window.openQRWarning(doDownload);
         } else {
-            downloadRaw();
+          doDownload();
         }
       });
     }

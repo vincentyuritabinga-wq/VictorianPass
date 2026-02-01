@@ -307,6 +307,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 <link rel="icon" type="image/png" href="images/logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link rel="stylesheet" href="css/dashboard.css">
 <!-- FontAwesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -527,6 +528,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   <div class="modal-content">
     <span class="close">&times;</span>
     <div id="activityModalBody"></div>
+  </div>
+</div>
+<div id="qrWarningModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
+  <div style="background:#fff; border-radius:12px; padding:22px 20px; width:360px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
+    <div style="font-weight:700; color:#23412e; font-size:1.05rem; margin-bottom:8px;">Warning</div>
+    <div style="font-size:0.9rem; color:#444; line-height:1.5;">Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.</div>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
+      <button type="button" id="qrWarningCancel" style="background:#e5e7eb; color:#111827; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
+      <button type="button" id="qrWarningProceed" style="background:#23412e; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer;">Proceed</button>
+    </div>
   </div>
 </div>
 
@@ -1322,6 +1333,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           activityModal.style.display = 'none';
       });
   }
+  (function(){
+    var modal = document.getElementById('qrWarningModal');
+    var cancelBtn = document.getElementById('qrWarningCancel');
+    var proceedBtn = document.getElementById('qrWarningProceed');
+    function close(){ if(modal) modal.style.display='none'; }
+    if(cancelBtn) cancelBtn.onclick = close;
+    if(proceedBtn) proceedBtn.onclick = function(){
+      close();
+      if(typeof window.qrWarningConfirm === 'function'){
+        var cb = window.qrWarningConfirm;
+        window.qrWarningConfirm = null;
+        cb();
+      }
+    };
+    if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+    window.openQRWarning = function(cb){
+      window.qrWarningConfirm = typeof cb === 'function' ? cb : null;
+      if(modal) modal.style.display = 'flex';
+    };
+  })();
   
   // Notification button handler
   if(notifBtn && notifPanel){
@@ -1469,19 +1500,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           if(img) url = img.src || '';
         }
         if(!url) return;
-        fetch(url)
-          .then(function(resp){ return resp.blob(); })
-          .then(function(blob){
-            var objectUrl = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = objectUrl;
-            a.download = 'QR_' + (ref || 'pass') + '.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(objectUrl);
-          })
-          .catch(function(){});
+        function downloadRaw(){
+          fetch(url)
+            .then(function(resp){ return resp.blob(); })
+            .then(function(blob){
+              var objectUrl = window.URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = objectUrl;
+              a.download = 'QR_' + (ref || 'pass') + '.png';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(objectUrl);
+            })
+            .catch(function(){});
+        }
+        if(typeof window.openQRWarning === 'function'){
+          window.openQRWarning(downloadRaw);
+        } else {
+          downloadRaw();
+        }
     });
     var updateBtn=extra.querySelector('.update-proof-btn');
     var updateInput=extra.querySelector('.update-proof-input');
@@ -1593,6 +1631,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<div id="visitorQrDownloadTemplate" style="position:fixed; left:-9999px; top:0; z-index:-9999; width:400px; background:#fff; padding:20px; box-sizing:border-box; font-family:'Poppins',sans-serif;">
+  <div style="border: 2px solid #23412e; padding: 20px; border-radius: 12px; background: #f9f9f9; text-align: center;">
+    <div style="margin-bottom: 15px; font-weight: 700; color: #23412e; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.1rem;">
+      <img src="images/logo.svg" alt="Logo" style="width: 32px; height: 32px; margin: 0;">
+      <span>Victorian Pass</span>
+    </div>
+    <div style="background:#fff; padding:10px; border:1px solid #ddd; display:inline-block; border-radius:0;">
+      <div id="visitorQrDownloadCode" style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;overflow:hidden;"></div>
+    </div>
+    <div style="color: #d9534f; font-weight: 600; margin: 15px auto 5px auto; font-size: 0.85rem; line-height: 1.5; border: 1px dashed #d9534f; padding: 10px; border-radius: 8px; background: #fff5f5;">
+      Do not scan. One-time use only. Once scanned, the QR code is permanently disabled. Authorized guards only.
+    </div>
+  </div>
+</div>
 <div id="changePasswordModalVisitor" class="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3000;">
   <div class="vp-logout-modal" style="position:relative; top:auto; right:auto; margin:0; width:350px; max-width:90vw; max-height:calc(100vh - 100px);">
     <button class="close-change-password" style="position:absolute; right:12px; top:10px; background:transparent; border:none; font-size:20px; cursor:pointer;">&times;</button>

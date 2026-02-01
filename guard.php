@@ -718,7 +718,48 @@ const sections = document.querySelectorAll('.section');
 const pageTitle = document.getElementById('page-title');
 navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); pageTitle.textContent=item.querySelector('span').textContent; if(item.dataset.section==='entries'){ loadTodayEntries(); } }); });
 function showToast(message, type){ const toast=document.getElementById('toast'); toast.textContent=message; toast.style.background=type==='error'?"var(--status-rejected)":"var(--status-approved)"; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2500); }
-function scanCode(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code to scan','error'); return; } fetch(`status.php?code=${encodeURIComponent(code)}`).then(r=>r.json()).then(data=>{ if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; } showToast('Scan recorded'); loadDashboardEntries(); loadTodayEntries(); }).catch(_=>{ showToast('Network error','error'); }); }
+function scanCode(){
+  const raw=(document.getElementById('scanCode').value||'').trim();
+  if(!raw){ showToast('Enter a code to scan','error'); return; }
+  const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
+  let codeForLog = raw;
+  let openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(raw)}`;
+  let parsedUrl = null;
+  try { parsedUrl = new URL(raw); } catch(_){}
+  if(parsedUrl){
+    const codeParam = parsedUrl.searchParams.get('code');
+    const ridParam = parsedUrl.searchParams.get('rid');
+    if(codeParam){
+      codeForLog = codeParam;
+      openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
+    } else if(ridParam && parsedUrl.pathname.indexOf('resident_qr_view.php') !== -1){
+      codeForLog = raw;
+      openUrl = parsedUrl.href;
+    }
+  } else {
+    const codeMatch = raw.match(/[?&]code=([^&]+)/i);
+    const ridMatch = raw.match(/[?&]rid=(\d+)/i);
+    if(codeMatch && codeMatch[1]){
+      const codeParam = decodeURIComponent(codeMatch[1]);
+      codeForLog = codeParam;
+      openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
+    } else if(ridMatch && ridMatch[1]){
+      codeForLog = raw;
+      openUrl = `${location.origin}${basePath}/resident_qr_view.php?rid=${encodeURIComponent(ridMatch[1])}`;
+    }
+  }
+  fetch(`status.php?code=${encodeURIComponent(codeForLog)}`)
+    .then(r=>r.json())
+    .then(data=>{
+      if(!data||!data.success){ showToast(data&&data.message?data.message:'Invalid code','error'); return; }
+      showToast('Scan recorded');
+      loadDashboardEntries();
+      loadTodayEntries();
+      const win = window.open(openUrl,'_blank');
+      if(!win){ window.location.href = openUrl; }
+    })
+    .catch(_=>{ showToast('Network error','error'); });
+}
 function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${dateDisplay}</td><td>${r.status||'-'}</td><td>${r.scanned_by||'-'}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
