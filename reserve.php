@@ -214,6 +214,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $startDateObj = DateTime::createFromFormat('Y-m-d', $start);
             $endDateObj = DateTime::createFromFormat('Y-m-d', $end);
             if (!$startDateObj || !$endDateObj) { throw new Exception('Invalid date range'); }
+            $hasRPersons = false;
+            $hasGPersons = false;
+            $chkR = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'persons'");
+            if ($chkR && $chkR->num_rows > 0) { $hasRPersons = true; }
+            $chkG = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'persons'");
+            if ($chkG && $chkG->num_rows > 0) { $hasGPersons = true; }
             $period = new DatePeriod($startDateObj, new DateInterval('P1D'), (clone $endDateObj)->modify('+1 day'));
             foreach ($period as $d) {
               $ds = $d->format('Y-m-d');
@@ -224,18 +230,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $r1 = $s1->get_result();
               $total += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['total']) : 0;
               $s1->close();
-              $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-              $s2->bind_param('ss', $amenity, $ds);
-              $s2->execute();
-              $r2 = $s2->get_result();
-              $total += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['total']) : 0;
-              $s2->close();
-              $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-              $s3->bind_param('ss', $amenity, $ds);
-              $s3->execute();
-              $r3 = $s3->get_result();
-              $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
-              $s3->close();
+              if ($hasRPersons) {
+                $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                $s2->bind_param('ss', $amenity, $ds);
+                $s2->execute();
+                $r2 = $s2->get_result();
+                $total += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['total']) : 0;
+                $s2->close();
+              }
+              if ($hasGPersons) {
+                $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                $s3->bind_param('ss', $amenity, $ds);
+                $s3->execute();
+                $r3 = $s3->get_result();
+                $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
+                $s3->close();
+              }
               if ($pool_booking_type === 'whole_pool') {
                 if ($total > 0) { $cnt = 1; break; }
               } else {
