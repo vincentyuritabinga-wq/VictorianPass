@@ -2271,8 +2271,8 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 .receipt-link:hover { color: var(--primary); }
 
 /* Tables */
-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 800px; }
-th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; vertical-align: middle; line-height: 1.4; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 800px; table-layout: fixed; }
+th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; vertical-align: middle; line-height: 1.4; white-space: nowrap; }
 th {
     font-weight: 600;
     color: var(--text-secondary);
@@ -2289,7 +2289,7 @@ tr:hover { background-color: #f8fafc; }
 
 /* Table Actions */
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-table td.actions { flex-direction: column; align-items: stretch; gap: 8px; min-width: 190px; }
+table td.actions { flex-direction: column; align-items: stretch; gap: 8px; min-width: 190px; white-space: normal; }
 table td.actions > * { width: 100%; }
 table td.actions form { width: 100%; margin: 0; display: block; }
 table td.actions .btn,
@@ -2297,10 +2297,16 @@ table td.actions a.btn {
     width: 100%;
     justify-content: center;
     min-height: 34px;
+    white-space: nowrap;
 }
 table td.actions .receipt-link { display: block; margin: 6px 0; }
 table td.actions .muted { display: block; margin: 6px 0; }
 table td.actions .badge { justify-content: center; }
+table td .receipt-link,
+table td .muted {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .actions .suspend-reason {
     width: 100%;
     padding: 7px 10px;

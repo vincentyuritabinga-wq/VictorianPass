@@ -1,6 +1,6 @@
 <?php
 // Database connection settings
-$host = "localhost";      // usually localhost in XAMPP
+$host = "127.0.0.1";
 $user = "root";           // default XAMPP MySQL user
 $pass = "";               // default is empty in XAMPP
 $db   = "victorianpass_db"; // your database name
