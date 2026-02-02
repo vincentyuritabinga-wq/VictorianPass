@@ -89,6 +89,20 @@ if ((!is_array($pending) || empty($pending)) && $ref_code !== '' && ($con instan
     $stmtC->close();
 }
 
+function format_time_ap($t){
+    $s = trim((string)$t);
+    if ($s === '') return '--';
+    $dt = DateTime::createFromFormat('H:i:s', $s);
+    if (!$dt) { $dt = DateTime::createFromFormat('H:i', $s); }
+    if ($dt) { return $dt->format('g:i A'); }
+    $p = explode(':', $s);
+    $h = intval($p[0] ?? 0);
+    $m = intval($p[1] ?? 0);
+    $ap = ($h >= 12) ? 'PM' : 'AM';
+    $hh = $h % 12; if ($hh === 0) $hh = 12;
+    return $hh . ':' . str_pad((string)$m, 2, '0', STR_PAD_LEFT) . ' ' . $ap;
+}
+
 // HANDLE FORM SUBMISSION
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
@@ -375,7 +389,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           }
           $persons = isset($pending['persons']) ? intval($pending['persons']) : 1;
         ?>
-        <div class="row"><span class="label">Hours</span><span class="amount"><?php echo intval($hours); ?></span></div>
+        <div class="row"><span class="label">Time</span><span class="amount">
+          <?php
+            $st = $pending['start_time'] ?? '';
+            $et = $pending['end_time'] ?? '';
+            echo ($st && $et) ? (format_time_ap($st) . ' – ' . format_time_ap($et)) : '--';
+          ?>
+        </span></div>
         <div class="row"><span class="label">Persons</span><span class="amount"><?php echo intval($persons); ?></span></div>
         <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>

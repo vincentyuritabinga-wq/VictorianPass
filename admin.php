@@ -872,11 +872,11 @@ function renderVerifyReceiptsCard($con){
                     echo '<button type="submit" class="btn btn-approve">Verify Payment Receipt</button>';
                     echo '</form>';
 
-                    echo '<form method="post">';
+                    echo '<form method="post" onsubmit="return openDenyModal(this)">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
                     echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
-                    echo '<button type="submit" class="btn btn-reject">Reject</button>';
+                    echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))">Reject</button>';
                     echo '</form>';
                   } else {
                   }
@@ -958,6 +958,7 @@ function getResidentOnlyReservations($con) {
               AND (r.booking_for IS NULL OR r.booking_for = 'resident')
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
+              AND (r.payment_status IS NULL OR r.payment_status != 'rejected')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -970,6 +971,7 @@ function getVisitorAccountReservations($con) {
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
+              AND (r.payment_status IS NULL OR r.payment_status != 'rejected')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1069,9 +1071,12 @@ function getResidentVisitorRequests($con) {
 }
 
 function getResidentGuestAmenityReservations($con) {
-    $query = "SELECT r.*, u.first_name AS res_first_name, u.last_name AS res_last_name, u.house_number AS res_house_number
+    $query = "SELECT r.*, 
+                     u.first_name AS res_first_name, u.last_name AS res_last_name, u.house_number AS res_house_number,
+                     gf.visitor_first_name AS gf_first_name, gf.visitor_middle_name AS gf_middle_name, gf.visitor_last_name AS gf_last_name
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
+              LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.booked_by_role IN ('guest', 'co_owner') OR r.booking_for IN ('guest', 'co_owner'))
               AND r.amenity IS NOT NULL
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
@@ -2777,6 +2782,18 @@ body.modal-open { overflow: hidden; }
     border-radius: 14px;
     box-shadow: 0 8px 18px rgba(0,0,0,0.12);
 }
+#denyReasonModal .modal-content {
+    width: min(92vw, 520px);
+    aspect-ratio: auto;
+    padding: 16px;
+    border-radius: 12px;
+    gap: 8px;
+}
+#denyReasonTitle { margin: 0; padding: 8px 0 10px; }
+#denyReasonMessage { margin: 6px 0 8px; }
+#denyReasonLabel { margin-top: 6px; }
+#denyReasonInput { min-height: 90px; }
+#denyReasonSubmit { background: var(--danger); color: #fff; }
 #visitorModal .modal-content h3,
 #residentReservationModal .modal-content h3,
 #reservationModal .modal-content h3,
@@ -3276,7 +3293,6 @@ body.modal-open { overflow: hidden; }
     <?php endforeach; ?>
   </div>
   <div class="content-row">
-    <div class="card-box" style="margin-top:20px;">
       <h3>Guest Forms Activity</h3>
       <table class="table">
         <thead>
@@ -3506,12 +3522,12 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                       echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
                       echo "</form>";
-                      echo "<form method='post' style='display:inline;'>";
+                      echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                       echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                       echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
                       echo "</form>";
                     } elseif ($payStatusLower === 'verified') {
                       echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -3525,12 +3541,12 @@ body.modal-open { overflow: hidden; }
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                   echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
                   echo "</form>";
-                  echo "<form method='post' class='action-form action-deny'>";
+                  echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                   echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Deny</button>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . " onclick='return openDenyModal(this.closest(\"form\"))'>Deny</button>";
                   echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " request? This cannot be undone.\")'>";
@@ -3564,6 +3580,7 @@ body.modal-open { overflow: hidden; }
         <thead>
           <tr>
             <th>Resident</th>
+            <th>Guest Name</th>
             <th>Booked By</th>
             <th>Amenity</th>
             <th>Dates</th>
@@ -3587,6 +3604,11 @@ body.modal-open { overflow: hidden; }
                   echo "<div style='font-weight:600; color:#333;'>" . htmlspecialchars($resName) . "</div>";
                   echo "<div style='font-size:0.85rem; color:#666;'>" . $resHouse . "</div>";
                   echo "</td>";
+
+                  // Guest Name (from guest_forms or fallback)
+                  $guestNameGF = trim(($gar['gf_first_name'] ?? '') . ' ' . ($gar['gf_middle_name'] ?? '') . ' ' . ($gar['gf_last_name'] ?? ''));
+                  $guestName = $guestNameGF !== '' ? $guestNameGF : ((strtolower($gar['booked_by_role'] ?? '') === 'guest') ? ($gar['booked_by_name'] ?? 'Guest') : '');
+                  echo "<td><strong>" . htmlspecialchars($guestName ?: 'Guest') . "</strong></td>";
 
                   // Booked By
                   $bookedBy = !empty($gar['booked_by_name']) ? htmlspecialchars($gar['booked_by_name']) : 'Guest';
@@ -3613,8 +3635,10 @@ body.modal-open { overflow: hidden; }
                   echo "<td>" . $dateRange . "</td>";
                   
                   $approval_status = $gar['approval_status'] ?? 'pending';
+                  $payStatusLowerGar = strtolower($gar['payment_status'] ?? '');
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  $statusLabelGar = ($payStatusLowerGar === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  echo "<td><span class='badge $statusClass'>" . $statusLabelGar . "</span></td>";
                   
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
@@ -3728,7 +3752,8 @@ body.modal-open { overflow: hidden; }
                   echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                  $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
                   if ($approval_status == 'pending') {
@@ -3796,7 +3821,7 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'>View Details</button>";
-              echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Are you sure? This resident will now be deleted\")'>";
+              echo "<form method='post' style='display:inline;' onsubmit='return openAdminConfirm(this, \"Are you sure? This resident will now be deleted\")'>";
               echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='suspend_user'>";
               echo "<input type='hidden' name='redirect_page' value='residents'>";
@@ -3842,7 +3867,7 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'>View Details</button>";
-              echo "<form method='post' class='delete-form' onsubmit='return confirm(\"Delete this account? This cannot be undone.\")' style='display:inline;'>";
+              echo "<form method='post' class='delete-form' onsubmit='return openAdminConfirm(this, \"Are you sure? This visitor will now be deleted\")' style='display:inline;'>";
               echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='delete_user'>";
               echo "<input type='hidden' name='redirect_page' value='visitors'>";
@@ -4026,16 +4051,16 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 </script>
 
 <div id="denyReasonModal" class="modal modal-top">
-  <div class="modal-content" style="max-width:520px;">
+  <div class="modal-content" style="max-width:520px;padding:16px;gap:8px;">
     <span class="close" id="denyReasonClose">&times;</span>
     <h3 id="denyReasonTitle">Confirm Rejection</h3>
-    <div id="denyReasonMessage" style="margin:10px 0 10px;color:#5a6b7c;font-size:0.9rem;">Are you sure you want to reject this item?</div>
-    <div id="denyReasonLabel" style="font-weight:600;margin-top:4px;">Reason</div>
-    <textarea id="denyReasonInput" rows="4" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-family:Poppins,Arial,sans-serif;"></textarea>
+    <div id="denyReasonMessage" style="margin:6px 0 8px;color:#5a6b7c;font-size:0.9rem;">Are you sure you want to reject this item?</div>
+    <div id="denyReasonLabel" style="font-weight:600;margin-top:6px;">Reason</div>
+    <textarea id="denyReasonInput" rows="3" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-family:Poppins,Arial,sans-serif;min-height:90px;"></textarea>
     <div id="denyReasonError" style="display:none;color:#b91c1c;font-size:0.85rem;margin-top:6px;">Please enter a reason to continue.</div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
       <button type="button" class="btn btn-view" id="denyReasonCancel">Cancel</button>
-      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Submit</button>
+      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Reject</button>
     </div>
   </div>
 </div>
@@ -4058,19 +4083,26 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     var incidentInput = form.querySelector('input[name="incident_action"]');
     var actionVal = actionInput ? String(actionInput.value || '') : '';
     var incidentVal = incidentInput ? String(incidentInput.value || '') : '';
-    if (incidentVal === 'reject') return 'Are you sure you want to reject this incident report?';
-    if (actionVal === 'reject_receipt') return 'Are you sure you want to reject this payment receipt?';
-    if (actionVal === 'deny_request') return 'Are you sure you want to deny this request?';
-    if (actionVal === 'deny_resident_reservation') return 'Are you sure you want to deny this reservation?';
-    if (actionVal === 'reject_reservation') return 'Are you sure you want to reject this reservation?';
-    if (actionVal === 'deny_user') return 'Are you sure you want to deny this account?';
+    var av = actionVal.trim().toLowerCase();
+    var iv = incidentVal.trim().toLowerCase();
+    if (iv === 'reject') return 'Are you sure you want to reject this incident report?';
+    if (av === 'reject_receipt') return 'Are you sure you want to proceed with rejecting this payment receipt?';
+    if (av === 'deny_request') return 'Are you sure you want to proceed with rejecting this amenity request?';
+    if (av === 'deny_resident_reservation') return 'Are you sure you want to proceed with rejecting this reservation?';
+    if (av === 'reject_reservation') return 'Are you sure you want to proceed with rejecting this reservation?';
+    if (av === 'deny_user') return 'Are you sure you want to deny this account?';
     return 'Are you sure you want to reject this item?';
   }
 
   function openModal(form, mustHaveReason){
     pendingForm = form;
     requireReason = !!mustHaveReason;
-    if (titleEl) titleEl.textContent = 'Confirm Rejection';
+    if (titleEl) {
+      var a = form.querySelector('input[name="action"]');
+      var av = a ? String(a.value || '').trim().toLowerCase() : '';
+      var proceedTitles = ['reject_receipt','reject_reservation','deny_request','deny_resident_reservation'];
+      titleEl.textContent = (proceedTitles.indexOf(av) !== -1) ? 'Proceed With Rejection' : 'Confirm Rejection';
+    }
     if (msgEl) msgEl.textContent = resolveRejectMessage(form);
     if (labelEl) labelEl.textContent = requireReason ? 'Reason' : 'Reason (optional)';
     if (input) {
@@ -4141,6 +4173,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
   });
 
   document.querySelectorAll('form').forEach(bindRejectForm);
+
+  window.openDenyModal = function(form){
+    var reasonInput = form.querySelector('input[name="denial_reason"]');
+    openModal(form, !!reasonInput);
+    return false;
+  };
 })();
 </script>
 
@@ -4221,8 +4259,10 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
                 echo "<td>" . $dateRange . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
+                $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
+                $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'>View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
@@ -4244,12 +4284,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
                   echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
                   echo "</form>";
-                  echo "<form method='post'>";
+                  echo "<form method='post' onsubmit='return openDenyModal(this)'>";
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='reject_receipt'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
                   echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                  echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
                   echo "</form>";
                 } elseif ($payStatusLower === 'verified') {
                   echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -5157,6 +5197,45 @@ window.addEventListener('click', function(event){
 </main>
 </div>
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+<div id="adminConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
+  <div style="background:#fff; border-radius:12px; padding:22px 20px; width:380px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
+    <div style="font-weight:700; color:#1f2937; font-size:1.05rem; margin-bottom:8px;">Confirm Action</div>
+    <div id="adminConfirmMessage" style="font-size:0.95rem; color:#374151; line-height:1.5; margin-bottom:16px;"></div>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <button type="button" class="btn btn-cancel" id="adminConfirmCancelBtn" style="min-width:130px;">Cancel</button>
+      <button type="button" class="btn btn-reject" id="adminConfirmOkBtn" style="min-width:130px;">Confirm</button>
+    </div>
+  </div>
+</div>
+<script>
+  (function(){
+    var modal = document.getElementById('adminConfirmModal');
+    var msgEl = document.getElementById('adminConfirmMessage');
+    var cancelBtn = document.getElementById('adminConfirmCancelBtn');
+    var okBtn = document.getElementById('adminConfirmOkBtn');
+    var currentForm = null;
+    function close(){ if(modal) modal.style.display='none'; currentForm = null; }
+    window.openAdminConfirm = function(form, message){
+      currentForm = form || null;
+      if(msgEl) msgEl.textContent = message || 'Are you sure?';
+      if(modal) modal.style.display = 'flex';
+      return false;
+    };
+    if(cancelBtn) cancelBtn.onclick = function(){ close(); };
+    if(okBtn) okBtn.onclick = function(){
+      var form = currentForm;
+      close();
+      if(!form) return;
+      var reason = form.querySelector('input[name=\"suspension_reason\"]');
+      if(reason){
+        var val = (reason.value || '').trim();
+        if(!val){ reason.focus(); return; }
+      }
+      form.submit();
+    };
+    if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+  })();
+</script>
 <script>
   function toggleDeleteForReason(input) {
     var wrap = input.closest('.actions');

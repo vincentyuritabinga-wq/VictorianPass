@@ -57,7 +57,7 @@ if ($resGF && $resGF->num_rows > 0) {
     $rPrice = null;
     $rDownpayment = null;
 
-    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, qr_path FROM reservations WHERE ref_code = ? LIMIT 1");
+    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, qr_path, payment_status, receipt_path, denial_reason FROM reservations WHERE ref_code = ? LIMIT 1");
     if ($stmtR) {
         $stmtR->bind_param('s', $row['ref_code']);
         if ($stmtR->execute()) {
@@ -73,6 +73,9 @@ if ($resGF && $resGF->num_rows > 0) {
                 $rPrice = isset($r['price']) ? floatval($r['price']) : null;
                 $rDownpayment = isset($r['downpayment']) ? floatval($r['downpayment']) : null;
 
+                $rPayStatus = strtolower(trim($r['payment_status'] ?? ''));
+                $rReceipt = $r['receipt_path'] ?? '';
+                $rReason = $r['denial_reason'] ?? '';
                 $hasReservation = !empty($rAmenity);
                 if (!$qrPath && !empty($r['qr_path'])) { $qrPath = $r['qr_path']; $qrImg = $qrPath; }
                 if ($hasReservation) {
@@ -126,7 +129,10 @@ if ($resGF && $resGF->num_rows > 0) {
         'resident_house_number' => $row['res_house_number'] ?? '',
         'guest_name' => $fullName,
         'is_resident_guest' => true,
-        'verification' => $verificationLink
+        'verification' => $verificationLink,
+        'payment_status' => isset($rPayStatus) ? $rPayStatus : '',
+        'receipt_path' => isset($rReceipt) ? $rReceipt : '',
+        'denial_reason' => isset($rReason) ? $rReason : ''
     ];
 }
 
@@ -236,7 +242,10 @@ if (!$data) {
             'resident_house_number' => $row['house_number'] ?? '',
             'guest_name' => $displayName,
             'is_resident_guest' => $isResidentGuest,
-            'verification' => $verificationLink
+            'verification' => $verificationLink,
+            'payment_status' => strtolower(trim($row['payment_status'] ?? '')),
+            'receipt_path' => $row['receipt_path'] ?? '',
+            'denial_reason' => $row['denial_reason'] ?? ''
         ];
     }
 }
@@ -298,7 +307,10 @@ if (!$data) {
             'resident_email' => $email,
             'guest_name' => '',
             'is_resident_guest' => false,
-            'verification' => $verificationLink
+            'verification' => $verificationLink,
+            'payment_status' => '',
+            'receipt_path' => '',
+            'denial_reason' => ''
         ];
     }
 }
@@ -429,6 +441,20 @@ if (!$data) {
         }
         .action-btn:hover {
             background-color: #1b3324;
+        }
+        .pay-status {
+            display:flex; align-items:center; gap:10px; margin-top:8px;
+        }
+        .pay-badge { padding:4px 10px; border-radius:16px; font-weight:600; font-size:0.8rem; }
+        .pay-pending { background:#ffedd5; color:#c2410c; }
+        .pay-verified { background:#dcfce7; color:#166534; }
+        .pay-rejected { background:#fee2e2; color:#991b1b; }
+        .pay-proof {
+            margin-top:10px; background:#fff; border:1px solid #eee; border-radius:10px; padding:10px;
+        }
+        .pay-proof img { max-width:100%; height:auto; border-radius:8px; }
+        .rejection-reason {
+            margin-top:12px; padding:10px; border-radius:8px; background:#fee2e2; color:#991b1b; font-weight:600;
         }
     </style>
 
@@ -586,4 +612,41 @@ if (!$data) {
     <?php if (($data['status'] ?? '') === 'approved'): ?>
     <?php endif; ?>
 
+    <?php 
+      $pstat = strtolower(trim($data['payment_status'] ?? ''));
+      $receipt = trim($data['receipt_path'] ?? '');
+      $denial = trim($data['denial_reason'] ?? '');
+      $showPayment = ($pstat !== '' || $receipt !== '');
+      if ($showPayment):
+    ?>
+    <div class="section-title">Payment</div>
+    <div class="info-grid">
+      <?php if($pstat !== ''): ?>
+      <div class="info-row pay-status">
+        <span class="info-label">Payment Status</span>
+        <?php 
+          $cls = 'pay-badge pay-pending'; $lbl='Pending';
+          if($pstat === 'verified'){ $cls='pay-badge pay-verified'; $lbl='Verified'; }
+          else if($pstat === 'rejected'){ $cls='pay-badge pay-rejected'; $lbl='Rejected'; }
+          else if($pstat === 'pending_update'){ $cls='pay-badge pay-pending'; $lbl='Pending Update'; }
+        ?>
+        <span class="<?php echo $cls; ?>"><?php echo $lbl; ?></span>
+      </div>
+      <?php endif; ?>
+      <?php if($pstat === 'rejected' && $denial !== ''): ?>
+      <div class="rejection-reason">Reason: <?php echo htmlspecialchars($denial); ?></div>
+      <?php endif; ?>
+      <?php if($receipt !== ''): ?>
+      <div class="pay-proof">
+        <?php $isPdf = (bool)preg_match('/\.pdf$/i', $receipt); ?>
+        <?php if($isPdf): ?>
+          <a href="<?php echo htmlspecialchars($receipt); ?>" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>
+        <?php else: ?>
+          <img src="<?php echo htmlspecialchars($receipt); ?>" alt="Uploaded proof of payment">
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+ 
 </div>
