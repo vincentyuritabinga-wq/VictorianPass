@@ -735,11 +735,11 @@ body.account-blocked { overflow: hidden; }
 
     <nav class="nav-menu">
       <a href="#" class="nav-item <?php echo $activeSection === 'panel-requests' ? 'active' : ''; ?>" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
-      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
       <a href="#" class="nav-item" data-section="panel-guest-form"><i class="fa-solid fa-user-plus"></i> <span>Guest Form</span></a>
       <a href="#" class="nav-item" data-section="panel-my-guests"><i class="fa-solid fa-user-group"></i> <span>My Guests</span></a>
       <a href="report_incident.php" class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> <span>Report Incident</span></a>
+      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
     </nav>
 
     <div class="sidebar-footer">
@@ -962,6 +962,35 @@ body.account-blocked { overflow: hidden; }
           </div>
           <div style="max-width:720px;margin:0 auto;">
             <form class="entry-form" id="entryForm" enctype="multipart/form-data">
+              <div class="booking-steps" aria-label="Guest form steps">
+                <div class="booking-steps-header">
+                  <div class="booking-steps-label">Guest form steps</div>
+                  <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
+                </div>
+                <div class="booking-steps-body">
+                  <div class="booking-step is-active" id="step-resident">
+                    <div class="step-index">1</div>
+                    <div class="step-content">
+                      <div class="step-title">Resident information</div>
+                      <div class="step-subtitle">Confirm your name, house/unit, and contact details</div>
+                    </div>
+                  </div>
+                  <div class="booking-step" id="step-guest">
+                    <div class="step-index">2</div>
+                    <div class="step-content">
+                      <div class="step-title">Guest information</div>
+                      <div class="step-subtitle">Enter your guest’s personal and contact details</div>
+                    </div>
+                  </div>
+                  <div class="booking-step" id="step-upload">
+                    <div class="step-index">3</div>
+                    <div class="step-content">
+                      <div class="step-title">Upload ID &amp; save</div>
+                      <div class="step-subtitle">Add a valid ID and save the guest to your list</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div class="form-header">
                 <img src="images/mainpage/ticket.svg" alt="Entry Icon">
                 <span>Add Guest</span>
@@ -2637,6 +2666,20 @@ document.addEventListener('DOMContentLoaded', function() {
   reportModal.addEventListener('click', function(e) {
     if (e.target === reportModal) closeReportModal();
   });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  var panel=document.querySelector('#panel-guest-form .booking-steps');
+  var toggle=document.getElementById('bookingStepsToggle');
+  if(panel&&toggle){
+    toggle.addEventListener('click',function(){
+      var collapsed=panel.classList.toggle('is-collapsed');
+      toggle.textContent=collapsed?'+':'−';
+      toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+    });
+  }
 });
 </script>
 

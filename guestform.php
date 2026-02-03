@@ -116,6 +116,35 @@ if ($con instanceof mysqli) {
 
 <section class="hero" id="addGuestSection">
   <form class="entry-form" id="entryForm">
+    <div class="booking-steps" aria-label="Guest form steps">
+      <div class="booking-steps-header">
+        <div class="booking-steps-label">Guest form steps</div>
+        <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
+      </div>
+      <div class="booking-steps-body">
+        <div class="booking-step is-active" id="step-resident">
+          <div class="step-index">1</div>
+          <div class="step-content">
+            <div class="step-title">Resident information</div>
+            <div class="step-subtitle">Confirm your name, house/unit, and contact details</div>
+          </div>
+        </div>
+        <div class="booking-step" id="step-guest">
+          <div class="step-index">2</div>
+          <div class="step-content">
+            <div class="step-title">Guest information</div>
+            <div class="step-subtitle">Enter your guest’s personal and contact details</div>
+          </div>
+        </div>
+        <div class="booking-step" id="step-upload">
+          <div class="step-index">3</div>
+          <div class="step-content">
+            <div class="step-title">Upload ID &amp; save</div>
+            <div class="step-subtitle">Add a valid ID and save the guest to your list</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="form-header">
       <img src="images/mainpage/ticket.svg" alt="Entry Icon">
       <span>Add Guest</span>
@@ -259,6 +288,18 @@ const verifySummary = document.getElementById('verifySummary');
 const verifyCancelBtn = document.getElementById('verifyCancelBtn');
 const verifyConfirmBtn = document.getElementById('verifyConfirmBtn');
 let submitting = false;
+
+document.addEventListener('DOMContentLoaded',function(){
+  var panel=document.querySelector('.booking-steps');
+  var toggle=document.getElementById('bookingStepsToggle');
+  if(panel&&toggle){
+    toggle.addEventListener('click',function(){
+      var collapsed=panel.classList.toggle('is-collapsed');
+      toggle.textContent=collapsed?'+':'−';
+      toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+    });
+  }
+});
 
 function openModal(){
   var m = document.getElementById('refModal');

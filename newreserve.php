@@ -139,6 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if ($booking_for === 'resident') { $rate = $rate * 0.5; }
       $basePrice = max(1, $hours) * $rate;
     } else if ($amenity === 'Pool') {
+      $startTime = '09:00';
+      $endTime = '18:00';
       $basePrice = ((max(0,$guests_count) * 175) + (max(0,$residents_count) * 175 * 0.5));
       $persons = max(1, ($residents_count + $guests_count));
     } else {
@@ -819,6 +821,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div class="res-label" id="timeSectionLabel" style="margin-top:8px; display:none;"><small>Start Time</small></div>
                     <div id="timeSlotContainer"></div>
                     <div id="selectedTimeRange" class="selected-time-range" style="display:none;"></div>
+                    <div id="selectedTimeNote" class="selected-time-note" style="display:none;">Note: This is the available time for the Community Pool. Please leave by closing time.</div>
                     <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
                   </div>
                     <div class="res-item date-item" id="endDateGroup">
@@ -1421,6 +1424,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const hs=document.getElementById('hoursSelect'); if(hs){ hs.value=''; }
       const hc=document.getElementById('hoursChosen'); if(hc){ hc.value='0'; }
       const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=''; tr.style.display='none'; }
+      const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display='none'; }
       const tsl=document.getElementById('timeSectionLabel'); if(tsl){ tsl.style.display='none'; }
       const tCont=document.getElementById('timeSlotContainer'); if(tCont){ tCont.innerHTML=''; tCont.style.display='none'; }
       const avail=document.getElementById('availabilityNotice'); if(avail){ avail.style.display='none'; avail.textContent=''; }
@@ -1497,15 +1501,30 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     });
   }
 
-  function changePersons(val){
+  async function changePersons(val){
     let count=parseInt(document.getElementById('personCount').textContent);
     const amen=document.getElementById('amenityField').value;
-    const max=getAmenityMaxPersons(amen);
-    count=Math.min(max,Math.max(1,count+val));
+    let max=getAmenityMaxPersons(amen);
+    let remaining=max;
+    if(amen==='Pool'){
+      const poolInfo=await getPoolRemainingSlots();
+      remaining=poolInfo.remaining;
+      max=remaining;
+    }
+    const desired=count+val;
+    const minAllowed=(amen==='Pool' && remaining===0) ? 0 : 1;
+    count=Math.min(max,Math.max(minAllowed,desired));
     document.getElementById('personCount').textContent=count;
     document.getElementById('personsInput').value=count;
-    const note=document.getElementById('personsMaxNote'); if(note){ note.textContent = max?(`Maximum: ${max} persons`):''; }
-    if(count>=max){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); } else { setFieldWarning('personsInput',''); }
+    const note=document.getElementById('personsMaxNote');
+    if(amen==='Pool'){
+      if(note){ note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:''; }
+      if(desired>remaining){ setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`); }
+      else { setFieldWarning('personsInput',''); }
+    } else {
+      if(note){ note.textContent = max?(`Maximum: ${max} persons`):''; }
+      if(count>=max){ setFieldWarning('personsInput',`Maximum is ${max} persons.`); } else { setFieldWarning('personsInput',''); }
+    }
     updateDisplayedPrice();
     updateDownpaymentSuggestion();
     updateBookingSummary();
@@ -1546,7 +1565,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateDownpaymentSuggestion();
     renderTimeSlotButtons();
     const st=document.getElementById('startTimeInput').value;
-    if(st){ computeEndTimeFromHours(); const sh=parseInt(st.split(':')[0],10); const eh=sh+parseInt(hoursInput.value||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr && hoursInput.value){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } }
+    if(st){ computeEndTimeFromHours(); const sh=parseInt(st.split(':')[0],10); const eh=sh+parseInt(hoursInput.value||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr && hoursInput.value){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn && hoursInput.value){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } }
     const dc=document.getElementById('durationContainer'); if(dc){ Array.from(dc.children).forEach(b=>b.classList.remove('selected')); const sel=Array.from(dc.children).find(b=>b.dataset.hours===String(hoursInput.value)); if(sel){ sel.classList.add('selected'); } }
     updateActionStates();
     const hc=document.getElementById('hoursChosen'); if(hc){ hc.value='1'; }
@@ -1554,6 +1573,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
 
   async function fetchBookedTimesFor(date){ if(!document.getElementById('amenityField').value) return {times:[], persons_total:0, capacity:0}; try{ const res=await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(selectedAmenity)}&date=${encodeURIComponent(date)}`); const data=await res.json(); return data||{times:[], persons_total:0, capacity:0}; }catch(_){ return {times:[], persons_total:0, capacity:0}; } }
+  async function getPoolRemainingSlots(){
+    const max=getAmenityMaxPersons('Pool');
+    const ds=document.getElementById('startDateInput')?.value||'';
+    if(!ds){ return {remaining:max, capacity:max}; }
+    const data=await fetchBookedTimesFor(ds);
+    const capacity=parseInt(data.capacity||max,10);
+    const total=parseInt(data.persons_total||'0',10);
+    return {remaining:Math.max(0, capacity-total), capacity};
+  }
 
   function isHourBasedAmenity(amen){ return amen==='Basketball Court' || amen==='Tennis Court' || amen==='Clubhouse'; }
   function isPersonBasedAmenity(amen){ return amen==='Pool'; }
@@ -1687,11 +1715,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const tsl=document.getElementById('timeSectionLabel'); if(tsl){ tsl.style.display='none'; }
       if(hoursInput){ hoursInput.value=''; }
       const hc=document.getElementById('hoursChosen'); if(hc){ hc.value='0'; }
-      if(startTimeInput){ startTimeInput.value=''; }
-      if(endTimeInput){ endTimeInput.value=''; endTimeInput.readOnly=true; }
+      if(startTimeInput){ startTimeInput.value='09:00'; }
+      if(endTimeInput){ endTimeInput.value='18:00'; endTimeInput.readOnly=true; }
       if(priceEl){ priceEl.style.display='block'; }
       const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.style.display='none'; tr.textContent=''; }
+      const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display='none'; }
       const notice=document.getElementById('availabilityNotice'); if(notice){ notice.style.display='none'; notice.textContent=''; }
+      const timeSlots=document.getElementById('timeSlotContainer'); if(timeSlots){ timeSlots.style.display='none'; }
       const note=document.getElementById('personsMaxNote'); if(note){ const max=getAmenityMaxPersons(amen); note.textContent = max?(`Maximum: ${max} persons`):''; }
       updateDisplayedPrice();
       updateDownpaymentSuggestion();
@@ -1714,36 +1744,78 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateHoursSelectEnabled();
   }
 
-  function changeResidents(delta){
+  async function changeResidents(delta){
     const rEl=document.getElementById('residentsCountText');
     const rInput=document.getElementById('residentsCountInput');
     const gInput=document.getElementById('guestsCountInput');
     const pInput=document.getElementById('personsInput');
     const pText=document.getElementById('personCount');
     let r=parseInt(rEl.textContent||'0',10);
-    r=Math.max(0, r+delta);
+    const nextR=Math.max(0, r+delta);
+    const g=parseInt(gInput.value||'0',10);
+    const amen=document.getElementById('amenityField').value;
+    let max=getAmenityMaxPersons(amen);
+    let remaining=max;
+    if(amen==='Pool'){
+      const poolInfo=await getPoolRemainingSlots();
+      remaining=poolInfo.remaining;
+      max=remaining;
+      const note=document.getElementById('personsMaxNote');
+      if(note){ note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:''; }
+    }
+    const total=Math.max(0, nextR+g);
+    if(total < 1){
+      setFieldWarning('personsInput','At least 1 participant is required.');
+      return;
+    }
+    if(max!==Infinity && total>max){
+      if(amen==='Pool'){ setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`); }
+      else { setFieldWarning('personsInput',`Maximum is ${max} persons.`); }
+      return;
+    }
+    setFieldWarning('personsInput','');
+    r=nextR;
     rEl.textContent=String(r);
     rInput.value=String(r);
-    const g=parseInt(gInput.value||'0',10);
-    const total=Math.max(1, r+g);
     pInput.value=String(total);
     if(pText) pText.textContent=String(total);
     updateDisplayedPrice();
     updateDownpaymentSuggestion();
     updateBookingSummary();
   }
-  function changeGuests(delta){
+  async function changeGuests(delta){
     const gEl=document.getElementById('guestsCountText');
     const gInput=document.getElementById('guestsCountInput');
     const rInput=document.getElementById('residentsCountInput');
     const pInput=document.getElementById('personsInput');
     const pText=document.getElementById('personCount');
     let g=parseInt(gEl.textContent||'0',10);
-    g=Math.max(0, g+delta);
+    const nextG=Math.max(0, g+delta);
+    const r=parseInt(rInput.value||'0',10);
+    const amen=document.getElementById('amenityField').value;
+    let max=getAmenityMaxPersons(amen);
+    let remaining=max;
+    if(amen==='Pool'){
+      const poolInfo=await getPoolRemainingSlots();
+      remaining=poolInfo.remaining;
+      max=remaining;
+      const note=document.getElementById('personsMaxNote');
+      if(note){ note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:''; }
+    }
+    const total=Math.max(0, r+nextG);
+    if(total < 1){
+      setFieldWarning('personsInput','At least 1 participant is required.');
+      return;
+    }
+    if(max!==Infinity && total>max){
+      if(amen==='Pool'){ setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`); }
+      else { setFieldWarning('personsInput',`Maximum is ${max} persons.`); }
+      return;
+    }
+    setFieldWarning('personsInput','');
+    g=nextG;
     gEl.textContent=String(g);
     gInput.value=String(g);
-    const r=parseInt(rInput.value||'0',10);
-    const total=Math.max(1, r+g);
     pInput.value=String(total);
     if(pText) pText.textContent=String(total);
     updateDisplayedPrice();
@@ -1814,7 +1886,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const el=document.getElementById('selectedTimeRange');
     if(!el) return;
     const hrs=parseInt(document.getElementById('hoursInput').value||'0',10);
-    if(!st || !hrs || hrs<1){ el.style.display='none'; el.textContent=''; return; }
+    const tn=document.getElementById('selectedTimeNote');
+    if(!st || !hrs || hrs<1){ el.style.display='none'; el.textContent=''; if(tn){ tn.style.display='none'; } return; }
     const sh=parseInt((st||'').split(':')[0],10);
     const eh=sh+Math.max(1,hrs);
     const amen=document.getElementById('amenityField').value;
@@ -1823,6 +1896,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const maxH=parseInt(hrsRange.max.split(':')[0],10);
     el.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)} • Overall: ${formatTimeSlot(minH)} - ${formatTimeSlot(maxH)}`;
     el.style.display='block';
+    if(tn){ tn.style.display = document.getElementById('amenityField').value==='Pool' ? 'block' : 'none'; }
   }
 
   function updateBookingSummary(){
@@ -2466,9 +2540,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   function updateActionStates(){
     const s=document.getElementById('startDateInput').value;
     const eD=document.getElementById('endDateInput').value;
-    const st=document.getElementById('startTimeInput').value;
-    const et=document.getElementById('endTimeInput').value;
     const amenVal=document.getElementById('amenityField').value;
+    const stInput=document.getElementById('startTimeInput');
+    const etInput=document.getElementById('endTimeInput');
+    if(amenVal==='Pool'){
+      if(stInput){ stInput.value='09:00'; }
+      if(etInput){ etInput.value='18:00'; }
+    }
+    const st=stInput ? stInput.value : '';
+    const et=etInput ? etInput.value : '';
     const persons=parseInt(document.getElementById('personsInput').value||'0');
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     const submitBtn=document.getElementById('submitBtn');
@@ -2667,7 +2747,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     window.__slotRenderTokenCounter=(window.__slotRenderTokenCounter||0)+1; const __token=window.__slotRenderTokenCounter; window.__activeSlotRenderToken=__token; if(!date){ container.innerHTML=''; if(notice){ notice.style.display='none'; notice.textContent=''; } return; } fetchBookedTimesFor(date).then(data=>{ if(window.__activeSlotRenderToken!==__token) return; const booked=(data && data.times) ? data.times : []; window.__bookedTimesForDate=booked||[]; let anyEnabled=false; let disabledCount=0; slots.forEach(slot=>{ const startHour=parseInt(slot.value.split(':')[0],10); const maxPossible=computeMaxDuration(amen,startHour,booked); const valid=(maxPossible>=hours); const btn=document.createElement('button'); btn.type='button'; btn.className='slot-btn airbnb'; btn.textContent=slot.label; btn.dataset.slot=slot.value; if(!valid){ disabledCount++; btn.classList.add('unavailable'); btn.setAttribute('aria-disabled','true'); btn.onclick=function(){ showToast('This start time cannot fit your selected duration. Try a different start time or duration.','warning'); }; } else { anyEnabled=true; btn.classList.add('available'); btn.onclick=function(){ selectTimeSlot(slot.value); }; } container.appendChild(btn); }); let hasBookedHours=false; (booked||[]).forEach(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return; const bS=parseInt(String(t.start).split(':')[0],10); const bE=parseInt(String(t.end).split(':')[0],10); if(bE>bS){ hasBookedHours=true; } }); if(notice){ if(!anyEnabled){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Fully Booked — no time slots available for this date.' : ''; } else if(disabledCount>0){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Partially Booked — some time slots are unavailable.' : ''; } else { notice.style.display='none'; notice.textContent=''; } } if(!anyEnabled){ showTimeError('No start times fit the selected hours. Try a different duration.'); } else { showTimeError(''); } const st=document.getElementById('startTimeInput').value; if(st){ const selBtn=Array.from(container.children).find(b=>b.tagName==='BUTTON' && b.dataset.slot===st); if(selBtn) selBtn.classList.add('selected'); } updateActionStates(); }); }
 
-  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } showTimeError(''); updateActionStates(); }
+  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } showTimeError(''); updateActionStates(); }
   function renderHoursDropdownForAmenity(){
     const amen=document.getElementById('amenityField').value;
     const sel=document.getElementById('hoursSelect');

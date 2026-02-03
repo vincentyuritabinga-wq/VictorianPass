@@ -393,12 +393,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
     <nav class="nav-menu">
       <a href="#" class="nav-item active" data-section="panel-requests"><i class="fa-solid fa-list"></i> <span>My Requests</span></a>
-      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
       <a href="reserve.php" class="nav-item"><i class="fa-solid fa-ticket"></i> <span>Amenity Reservation</span></a>
+      <a href="#" class="nav-item" data-section="panel-history"><i class="fa-solid fa-clock-rotate-left"></i> <span>History</span></a>
     </nav>
 
     <div class="sidebar-footer">
-      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i></a>
+      <a href="logout.php" class="logout-btn" title="Log Out"><i class="fa-solid fa-right-from-bracket"></i> <span>Log Out</span></a>
     </div>
   </aside>
 

@@ -1929,7 +1929,7 @@ $verifyContext = isset($_GET['verify_context']) ? $_GET['verify_context'] : '';
     
     --bg-body: #f4f6f8;
     --bg-surface: #ffffff;
-    --bg-sidebar: #ffffff;
+    --bg-sidebar: #2b2623;
     
     --text-main: #2c3e50;
     --text-secondary: #5a6b7c;
@@ -1955,8 +1955,8 @@ $verifyContext = isset($_GET['verify_context']) ? $_GET['verify_context'] : '';
     --transition: all 0.2s ease-in-out;
     
     --radius: 8px;
-    --sidebar-width: 260px;
-    --header-height: 60px;
+    --sidebar-width: 280px;
+    --header-height: 68px;
 }
 
 /* Reset & Base */
@@ -1987,8 +1987,8 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
-    background: var(--bg-sidebar);
-    border-right: 1px solid var(--border);
+    background: radial-gradient(circle at top left, #3a332f 0%, #2b2623 55%, #211b18 100%);
+    color: #f4efe6;
     display: flex;
     flex-direction: column;
     position: sticky;
@@ -1997,35 +1997,37 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     overflow-y: auto;
     z-index: 100;
     flex-shrink: 0;
-    box-shadow: var(--shadow-sm);
+    transition: width 0.25s ease;
 }
 
 .brand {
-    padding: 20px 24px;
+    padding: 22px 20px;
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid var(--border-light);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    justify-content: center;
 }
 
-.brand img { width: 32px; height: 32px; }
+.brand img { width: 36px; height: 36px; }
 .brand .title { display: flex; flex-direction: column; }
 .brand h1 { font-size: 1rem; color: var(--primary); line-height: 1.2; }
 .brand p { font-size: 0.75rem; color: var(--text-secondary); margin: 0; }
 
 .nav-list {
-    padding: 20px 10px;
+    padding: 18px 12px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
 }
 
 .nav-item {
-    padding: 12px 16px;
-    border-radius: var(--radius);
-    color: var(--text-secondary);
+    padding: 12px 18px;
+    border-radius: 12px;
+    color: rgba(255,255,255,0.78);
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    line-height: 1.2;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -2033,34 +2035,31 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 }
 
 .nav-item:hover, .nav-item.active {
-    background: var(--primary-light);
-    color: var(--primary);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
     font-weight: 600;
 }
 
 .nav-item.active {
-    border-left: 4px solid var(--primary);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    padding-left: 12px;
+    box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .nav-item img {
     width: 20px;
     height: 20px;
     object-fit: contain;
-    filter: grayscale(100%) opacity(0.7);
+    filter: brightness(0) invert(1) opacity(0.7);
     transition: var(--transition);
 }
 
 .nav-item:hover img, .nav-item.active img {
-    filter: none;
     opacity: 1;
 }
 
 .sidebar-footer {
     margin-top: auto;
-    padding: 20px;
-    border-top: 1px solid var(--border-light);
+    padding: 18px 20px 22px;
+    border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 .sidebar-footer .text-muted-link {
@@ -2077,6 +2076,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     text-decoration: none;
 }
 .sidebar-footer .text-muted-link:hover { background: #a93226; color: #fff; }
+.sidebar-footer .text-muted-link svg { width: 18px; height: 18px; flex-shrink: 0; }
 
 /* Main Content Area */
 .main {
@@ -2089,19 +2089,18 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 
 /* Top Header */
 .top-header {
-    height: auto;
-    min-height: var(--header-height);
-    padding: 10px 30px;
+    height: var(--header-height);
+    padding: 0 28px;
     background: radial-gradient(circle at top left, #3a332f 0%, #2b2623 55%, #211b18 100%);
     border-bottom: 1px solid #1a1512;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 24px;
     position: sticky;
     top: 0;
     z-index: 90;
     color: #fff;
-    box-shadow: var(--shadow-md);
 }
 
 .header-brand, .header-actions {
@@ -2109,6 +2108,55 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     align-items: center;
     gap: 15px;
 }
+.header-brand {
+    gap: 12px;
+    min-width: 0;
+}
+.header-brand .sidebar-toggle {
+    margin-right: 2px;
+}
+.header-brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+.header-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.4px;
+}
+.header-subtitle {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.75);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.sidebar-toggle {
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,0.2); }
+
+body.sidebar-collapsed .sidebar { width: 72px; }
+body.sidebar-collapsed .brand { justify-content: center; padding: 16px 12px; }
+body.sidebar-collapsed .brand .title { display: none; }
+body.sidebar-collapsed .nav-list { padding: 16px 8px; }
+body.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; gap: 0; }
+body.sidebar-collapsed .nav-item span { display: none; }
+body.sidebar-collapsed .sidebar-footer { padding: 16px 10px; }
+body.sidebar-collapsed .sidebar-footer .text-muted-link span { display: none; }
+body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 100%; }
 
 .avatar {
     width: 36px;
@@ -2123,28 +2171,34 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 
 /* Page Header */
 .page-header {
-    padding: 20px 30px 10px 30px;
+    padding: 18px 30px 6px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     margin-bottom: 10px;
 }
 
 .page-header h2 { font-size: 1.5rem; color: var(--text-main); }
 
+.header-search {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+}
 .search {
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 8px 15px;
-    width: 300px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 999px;
+    padding: 8px 16px;
+    width: min(520px, 100%);
     display: flex;
     align-items: center;
     transition: var(--transition);
-    box-shadow: var(--shadow-sm);
 }
-.search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1); }
-.search input { border: none; width: 100%; font-size: 0.9rem; background: transparent; outline: none; }
+.search:focus-within { border-color: rgba(255,255,255,0.45); box-shadow: 0 0 0 3px rgba(255,255,255,0.12); }
+.search input { border: none; width: 100%; font-size: 0.9rem; background: transparent; outline: none; color: #fff; }
+.search input::placeholder { color: rgba(255,255,255,0.6); }
 
 /* Dashboard Widgets */
 .dashboard-grid {
@@ -2265,6 +2319,15 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 
 /* Tables */
 table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 900px; table-layout: auto; }
+table.table-requests,
+table.table-reservations,
+table.table-resident-guest { min-width: 1100px; }
+table.table-requests th,
+table.table-reservations th,
+table.table-resident-guest th { white-space: nowrap; }
+table.table-requests td,
+table.table-reservations td,
+table.table-resident-guest td { vertical-align: top; }
 th, td { padding: 16px 18px; text-align: left; border-bottom: 1px solid var(--border-light); font-size: 0.9rem; vertical-align: middle; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 th {
     font-weight: 600;
@@ -2282,7 +2345,7 @@ tr:hover { background-color: #f8fafc; }
 
 /* Table Actions */
 .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-table td.actions { flex-direction: column; align-items: stretch; gap: 10px; min-width: 220px; white-space: normal; }
+table td.actions { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 10px; min-width: 220px; white-space: normal; }
 table td.actions > * { width: 100%; }
 table td.actions form { width: 100%; margin: 0; display: block; }
 table td.actions .btn,
@@ -2353,9 +2416,12 @@ table td.actions .delete-form.show { width: 100%; }
 .btn:hover { filter: brightness(92%); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .btn:active { transform: translateY(0); box-shadow: none; }
 
-.btn-view { background: var(--info); color: #fff; }
+.btn-view { background: #2563eb; color: #fff; box-shadow: 0 6px 14px rgba(37,99,235,0.35); }
+.btn-view:hover { background: #1d4ed8; box-shadow: 0 8px 18px rgba(29,78,216,0.4); }
+.btn-receipt { background: #7c3aed; color: #fff; }
 .btn-approve { background: var(--success); color: #fff; }
 .btn-reject { background: var(--danger); color: #fff; }
+.btn-receipt:hover { background: #6d28d9; }
 .btn-edit { background: var(--warning); color: #fff; }
 .btn-remove { background: var(--danger); color: #fff; }
 .btn-disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; opacity: 0.7; }
@@ -2942,7 +3008,7 @@ body.modal-open { overflow: hidden; }
 /* Responsive Design */
 @media (max-width: 768px) {
     .app { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; position: sticky; top: 0; border-right: none; border-bottom: 1px solid var(--border); box-shadow: var(--shadow-md); }
+    .sidebar { width: 100%; height: auto; position: sticky; top: 0; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
     
     .nav-list { 
         flex-direction: row; 
@@ -2957,21 +3023,23 @@ body.modal-open { overflow: hidden; }
     .nav-item { 
         white-space: nowrap; 
         padding: 8px 16px; 
-        border-radius: 20px; 
-        border: 1px solid var(--border); 
-        background: var(--bg-surface);
+        border-radius: 999px; 
+        border: 1px solid rgba(255,255,255,0.12); 
+        background: rgba(255,255,255,0.08);
     }
     .nav-item.active { 
-        border-left: 1px solid var(--primary); 
-        padding-left: 16px; 
-        background: var(--primary); 
-        color: #fff; 
+        border-left: 1px solid rgba(255,255,255,0.3); 
+        background: rgba(255,255,255,0.2); 
+        color: #fff;
     }
     .nav-item.active img { filter: brightness(0) invert(1); }
     
-    .top-header { padding: 10px 20px; }
-    .page-header { flex-direction: column; align-items: flex-start; gap: 15px; padding: 20px 20px; }
+    .top-header { padding: 12px 18px; height: auto; flex-wrap: wrap; gap: 12px; }
+    .header-brand { order: 1; }
+    .header-actions { order: 2; }
+    .header-search { order: 3; width: 100%; }
     .search { width: 100%; }
+    .page-header { padding: 16px 20px 6px; }
     
     .dashboard-grid, .panel { padding: 0 20px; margin: 0 0 20px 0; }
     .panel { margin: 0 20px 20px 20px; padding: 20px; }
@@ -2988,10 +3056,6 @@ body.modal-open { overflow: hidden; }
   <aside class="sidebar">
     <div class="brand">
       <img src="images/logo.svg" alt="VictorianPass logo">
-      <div class="title">
-        <h1>Admin Dashboard</h1>
-        <p>Victorian Heights Subdivision</p>
-      </div>
     </div>
 
     <nav class="nav-list">
@@ -3007,14 +3071,42 @@ body.modal-open { overflow: hidden; }
     <a href="?page=summary" class="nav-item <?php echo $currentPage == 'summary' ? 'active' : ''; ?>" data-page="summary"><img src="images/dashboard.svg"><span>Summary Report</span></a>
      </nav>
     <div class="sidebar-footer">
-      <a href="?logout=1" class="text-muted-link">Log Out</a>
+      <a href="?logout=1" class="text-muted-link">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 17v-2H7v-6h9V7l5 5-5 5zm-11 3h8v2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8v2H5v16z"/></svg>
+        <span>Log Out</span>
+      </a>
     </div>
   </aside>
 
   <!-- MAIN CONTENT -->
   <main class="main">
+    <?php $pageTitles = [
+      'requests' => 'Resident Requests',
+      'resident_guest_forms' => "Resident's Guest Request",
+      'visitor_requests' => 'Visitor Requests',
+      'reservations' => 'Reservations',
+      'report' => 'View Reported Incidents',
+      'security' => 'Security Guards',
+      'verify' => 'Verify Payment Receipts',
+      'residents' => 'Residents',
+      'cancelled' => 'Cancelled Requests',
+      'summary' => 'Summary Report',
+      'dashboard' => 'Dashboard'
+    ];
+    $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
     <header class="top-header">
-      <div class="header-brand"></div>
+      <div class="header-brand">
+        <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+        </button>
+        <div class="header-brand-text">
+          <div class="header-title">Admin Dashboard</div>
+          <div class="header-subtitle">Victorian Heights</div>
+        </div>
+      </div>
+      <div class="header-search">
+        <div class="search"><input id="search-input" placeholder="Search <?php echo htmlspecialchars($pageTitle); ?>..."></div>
+      </div>
       <?php 
         $notifPayments = getPendingPaymentCount($con); 
         $notifAwaiting = getAmenityAwaitingPaymentCount($con); 
@@ -3054,22 +3146,7 @@ body.modal-open { overflow: hidden; }
     </header>
 
     <div class="page-header">
-      <?php $pageTitles = [
-        'requests' => 'Resident Requests',
-        'resident_guest_forms' => "Resident's Guest Request",
-        'visitor_requests' => 'Visitor Requests',
-        'reservations' => 'Reservations',
-        'report' => 'View Reported Incidents',
-        'security' => 'Security Guards',
-        'verify' => 'Verify Payment Receipts',
-        'residents' => 'Residents',
-        'cancelled' => 'Cancelled Requests',
-        'summary' => 'Summary Report',
-        'dashboard' => 'Dashboard'
-      ];
-      $pageTitle = $pageTitles[$currentPage] ?? ucfirst($currentPage); ?>
       <h2 id="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
-      <div class="search"><input id="search-input" placeholder="Search <?php echo htmlspecialchars($pageTitle); ?>..."></div>
       <script>
         (function(){
           const input=document.getElementById('search-input');
@@ -3214,6 +3291,26 @@ body.modal-open { overflow: hidden; }
               }
             }
           }catch(e){}
+        })();
+      </script>
+      <script>
+        (function(){
+          var body = document.body;
+          var toggle = document.getElementById('sidebarToggle');
+          var key = 'adminSidebarCollapsed';
+          var stored = localStorage.getItem(key);
+          if(stored === '1'){ body.classList.add('sidebar-collapsed'); }
+          if(toggle){
+            toggle.addEventListener('click', function(){
+              var collapsed = body.classList.toggle('sidebar-collapsed');
+              localStorage.setItem(key, collapsed ? '1' : '0');
+            });
+          }
+          var items = document.querySelectorAll('.nav-item');
+          items.forEach(function(item){
+            var span = item.querySelector('span');
+            if(span){ item.setAttribute('title', span.textContent.trim()); }
+          });
         })();
       </script>
     </div>
@@ -3437,17 +3534,16 @@ body.modal-open { overflow: hidden; }
 
 <!-- RESIDENT GUEST FORMS -->
 <?php if ($currentPage == 'resident_guest_forms'): ?>
-<section class="panel" id="resident-guest-forms-panel">
+  <section class="panel" id="resident-guest-forms-panel">
   <div class="content-row">
     <div class="card-box">
-      <h3>Co-owner / Shared Access Requests</h3>
-      <div class="notice">Requests from residents to add co-owners or shared access users</div>
+      <h3>Resident’s Guest Requests</h3>
+      <div class="notice">Requests from residents to add guests</div>
       <table class="table table-resident-guest">
         <thead>
           <tr>
             <th>Resident</th>
             <th>Guest Name</th>
-            <th>Relation/Role</th>
             <th>Request Date</th>
             <th>Actions</th>
           </tr>
@@ -3473,7 +3569,6 @@ body.modal-open { overflow: hidden; }
 
                   $fullName = trim(($req['full_name'] ?? '') . ' ' . ($req['middle_name'] ?? '') . ' ' . ($req['last_name'] ?? ''));
                   echo "<td><strong>" . htmlspecialchars($fullName) . "</strong></td>";
-                  echo "<td>" . (!empty($req['purpose']) ? htmlspecialchars($req['purpose']) : "Co-owner") . "</td>";
                   $reqDate = !empty($req['created_at']) ? date('M d, Y', strtotime($req['created_at'])) : '-';
                   echo "<td>" . $reqDate . "</td>";
                   
@@ -3496,9 +3591,9 @@ body.modal-open { overflow: hidden; }
                     if (!empty($receiptPath)) {
                       $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                       if ($isPdf) {
-                        echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                        echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
                       } else {
-                        echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
                       }
                     } else {
                       echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -3554,7 +3649,7 @@ body.modal-open { overflow: hidden; }
               }
           }
           if (!$hasResidentRequests) {
-              echo "<tr><td colspan='5' style='text-align:center;'>No co-owner / shared access requests found</td></tr>";
+              echo "<tr><td colspan='4' style='text-align:center;'>No resident guest requests found</td></tr>";
           }
           ?>
         </tbody>
@@ -3570,8 +3665,6 @@ body.modal-open { overflow: hidden; }
             <th>Resident</th>
             <th>Guest Name</th>
             <th>Booked By</th>
-            <th>Amenity</th>
-            <th>Dates</th>
             <th>Request Status</th>
             <th>Actions</th>
           </tr>
@@ -3629,15 +3722,15 @@ body.modal-open { overflow: hidden; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabelGar . "</span></td>";
                   
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
                   $receiptPath = $gar['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
                     } else {
-                      echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -3743,7 +3836,7 @@ body.modal-open { overflow: hidden; }
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button><br>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -4048,7 +4141,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     <div id="denyReasonError" style="display:none;color:#b91c1c;font-size:0.85rem;margin-top:6px;">Please enter a reason to continue.</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
       <button type="button" class="btn btn-view" id="denyReasonCancel">Cancel</button>
-      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Reject</button>
+      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Confirm</button>
     </div>
   </div>
 </div>
@@ -4223,8 +4316,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           <th>Reference Code</th>
           <th>Type</th>
           <th>House #</th>
-          <th>Amenity</th>
-          <th>Dates</th>
           <th>Request Status</th>
           <th>Actions</th>
         </tr>
@@ -4243,32 +4334,29 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 
                 $isResidentGuest = !empty($rr['gf_id']);
                 $uType = $isResidentGuest ? "Resident’s Guest" : ucfirst($rr['user_type'] ?? 'Resident');
-                $uTypeClass = ($rr['user_type'] === 'visitor') ? 'badge-pending' : 'badge-approved';
+                $uTypeClass = 'badge-approved';
                 echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
-                echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
-                $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
-                echo "<td>" . $dateRange . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                 echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                 echo "<td class='actions'>";
-                echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'>View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'>View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $receiptPath = $rr['receipt_path'] ?? null;
-                if (!empty($receiptPath)) {
-                  $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
-                  if ($isPdf) {
-                    echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank'>Open Receipt (PDF)</a>";
+                  if (!empty($receiptPath)) {
+                    $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                    if ($isPdf) {
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank'>Open Receipt (PDF)</a>";
+                    } else {
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\">View Uploaded Receipt</button>";
+                    }
                   } else {
-                    echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\">View Uploaded Receipt</a>";
+                    echo "<div class='muted'>No receipt</div>";
                   }
-                } else {
-                  echo "<div class='muted'>No receipt</div>";
-                }
                 if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
                   echo "<form method='post'>";
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
@@ -4314,7 +4402,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             }
         }
         if (!$hasRR) {
-            echo "<tr><td colspan='8' style='text-align:center;'>No amenity requests found</td></tr>";
+            echo "<tr><td colspan='6' style='text-align:center;'>No amenity requests found</td></tr>";
         }
         ?>
       </tbody>
@@ -4429,8 +4517,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             <th>Name</th>
             <th>Reference Code</th>
             <th>Type</th>
-            <th>Amenity</th>
-            <th>Dates</th>
             <th>Request Status</th>
             <th>Actions</th>
           </tr>
@@ -4448,25 +4534,23 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<td>" . htmlspecialchars($rr['ref_code'] ?? '-') . "</td>";
                   
                   $uType = ucfirst($rr['user_type'] ?? 'Visitor');
-                  $uTypeClass = 'badge-pending'; 
+                  $uTypeClass = 'badge-approved'; 
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
-                  echo "<td>" . htmlspecialchars($rr['amenity'] ?? '-') . "</td>";
-                  $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
-                  echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
-                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                  echo "<td><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></td>";
-                  echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button><br>";
                   $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
+                  $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
+                  echo "<td class='actions'>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button>";
                   $receiptPath = $rr['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='receipt-link' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='display:inline-block;margin:6px 0;'>Open Receipt (PDF)</a>";
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
                     } else {
-                      echo "<a class='receipt-link' href='#' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "'); return false;\" style='display:inline-block;margin:6px 0;'>View Uploaded Receipt</a>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -4478,12 +4562,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
                     echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
                     echo "</form>";
-                    echo "<form method='post' style='display:inline;'>";
+                    echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
                     echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                    echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
                     echo "</form>";
                   } elseif ($payStatusLower === 'verified') {
                     echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -4516,7 +4600,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               }
           }
           if (!$hasVR) {
-              echo "<tr><td colspan='7' style='text-align:center;'>No visitor account amenity requests found</td></tr>";
+              echo "<tr><td colspan='5' style='text-align:center;'>No visitor account amenity requests found</td></tr>";
           }
           ?>
         </tbody>
