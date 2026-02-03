@@ -446,7 +446,7 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
         $isHistory = true;
     }
 
@@ -870,9 +870,10 @@ body.account-blocked { overflow: hidden; }
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
-                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -919,9 +920,10 @@ body.account-blocked { overflow: hidden; }
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
-                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -1272,12 +1274,13 @@ body.account-blocked { overflow: hidden; }
     s=(s||'').toLowerCase();
     if(s.indexOf('approv')!==-1) return 'status-approved';
     if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
-    if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) return 'status-denied';
+    if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     return 'status-pending';
   }
   function fmtLabel(s){
     s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+    if(s.indexOf('moved to history')!==-1) return 'Denied';
     return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
   var notifCountEl=document.getElementById('notifCount');
@@ -1307,7 +1310,7 @@ body.account-blocked { overflow: hidden; }
     for(var i=0;i<items.length;i++){
       var it=items[i]||{};
       var title=String(it.title||'').replace(/[<>]/g,'');
-      var message=String(it.message||'').replace(/[<>]/g,'');
+      var message=formatNotifMessage(it.message||'');
       var time=formatNotifDateTime(it.created_at||'');
       html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
     }
@@ -1470,6 +1473,58 @@ body.account-blocked { overflow: hidden; }
       // alert('Network error. Please try again.');
     });
   }
+  function performMoveToHistory(li, ref){
+    if(!li || !ref) return;
+    fetch('status.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'move_to_history',code:ref})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to move to history.');
+        return;
+      }
+      li.setAttribute('data-status','moved_to_history');
+      prevStatuses[ref]='moved_to_history';
+      var badge=li.querySelector('.status-badge');
+      if(badge){
+        badge.textContent=fmtLabel('moved_to_history');
+        badge.className='status-badge '+statusClassFor('moved_to_history');
+      }
+      var extraEl=li.querySelector('.item-extra');
+      if(extraEl){
+        extraEl.setAttribute('data-loaded','0');
+        extraEl.innerHTML='';
+        if(li.classList.contains('expanded')){
+          buildExtraContent(li,extraEl);
+          extraEl.setAttribute('data-loaded','1');
+        }
+      }
+      var activePanel = document.getElementById('panel-requests');
+      var historyPanel = document.getElementById('panel-history');
+      if(activePanel && historyPanel){
+        var activeList = activePanel.querySelector('.item-list');
+        var historyList = historyPanel.querySelector('.item-list');
+        if(activeList && historyList){
+          var remainingActiveItems = activeList.querySelectorAll('.list-item');
+          li.remove();
+          if(remainingActiveItems.length === 1){
+            var emptyDiv = document.createElement('div');
+            emptyDiv.style.cssText = 'padding:20px; text-align:center; color:#777;';
+            emptyDiv.textContent = 'No active requests.';
+            activeList.appendChild(emptyDiv);
+          }
+          var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+          if(noHistoryMsg) noHistoryMsg.remove();
+          historyList.insertBefore(li, historyList.firstChild);
+          li.style.display = '';
+          li.classList.remove('expanded');
+        }
+      }
+    })["catch"](function(){
+      alert('Network error. Please try again.');
+    });
+  }
   
   function performDeleteResident(){
     var ref=cancelModalRef;
@@ -1548,7 +1603,7 @@ body.account-blocked { overflow: hidden; }
         if(type==='guest_form') statusNote='This request is approved. View the entry pass in the "My Guests" tab.';
         else statusNote='This request is approved. Use this QR pass at the gate.';
     }
-    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
+    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
     else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
     else if(s.indexOf('pending')!==-1||s===''||s==='new') {
         if(type==='guest_form') statusNote='Wait until the guest is approved. Once approved, a unique QR code will be available in "My Guests" under the guest\'s name.';
@@ -1574,7 +1629,9 @@ body.account-blocked { overflow: hidden; }
     if(reservedBy && type==='reservation'){ summaryParts.push('Reserved by: '+reservedBy); }
     var summaryText=summaryParts.join(' • ');
     var canCancel=(type==='reservation'||type==='guest_form')&&(s.indexOf('pending')!==-1||s===''||s==='new');
-    var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
+    var isHistoryPanel=!!li.closest('#panel-history');
+    var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
+    var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
     var html='';
     if(type==='reservation'||type==='guest_form'){
@@ -1608,6 +1665,9 @@ body.account-blocked { overflow: hidden; }
       if(canCancel && ref){
         var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
+      }
+      if(canMoveHistory && ref){
+        html+='<button type="button" class="item-extra-move-history" data-ref="'+esc(ref)+'">Move to History</button>';
       }
       if(canDelete && ref){
          html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
@@ -1652,6 +1712,13 @@ body.account-blocked { overflow: hidden; }
       deleteBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openDeleteModal(li,ref);
+      });
+    }
+    var moveBtn=extra.querySelector('.item-extra-move-history');
+    if(moveBtn && ref && canMoveHistory){
+      moveBtn.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        performMoveToHistory(li, ref);
       });
     }
     var viewBtn=extra.querySelector('.view-details-btn');
@@ -1753,6 +1820,16 @@ body.account-blocked { overflow: hidden; }
     h=h%12; if(h===0) h=12;
     return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
   }
+  function formatNotifMessage(message){
+    var safe=String(message||'').replace(/[<>]/g,'');
+    var lower=safe.toLowerCase();
+    var idx=lower.indexOf('reason:');
+    if(idx===-1) return safe;
+    var before=safe.slice(0,idx).replace(/\s+$/,'');
+    var reason=safe.slice(idx).replace(/^\s+/,'');
+    if(before) return before+' <span class="notif-reason">'+reason+'</span>';
+    return '<span class="notif-reason">'+reason+'</span>';
+  }
   function renderNotifPanel(){
     if(!notifPanel) return;
     var header='<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">&times;</button></div>';
@@ -1768,7 +1845,7 @@ body.account-blocked { overflow: hidden; }
       for(var i=0;i<notifItems.length;i++){
         var it=notifItems[i]||{};
         var title=String(it.title||'').replace(/[<>]/g,'');
-        var message=String(it.message||'').replace(/[<>]/g,'');
+        var message=formatNotifMessage(it.message||'');
         var time=formatNotifDateTime(it.created_at||'');
         html+='<div class="notif-item"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+message+'</div>';
         if(time) html+='<div class="notif-item-time">'+time+'</div>';
@@ -2351,7 +2428,8 @@ body.account-blocked { overflow: hidden; }
                     
                     li.setAttribute('data-status', newStatus);
                     
-                    if(panelId === 'panel-requests' && newStatusLower.indexOf('cancel') !== -1 && historyList){
+                    var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
+                    if(panelId === 'panel-requests' && shouldMoveHistory && historyList){
                         var safeCode=String(code||'').replace(/"/g,'&quot;');
                         var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
                         if(existing){

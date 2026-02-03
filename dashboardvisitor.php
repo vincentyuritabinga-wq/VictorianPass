@@ -273,7 +273,7 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
         $isHistory = true;
     }
 
@@ -447,9 +447,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
-                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -491,10 +492,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-completed'; // Completed/Past
-                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -738,7 +740,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   function statusClassFor(s){
     s=(s||'').toLowerCase();
     if(s.indexOf('approv')!==-1||s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
-    if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) return 'status-denied';
+    if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     if(s.indexOf('expired')!==-1) return 'status-denied';
     if(s.indexOf('complete')!==-1) return 'status-completed';
@@ -746,6 +748,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   function fmtLabel(s){
     s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+    if(s.indexOf('moved to history')!==-1) return 'Denied';
     return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
 
@@ -772,6 +775,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     h=h%12; if(h===0) h=12;
     return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
   }
+  function formatNotifMessage(message){
+    var safe=String(message||'').replace(/[<>]/g,'');
+    var lower=safe.toLowerCase();
+    var idx=lower.indexOf('reason:');
+    if(idx===-1) return safe;
+    var before=safe.slice(0,idx).replace(/\s+$/,'');
+    var reason=safe.slice(idx).replace(/^\s+/,'');
+    if(before) return before+' <span class="notif-reason">'+reason+'</span>';
+    return '<span class="notif-reason">'+reason+'</span>';
+  }
   function notifTimeValue(it){
     var v=it.created_at||it.time||'';
     var d=new Date(v);
@@ -789,7 +802,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     for(var i=0;i<items.length;i++){
       var it=items[i]||{};
       var title=String(it.title||'').replace(/[<>]/g,'');
-      var message=String(it.message||'').replace(/[<>]/g,'');
+      var message=formatNotifMessage(it.message||'');
       var time=formatNotifDateTime(it.created_at||it.time||'');
       html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
     }
@@ -807,9 +820,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var type=(li.getAttribute('data-type')||'').toLowerCase();
     var titleEl=li.querySelector('.item-title');
     var title=titleEl?titleEl.textContent.trim():(type==='reservation'?'Reservation Schedule':'Request Update');
+    var reasonText='';
+    var detailsEl=li.querySelector('.item-details');
+    if(detailsEl){
+      var details=String(detailsEl.textContent||'');
+      var idx=details.toLowerCase().indexOf('reason:');
+      if(idx!==-1){
+        reasonText=details.slice(idx).replace(/^\s*-\s*/,'').trim();
+      }
+    }
     var timeText='';
     var now=new Date();
     try{ timeText=formatNotifDateTime(now); }catch(e){ timeText=''; }
+    var message='Code: '+code+' • '+fmtLabel(status);
+    if(reasonText) message+=' • '+reasonText;
     notifItems.push({
       key:key,
       code:code,
@@ -818,7 +842,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       type:type,
       time:timeText,
       created_at: now.toISOString(),
-      message:'Code: '+code+' • '+fmtLabel(status)
+      message:message
     });
   }
   
@@ -835,7 +859,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         var code=String(it.code||'').replace(/[<>]/g,'');
         var title=String(it.title||'').replace(/[<>]/g,'');
         var status=String(it.status||'').replace(/[<>]/g,'');
-        var message=String(it.message||'').replace(/[<>]/g,'');
+        var message=formatNotifMessage(it.message||'');
         var time=formatNotifDateTime(it.created_at||it.time||'');
         var subText=message || ('Code: '+code+' • '+status);
         html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+subText+'</div>';
@@ -900,7 +924,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               li.setAttribute('data-payment-status', newItem.payment_status || '');
             }
 
-            if(panelId === 'panel-requests' && newStatusLower.indexOf('cancel') !== -1 && historyList && activeList){
+            var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
+            if(panelId === 'panel-requests' && shouldMoveHistory && historyList && activeList){
               var safeCode=code.replace(/"/g,'&quot;');
               var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
               if(existing){
@@ -1222,6 +1247,54 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       // alert('Network error. Please try again.'); // Suppress as per request
     });
   }
+  function performMoveToHistory(li, ref){
+    if(!li || !ref) return;
+    fetch('status.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'move_to_history',code:ref})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to move to history.');
+        return;
+      }
+      li.setAttribute('data-status','moved_to_history');
+      if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='moved_to_history';
+      var badge=li.querySelector('.status-badge');
+      if(badge){
+        badge.textContent=fmtLabel('moved_to_history');
+        badge.className='status-badge '+statusClassFor('moved_to_history');
+      }
+      var extraEl=li.querySelector('.item-extra');
+      if(extraEl){
+        extraEl.setAttribute('data-loaded','0');
+        extraEl.innerHTML='';
+        if(li.classList.contains('expanded')){
+          buildExtraContent(li,extraEl);
+          extraEl.setAttribute('data-loaded','1');
+        }
+      }
+      var activeList = document.getElementById('list-active');
+      var historyList = document.getElementById('list-history');
+      if(activeList && historyList){
+        var remainingActiveItems = activeList.querySelectorAll('.list-item');
+        li.remove();
+        if(remainingActiveItems.length === 1){
+          var emptyDiv = document.createElement('div');
+          emptyDiv.style.cssText = 'padding:20px; text-align:center; color:#777;';
+          emptyDiv.textContent = 'No active requests.';
+          activeList.appendChild(emptyDiv);
+        }
+        var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+        if(noHistoryMsg) noHistoryMsg.remove();
+        historyList.insertBefore(li, historyList.firstChild);
+        li.style.display = '';
+        li.classList.remove('expanded');
+      }
+    })["catch"](function(){
+      alert('Network error. Please try again.');
+    });
+  }
 
   function performDeleteVisitor(){
     var ref=cancelModalRef;
@@ -1411,7 +1484,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(isApproved) {
         statusNote='This request is approved. Use this QR pass at the gate.';
     }
-    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
+    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
     else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
     else if(s.indexOf('pending')!==-1||s===''||s==='new') {
         statusNote='This request is pending. Wait for the admin to review it. The QR entry pass will be available after approval.';
@@ -1437,7 +1510,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var summaryText=summaryParts.join(' • ');
 
     var canCancel=(s.indexOf('pending')!==-1||s===''||s==='new');
-    var canDelete=(s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1);
+    var isHistoryPanel=!!li.closest('#panel-history');
+    var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
+    var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
     
     var html='';
@@ -1469,6 +1544,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(canCancel && ref){
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
     }
+    if(canMoveHistory && ref){
+        html+='<button type="button" class="item-extra-move-history" data-ref="'+esc(ref)+'">Move to History</button>';
+    }
     if(canDelete && ref){
          html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
     }
@@ -1490,6 +1568,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     
     var deleteBtn = extra.querySelector('.item-extra-delete');
     if(deleteBtn) deleteBtn.addEventListener('click', function(){ window.openDeleteModal(li, ref); });
+    
+    var moveBtn = extra.querySelector('.item-extra-move-history');
+    if(moveBtn && ref && canMoveHistory){
+      moveBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        performMoveToHistory(li, ref);
+      });
+    }
     
     var viewBtn = extra.querySelector('.view-details-btn');
     if(viewBtn) viewBtn.addEventListener('click', function(){ window.openActivityModal(ref); });

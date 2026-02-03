@@ -1055,19 +1055,7 @@ function getResidentVisitorRequests($con) {
               AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed'))
               ORDER BY gf.created_at DESC";
     $res = $con->query($query);
-    if ($res && $res->num_rows > 0) return $res;
-    // Fallback: legacy reservations + entry_passes
-    $legacy = $con->query("SELECT r.*, ep.full_name, ep.middle_name, ep.last_name, ep.sex, ep.birthdate,
-                                  ep.contact, ep.email, ep.address, ep.valid_id_path, ep.created_at as entry_created,
-                                  u.house_number AS res_house_number, r.amenity, r.persons
-                           FROM reservations r
-                           JOIN entry_passes ep ON r.entry_pass_id = ep.id
-                           LEFT JOIN users u ON r.user_id = u.id
-                           WHERE r.entry_pass_id IS NOT NULL AND r.user_id IS NOT NULL
-                           AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
-                           AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
-                           ORDER BY r.created_at DESC");
-    return $legacy ?: false;
+    return ($res && $res->num_rows > 0) ? $res : false;
 }
 
 function getResidentGuestAmenityReservations($con) {
@@ -1075,8 +1063,8 @@ function getResidentGuestAmenityReservations($con) {
                      u.first_name AS res_first_name, u.last_name AS res_last_name, u.house_number AS res_house_number,
                      gf.visitor_first_name AS gf_first_name, gf.visitor_middle_name AS gf_middle_name, gf.visitor_last_name AS gf_last_name
               FROM reservations r
-              LEFT JOIN users u ON r.user_id = u.id
-              LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
+              JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
+              JOIN users u ON gf.resident_user_id = u.id
               WHERE (r.booked_by_role IN ('guest', 'co_owner') OR r.booking_for IN ('guest', 'co_owner'))
               AND r.amenity IS NOT NULL
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired'))
@@ -4081,12 +4069,16 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
   function resolveRejectMessage(form){
     var actionInput = form.querySelector('input[name="action"]');
     var incidentInput = form.querySelector('input[name="incident_action"]');
+    var redirectInput = form.querySelector('input[name="redirect_page"]');
     var actionVal = actionInput ? String(actionInput.value || '') : '';
     var incidentVal = incidentInput ? String(incidentInput.value || '') : '';
+    var redirectVal = redirectInput ? String(redirectInput.value || '') : '';
     var av = actionVal.trim().toLowerCase();
     var iv = incidentVal.trim().toLowerCase();
+    var rv = redirectVal.trim().toLowerCase();
     if (iv === 'reject') return 'Are you sure you want to reject this incident report?';
     if (av === 'reject_receipt') return 'Are you sure you want to proceed with rejecting this payment receipt?';
+    if (av === 'deny_request' && rv === 'resident_guest_forms') return 'Are you sure to deny this guest request?';
     if (av === 'deny_request') return 'Are you sure you want to proceed with rejecting this amenity request?';
     if (av === 'deny_resident_reservation') return 'Are you sure you want to proceed with rejecting this reservation?';
     if (av === 'reject_reservation') return 'Are you sure you want to proceed with rejecting this reservation?';

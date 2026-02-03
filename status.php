@@ -32,11 +32,11 @@ function ensureEnumHasValues($con, $table, $column, $enumValues, $defaultValue){
 }
 
 function ensureStatusEnums($con){
-    ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
-    ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted','moved_to_history'], 'pending');
     ensureEnumHasValues($con, 'reservations', 'payment_status', ['pending','submitted','verified','rejected','pending_update'], 'pending');
-    ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
-    ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted'], 'pending');
+    ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
+    ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
 }
 ensureStatusEnums($con);
 
@@ -180,6 +180,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             error_log('status.php cancel error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Server error.']);
+            exit;
+        }
+    }
+    
+    if ($action === 'move_to_history' && $code !== '' && ($con instanceof mysqli)) {
+        try {
+            $stmtG = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG->bind_param('s', $code);
+            $stmtG->execute();
+            $resG = $stmtG->get_result();
+            $stmtG->close();
+            if ($resG && $resG->num_rows > 0) {
+                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU->bind_param('s', $code);
+                $stmtU->execute();
+                $stmtU->close();
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR->bind_param('s', $code);
+                $stmtUR->execute();
+                $stmtUR->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+            
+            $stmtR = $con->prepare("SELECT id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR->bind_param('s', $code);
+            $stmtR->execute();
+            $resR = $stmtR->get_result();
+            $stmtR->close();
+            if ($resR && $resR->num_rows > 0) {
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU2->bind_param('s', $code);
+                $stmtU2->execute();
+                $stmtU2->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+
+            $stmtRR = $con->prepare("SELECT id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR->bind_param('s', $code);
+            $stmtRR->execute();
+            $resRR = $stmtRR->get_result();
+            $stmtRR->close();
+            if ($resRR && $resRR->num_rows > 0) {
+                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU3->bind_param('s', $code);
+                $stmtU3->execute();
+                $stmtU3->close();
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR2->bind_param('s', $code);
+                $stmtUR2->execute();
+                $stmtUR2->close();
+                echo json_encode(['success' => true]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'Request not found.']);
+            exit;
+        } catch (Throwable $e) {
+            error_log('status.php move_to_history error: ' . $e->getMessage());
             echo json_encode(['success' => false, 'message' => 'Server error.']);
             exit;
         }

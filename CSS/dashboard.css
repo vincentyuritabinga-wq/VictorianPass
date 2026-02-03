@@ -443,6 +443,7 @@ body {
 }
 
 .item-extra-cancel,
+.item-extra-move-history,
 .view-details-btn {
     font-family: 'Poppins', sans-serif;
     padding: 8px 16px;
@@ -471,6 +472,18 @@ body {
     color: #fff;
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+}
+
+.item-extra-move-history {
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+
+.item-extra-move-history:hover {
+    background-color: #f59e0b;
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(245, 158, 11, 0.2);
 }
 
 .view-details-btn {
@@ -802,6 +815,10 @@ body {
 .notif-item-sub {
     font-size: 0.8rem;
     color: #555;
+}
+.notif-reason {
+    font-weight: 600;
+    color: #c0392b;
 }
 
 .notif-item-time {
@@ -1347,6 +1364,7 @@ body {
 }
 
 .item-actions .item-extra-cancel,
+.item-actions .item-extra-move-history,
 .item-actions .item-extra-delete,
 .item-actions .item-extra-link,
 .item-actions .view-details-btn {
