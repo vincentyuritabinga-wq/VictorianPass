@@ -958,6 +958,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 .calendar td.fully-booked { background:#dc2626; border-color:#b91c1c; color:#ffffff; }
                 .calendar td.disabled { cursor:not-allowed; opacity:0.95; }
                 .calendar td.today { outline:2px solid #345c40; }
+                .calendar td.active { background:#ffffff; border:2px solid #16a34a; color:#0f172a; box-shadow:none; }
               </style>
               <div class="calendar" style="width:100%">
                 <div class="calendar-header">

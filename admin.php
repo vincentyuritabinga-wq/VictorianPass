@@ -462,6 +462,16 @@ if (isset($_POST['user_action']) && isset($_POST['user_id'])) {
             $stmt1->execute();
             $stmt1->close();
             
+            // Clear related references to avoid FK or logical constraints
+            $stmtGF = $con->prepare("UPDATE guest_forms SET resident_user_id = NULL WHERE resident_user_id = ?");
+            if ($stmtGF) { $stmtGF->bind_param('i', $uid); $stmtGF->execute(); $stmtGF->close(); }
+            $stmtN = $con->prepare("UPDATE notifications SET user_id = NULL WHERE user_id = ?");
+            if ($stmtN) { $stmtN->bind_param('i', $uid); $stmtN->execute(); $stmtN->close(); }
+            $stmtIR = $con->prepare("UPDATE incident_reports SET user_id = NULL WHERE user_id = ?");
+            if ($stmtIR) { $stmtIR->bind_param('i', $uid); $stmtIR->execute(); $stmtIR->close(); }
+            $stmtRR = $con->prepare("DELETE FROM resident_reservations WHERE user_id = ?");
+            if ($stmtRR) { $stmtRR->bind_param('i', $uid); $stmtRR->execute(); $stmtRR->close(); }
+            
             $stmt2 = $con->prepare("DELETE FROM users WHERE id = ?");
             $stmt2->bind_param('i', $uid);
             $stmt2->execute();
@@ -2422,6 +2432,9 @@ table td.actions .delete-form.show { width: 100%; }
 .btn-remove { background: var(--danger); color: #fff; }
 .btn-disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; opacity: 0.7; }
 .btn-disabled:hover { transform: none; box-shadow: none; filter: none; }
+/* Gold QR button */
+.btn-qr { background: var(--accent); color: #fff; box-shadow: 0 6px 14px rgba(212,175,55,0.35); }
+.btn-qr:hover { background: #b08d2f; box-shadow: 0 8px 18px rgba(212,175,55,0.45); }
 
 /* Status Badges */
 .status, .badge, .status-badge {
@@ -3326,34 +3339,34 @@ body.modal-open { overflow: hidden; }
 <section class="panel" id="dashboard-panel">
   <h3>Community Overview</h3>
   <div class="dashboard-grid">
-    <div class="dashboard-widget">
+    <a class="dashboard-widget" href="?page=residents" aria-label="View Residents">
       <div class="dashboard-widget-value"><?php echo getResidentCount($con); ?></div>
       <div class="dashboard-widget-label">Residents</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=summary" aria-label="View Active Passes">
       <div class="dashboard-widget-value"><?php echo getActivePassesCount($con); ?></div>
       <div class="dashboard-widget-label">Active Passes</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=resident_guest_forms" aria-label="View Pending Resident Guest Requests">
       <div class="dashboard-widget-value"><?php echo getPendingResidentRequestsCountNew($con); ?></div>
       <div class="dashboard-widget-label">Pending Resident Guests Requests</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=visitor_requests" aria-label="View Pending Visitor Requests">
       <div class="dashboard-widget-value"><?php echo getPendingVisitorRequestsCountNew($con); ?></div>
       <div class="dashboard-widget-label">Pending Visitor Requests</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=verify" aria-label="View Verified Payment Receipts">
       <div class="dashboard-widget-value"><?php echo getPaymentReceiptsCount($con); ?></div>
       <div class="dashboard-widget-label">Verified Payment Receipts</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=residents" aria-label="View Resident Accounts">
       <div class="dashboard-widget-value"><?php echo getPendingResidentAccountsCount($con); ?></div>
       <div class="dashboard-widget-label">Resident Accounts</div>
-    </div>
-    <div class="dashboard-widget">
+    </a>
+    <a class="dashboard-widget" href="?page=visitors" aria-label="View Visitor Accounts">
       <div class="dashboard-widget-value"><?php echo getVisitorAccountsCount($con); ?></div>
       <div class="dashboard-widget-label">Total Visitor Accounts</div>
-    </div>
+    </a>
   </div>
 </section>
 <?php endif; ?>
@@ -3638,7 +3651,7 @@ body.modal-open { overflow: hidden; }
                   } else {
                       $approvedBy = !empty($req['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($req['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3762,7 +3775,7 @@ body.modal-open { overflow: hidden; }
                   } else {
                       $approvedBy = !empty($gar['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($gar['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3846,7 +3859,7 @@ body.modal-open { overflow: hidden; }
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3892,13 +3905,23 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'><i class='fa-solid fa-eye'></i> View Details</button>";
-              echo "<form method='post' style='display:inline;' onsubmit='return openAdminConfirm(this, \"Are you sure? This resident will now be deleted\")'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='suspend_user'>";
-              echo "<input type='hidden' name='redirect_page' value='residents'>";
-              echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-              echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-ban'></i> Suspend</button>";
-              echo "</form>";
+              $status = strtolower($resident['status'] ?? 'active');
+              if ($status !== 'disabled') {
+                echo "<form method='post' style='display:inline;' onsubmit='return openAdminConfirm(this, \"Deactivate this account?\")'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+                echo "<input type='hidden' name='user_action' value='deactivate_user'>";
+                echo "<input type='hidden' name='redirect_page' value='residents'>";
+                echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
+                echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-ban'></i> Deactivate</button>";
+                echo "</form>";
+              } else {
+                echo "<form method='post' class='delete-form show' onsubmit='return openAdminConfirm(this, \"Delete this account permanently?\")' style='display:inline;'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
+                echo "<input type='hidden' name='user_action' value='delete_user'>";
+                echo "<input type='hidden' name='redirect_page' value='residents'>";
+                echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete Account</button>";
+                echo "</form>";
+              }
               echo "</td>";
               echo "</tr>";
           }
@@ -3938,12 +3961,22 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
               echo "<td class='actions'>";
               echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
-              echo "<form method='post' class='delete-form' onsubmit='return openAdminConfirm(this, \"Are you sure? This visitor will now be deleted\")' style='display:inline;'>";
-              echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
-              echo "<input type='hidden' name='user_action' value='delete_user'>";
-              echo "<input type='hidden' name='redirect_page' value='visitors'>";
-              echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete Account</button>";
-              echo "</form>";
+              if ($status !== 'disabled') {
+                echo "<form method='post' style='display:inline;' onsubmit='return openAdminConfirm(this, \"Deactivate this account?\")'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+                echo "<input type='hidden' name='user_action' value='deactivate_user'>";
+                echo "<input type='hidden' name='redirect_page' value='visitors'>";
+                echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
+                echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-ban'></i> Deactivate</button>";
+                echo "</form>";
+              } else {
+                echo "<form method='post' class='delete-form show' onsubmit='return openAdminConfirm(this, \"Delete this account permanently?\")' style='display:inline;'>";
+                echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
+                echo "<input type='hidden' name='user_action' value='delete_user'>";
+                echo "<input type='hidden' name='redirect_page' value='visitors'>";
+                echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete Account</button>";
+                echo "</form>";
+              }
               echo "</td>";
               echo "</tr>";
           }
@@ -4380,7 +4413,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 } else {
                     $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                     if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                      echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                     }
                     echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                 }
@@ -4570,7 +4603,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -5272,6 +5305,10 @@ window.addEventListener('click', function(event){
     var currentForm = null;
     function close(){ if(modal) modal.style.display='none'; currentForm = null; }
     window.openAdminConfirm = function(form, message){
+      if (form && String(form.dataset.confirmed || '') === '1') {
+        form.dataset.confirmed = '';
+        return true;
+      }
       currentForm = form || null;
       if(msgEl) msgEl.textContent = message || 'Are you sure?';
       if(modal) modal.style.display = 'flex';
@@ -5287,7 +5324,12 @@ window.addEventListener('click', function(event){
         var val = (reason.value || '').trim();
         if(!val){ reason.focus(); return; }
       }
-      form.submit();
+      form.dataset.confirmed = '1';
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
     };
     if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
   })();
