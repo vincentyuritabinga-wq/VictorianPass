@@ -311,6 +311,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   .my-reports-empty { padding: 16px; text-align: center; color: #777; background: #f8fafc; border: 1px dashed #d1d5db; border-radius: 10px; }
   .status-approved-guard { background-color: #e0f2fe; color: #0369a1; }
   .status-approved-admin { background-color: #dcfce7; color: #166534; }
+  .report-steps {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+  }
+  .report-steps-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+  }
+  .report-steps-label {
+      font-weight: 700;
+      color: #23412e;
+      font-size: 0.9rem;
+  }
+  .report-steps-toggle {
+      border: 0;
+      background: #edf2f0;
+      color: #23412e;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      font-size: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+  }
+  .report-steps-body { display: flex; flex-direction: column; gap: 10px; }
+  .report-steps.is-collapsed .report-steps-body { display: none; }
+  @media (min-width: 1024px){
+      .report-steps{
+          position: fixed;
+          right: 32px;
+          top: 110px;
+          z-index: 900;
+          max-width: 320px;
+      }
+  }
   @media (max-width: 900px) {
       .hero { padding: 8px 8px; min-height: auto; }
       .entry-form { padding: 12px 12px; transform: scale(0.92); transform-origin: top center; }
@@ -321,6 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       .entry-form { padding: 10px; transform: scale(0.85); transform-origin: top center; }
       .report-title { font-size: 0.68rem; padding: 5px 12px; }
       .checkbox-group { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+      .report-steps { position: static; max-width: 100%; }
   }
 </style>
 </head>
@@ -342,6 +388,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <div class="top-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
             <button type="button" class="btn-secondary back-account-btn" onclick="window.location.href='profileresident.php'">&#8592; Back to Account</button>
             <button type="button" class="btn-secondary" onclick="openModal('myReportsModal')">My Reported Incidents</button>
+        </div>
+        <div class="report-steps" aria-label="Report steps">
+            <div class="report-steps-header">
+                <div class="report-steps-label">Report steps</div>
+                <button type="button" class="report-steps-toggle" id="reportStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
+            </div>
+            <div class="report-steps-body">
+                <div class="booking-step is-active">
+                    <div class="step-index">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Identify the incident</div>
+                        <div class="step-subtitle">Enter the subject, location, and date of the incident</div>
+                    </div>
+                </div>
+                <div class="booking-step">
+                    <div class="step-index">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Describe the concern</div>
+                        <div class="step-subtitle">Select the nature and provide detailed notes</div>
+                    </div>
+                </div>
+                <div class="booking-step">
+                    <div class="step-index">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Attach proof</div>
+                        <div class="step-subtitle">Upload any images or documents if available</div>
+                    </div>
+                </div>
+                <div class="booking-step">
+                    <div class="step-index">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Confirm and submit</div>
+                        <div class="step-subtitle">Read the terms and rules before submitting</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="entry-form">
@@ -572,6 +654,15 @@ document.addEventListener('DOMContentLoaded', function() {
             openModal('rulesModal');
         }
     });
+    const panel=document.querySelector('.report-steps');
+    const toggle=document.getElementById('reportStepsToggle');
+    if(panel && toggle){
+        toggle.addEventListener('click', function(){
+            const collapsed=panel.classList.toggle('is-collapsed');
+            toggle.textContent=collapsed?'+':'−';
+            toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+        });
+    }
 });
 </script>
 
