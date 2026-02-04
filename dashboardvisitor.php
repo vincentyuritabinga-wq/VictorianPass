@@ -11,9 +11,13 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION[
 $user_id = $_SESSION['user_id'];
 $user_data = [];
 
-// Fetch visitor data
 if ($con) {
-    $stmt = $con->prepare("SELECT first_name, last_name, email, phone, sex, birthdate, status, suspension_reason FROM users WHERE id = ?");
+    $hasSuspension = false;
+    $chk = $con->query("SHOW COLUMNS FROM users LIKE 'suspension_reason'");
+    if ($chk && $chk->num_rows > 0) { $hasSuspension = true; }
+    $selectCols = "first_name, last_name, email, phone, sex, birthdate, status";
+    if ($hasSuspension) { $selectCols .= ", suspension_reason"; }
+    $stmt = $con->prepare("SELECT ".$selectCols." FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result();

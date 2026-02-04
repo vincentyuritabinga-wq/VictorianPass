@@ -176,11 +176,20 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
     .login-modal {
       position: fixed;
       inset: 0;
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
       background: rgba(0,0,0,0.5);
       z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
+    }
+    .login-modal.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
     }
     .login-modal .modal-content {
       background: #fff;
@@ -191,6 +200,11 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
       text-align: center;
       position: relative;
       box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+      transform: translateY(8px) scale(0.98);
+      transition: transform 0.22s ease;
+    }
+    .login-modal.is-visible .modal-content {
+      transform: translateY(0) scale(1);
     }
     .login-modal .modal-close {
       position: absolute;
@@ -566,26 +580,34 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
       }
     }
 
+    function setLoginModalVisible(modal, visible) {
+      if (!modal) return;
+      if (visible) {
+        modal.classList.add('is-visible');
+      } else {
+        modal.classList.remove('is-visible');
+      }
+    }
     function openLoginError(message) {
       const modal = document.getElementById('loginErrorModal');
       const msg = document.getElementById('loginErrorMessage');
       if (msg) msg.textContent = message;
-      if (modal) modal.style.display = 'flex';
+      setLoginModalVisible(modal, true);
     }
 
     function closeLoginError() {
       const modal = document.getElementById('loginErrorModal');
-      if (modal) modal.style.display = 'none';
+      setLoginModalVisible(modal, false);
     }
     function openLoginSuccess(message) {
       const modal = document.getElementById('loginSuccessModal');
       const msg = document.getElementById('loginSuccessMessage');
       if (msg) msg.textContent = message;
-      if (modal) modal.style.display = 'flex';
+      setLoginModalVisible(modal, true);
     }
     function closeLoginSuccess() {
       const modal = document.getElementById('loginSuccessModal');
-      if (modal) modal.style.display = 'none';
+      setLoginModalVisible(modal, false);
       if (window._loginRedirect) {
         window.location.href = window._loginRedirect;
       }
