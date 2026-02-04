@@ -826,13 +826,15 @@ function renderVerifyReceiptsCard($con){
                 if ($fullName === '') { $fullName = $userType; }
                 echo '<td>' . htmlspecialchars($fullName) . '</td>';
                 
-                if (!empty($row['receipt_path'])) {
+            $ps = strtolower($row['payment_status'] ?? 'pending');
+            $canVerify = $ps !== 'verified';
+            if (!empty($row['receipt_path'])) {
                   $rp = $row['receipt_path'];
                   $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
                   if ($isPdf) {
-                    echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank">Open Receipt (PDF)</a></td>';
+                    echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;">Open Receipt (PDF)</a></td>';
                   } else {
-                    echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
+                echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
                   }
                 } else {
                   echo '<td><span class="muted">No receipt</span></td>';
@@ -851,7 +853,6 @@ function renderVerifyReceiptsCard($con){
                   echo '<span class="muted">-</span>';
                 }
                 echo '</td>';
-                $ps = strtolower($row['payment_status'] ?? 'pending');
                 $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
                 $psLabel = ucwords(str_replace('_',' ', $ps));
                 echo '<td><span class="badge ' . $psClass . '">' . $psLabel . '</span></td>';
@@ -866,12 +867,6 @@ function renderVerifyReceiptsCard($con){
                 }
                   echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
                   if($ps!=='verified'){
-                    echo '<form method="post">';
-                    echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
-                    echo '<input type="hidden" name="action" value="verify_receipt">';
-                    echo '<button type="submit" class="btn btn-approve"><i class="fa-solid fa-receipt"></i> <i class="fa-solid fa-check"></i> Verify Payment Receipt</button>';
-                    echo '</form>';
-
                     echo '<form method="post" onsubmit="return openDenyModal(this)">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
@@ -2563,15 +2558,25 @@ table td.actions .delete-form.show { width: 100%; }
 
 .close {
     position: absolute;
-    top: 20px;
-    right: 25px;
-    font-size: 1.8rem;
-    color: var(--text-muted);
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #fff;
+    color: #111827;
+    border: 1px solid #333;
+    font-size: 20px;
     cursor: pointer;
-    transition: var(--transition);
     line-height: 1;
+    z-index: 100;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
-.close:hover { color: var(--danger); transform: rotate(90deg); }
+.close:hover { color: #000; border-color: #000; transform: scale(1.1); }
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -3127,7 +3132,7 @@ body.modal-open { overflow: hidden; }
           <div id="notifPanel" class="notif-panel" style="display:none"></div>
           <div id="notifModal" class="modal">
             <div class="modal-content">
-              <span class="close" id="notifModalClose">&times;</span>
+              <button type="button" class="close" id="notifModalClose" aria-label="Close">✕</button>
               <h3>Notifications</h3>
              <!--<div class="tabs">
                 <button class="tab-btn active" data-tab="req">Requests</button>
@@ -3592,20 +3597,14 @@ body.modal-open { overflow: hidden; }
                     if (!empty($receiptPath)) {
                       $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                       if ($isPdf) {
-                        echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($resIdMatch) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                       } else {
-                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($resIdMatch) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                       }
                     } else {
                       echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                     }
                     if ($resIdMatch && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                      echo "<form method='post' style='display:inline;'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
-                      echo "<input type='hidden' name='action' value='verify_receipt'>";
-                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
-                      echo "</form>";
                       echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                       echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
@@ -3613,8 +3612,6 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
-                    } elseif ($payStatusLower === 'verified') {
-                      echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
                     }
                   }
                   if ($approval_status == 'pending') {
@@ -3726,12 +3723,12 @@ body.modal-open { overflow: hidden; }
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
                   $receiptPath = $gar['receipt_path'] ?? null;
-                  if (!empty($receiptPath)) {
+                    if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($gar['id']) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($gar['id']) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -3739,19 +3736,11 @@ body.modal-open { overflow: hidden; }
                   if (!empty($gar['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
-                    echo "<input type='hidden' name='action' value='verify_receipt'>";
-                    echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                    echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
-                    echo "</form>";
-                    echo "<form method='post' style='display:inline;'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                     echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                     echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-xmark'></i> Reject</button>";
                     echo "</form>";
-                  } elseif ($payStatusLower === 'verified') {
-                    echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
                   }
                   
                   if ($approval_status == 'pending') {
@@ -4018,13 +4007,15 @@ body.modal-open { overflow: hidden; }
             if ($fullName === '') { $fullName = $userType; }
             echo '<td>' . htmlspecialchars($fullName) . '</td>';
             
-            if (!empty($row['receipt_path'])) {
+                $ps = strtolower($row['payment_status'] ?? 'pending');
+                $canVerify = $ps !== 'verified';
+                if (!empty($row['receipt_path'])) {
               $rp = $row['receipt_path'];
               $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
               if ($isPdf) {
-                echo '<td><a class="receipt-link" href="' . htmlspecialchars($rp) . '" target="_blank">Open Receipt (PDF)</a></td>';
+                echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;">Open Receipt (PDF)</a></td>';
               } else {
-                echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
+                    echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
               }
             } else {
               echo '<td><span class="muted">No receipt</span></td>';
@@ -4043,7 +4034,6 @@ body.modal-open { overflow: hidden; }
               echo '<span class="muted">-</span>';
             }
             echo '</td>';
-            $ps = strtolower($row['payment_status'] ?? 'pending');
             $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
             echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
             echo '<td class="actions">';
@@ -4057,12 +4047,6 @@ body.modal-open { overflow: hidden; }
             }
               echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
               if($ps!=='verified'){
-                echo '<form method="post">';
-                echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
-                echo '<input type="hidden" name="action" value="verify_receipt">';
-                echo '<button type="submit" class="btn btn-approve"><i class="fa-solid fa-receipt"></i> <i class="fa-solid fa-check"></i> Verify Payment Receipt</button>';
-                echo '</form>';
-
                 echo '<form method="post">';
                 echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                 echo '<input type="hidden" name="action" value="reject_receipt">';
@@ -4088,7 +4072,7 @@ body.modal-open { overflow: hidden; }
 <!-- Price Details Modal -->
 <div id="priceDetailsModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closePriceDetailsModal()">&times;</span>
+    <button type="button" class="close" onclick="closePriceDetailsModal()" aria-label="Close">✕</button>
     <h3>Price Details</h3>
     <div id="priceDetailsContent"></div>
   </div>
@@ -4120,21 +4104,31 @@ window.addEventListener('click', function(e){ var m=document.getElementById('pri
 <!-- Receipt Image Modal -->
 <div id="receiptModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeReceiptModal()">&times;</span>
-    <div style="overflow-y: auto; flex: 1; display: flex; align-items: center; justify-content: center;">
-      <img id="receiptModalImg" alt="Receipt" style="width:100%;height:auto;border-radius:8px"/>
+    <button type="button" class="close" onclick="closeReceiptModal()" aria-label="Close">✕</button>
+    <div style="display:flex;flex-direction:column;gap:12px;max-height:85vh;">
+      <div style="overflow-y: auto; flex: 1; display: flex; align-items: center; justify-content: center;">
+        <img id="receiptModalImg" alt="Receipt" style="width:100%;height:auto;border-radius:8px"/>
+        <a id="receiptModalPdfLink" href="#" target="_blank" style="display:none;padding:10px 14px;border:1px solid #ddd;border-radius:8px;color:#23412e;text-decoration:none;font-weight:600;">Open Receipt (PDF)</a>
+      </div>
+      <form id="receiptVerifyForm" method="post" style="display:none;justify-content:center;">
+        <input type="hidden" name="reservation_id" id="receiptVerifyId">
+        <input type="hidden" name="action" value="verify_receipt">
+        <input type="hidden" name="redirect_page" id="receiptVerifyRedirect" value="requests">
+        <button type="submit" class="btn btn-approve"><i class="fa-solid fa-receipt"></i> <i class="fa-solid fa-check"></i> Verify</button>
+      </form>
+      <div id="receiptVerifiedNote" class="muted" style="display:none;text-align:center;">Payment verified</div>
     </div>
   </div>
 </div>
 <script>
-function openReceiptModal(src){ var m=document.getElementById('receiptModal'); var img=document.getElementById('receiptModalImg'); if(img){ img.src = src; } if(m){ m.style.display='flex'; } }
+function openReceiptModal(src, reservationId, redirectPage){ var m=document.getElementById('receiptModal'); var img=document.getElementById('receiptModalImg'); var link=document.getElementById('receiptModalPdfLink'); var form=document.getElementById('receiptVerifyForm'); var note=document.getElementById('receiptVerifiedNote'); var idInput=document.getElementById('receiptVerifyId'); var redirectInput=document.getElementById('receiptVerifyRedirect'); var isPdf = typeof src === 'string' && src.toLowerCase().indexOf('.pdf') !== -1; if(img){ if(isPdf){ img.style.display='none'; } else { img.style.display='block'; img.src = src; } } if(link){ if(isPdf){ link.href = src; link.style.display='inline-flex'; } else { link.style.display='none'; link.href = '#'; } } if(form && idInput){ var rid = parseInt(reservationId || '0', 10); if(rid > 0){ idInput.value = String(rid); if(redirectInput){ redirectInput.value = redirectPage || 'requests'; } form.style.display = 'flex'; if(note){ note.style.display = 'none'; } } else { idInput.value = ''; form.style.display = 'none'; if(redirectInput){ redirectInput.value = redirectPage || 'requests'; } if(note){ note.style.display = 'block'; } } } if(m){ m.style.display='flex'; } }
 function closeReceiptModal(){ var m=document.getElementById('receiptModal'); if(m){ m.style.display='none'; } }
 window.addEventListener('click', function(e){ var m=document.getElementById('receiptModal'); if(e.target===m){ m.style.display='none'; } });
 </script>
 
 <div id="denyReasonModal" class="modal modal-top">
   <div class="modal-content" style="max-width:520px;padding:16px;gap:8px;">
-    <span class="close" id="denyReasonClose">&times;</span>
+    <button type="button" class="close" id="denyReasonClose" aria-label="Close">✕</button>
     <h3 id="denyReasonTitle">Confirm Rejection</h3>
     <div id="denyReasonMessage" style="margin:6px 0 8px;color:#5a6b7c;font-size:0.9rem;">Are you sure you want to reject this item?</div>
     <div id="denyReasonLabel" style="font-weight:600;margin-top:6px;">Reason</div>
@@ -4351,20 +4345,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'requests')\"><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\"><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'requests')\"><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted'>No receipt</div>";
                   }
                 if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                  echo "<form method='post'>";
-                  echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
-                  echo "<input type='hidden' name='action' value='verify_receipt'>";
-                  echo "<input type='hidden' name='redirect_page' value='requests'>";
-                  echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
-                  echo "</form>";
                   echo "<form method='post' onsubmit='return openDenyModal(this)'>";
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='reject_receipt'>";
@@ -4372,8 +4360,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                   echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                   echo "</form>";
-                } elseif ($payStatusLower === 'verified') {
-                  echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
                 }
                 if ($approval_status == 'pending') {
                     $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
@@ -4549,20 +4535,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                   }
                   if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                    echo "<form method='post' style='display:inline;'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
-                    echo "<input type='hidden' name='action' value='verify_receipt'>";
-                    echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                    echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
-                    echo "</form>";
                     echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
@@ -4570,8 +4550,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
                     echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                     echo "</form>";
-                  } elseif ($payStatusLower === 'verified') {
-                    echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
                   }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
@@ -4730,7 +4708,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <!-- Visitor Details Modal -->
 <div id="visitorModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeVisitorModal()">&times;</span>
+    <button type="button" class="close" onclick="closeVisitorModal()" aria-label="Close">✕</button>
     <h3>Visitor Details</h3>
     <div id="visitorDetailsContent">
       <!-- Content will be loaded here -->
@@ -4741,7 +4719,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <!-- Incident Proof Modal -->
 <div id="incidentProofModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeIncidentProofModal()">&times;</span>
+    <button type="button" class="close" onclick="closeIncidentProofModal()" aria-label="Close">✕</button>
     <div style="overflow-y: auto; flex: 1; display: flex; align-items: center; justify-content: center;">
       <img id="incidentProofImg" src="" alt="Proof" />
     </div>
@@ -4954,7 +4932,7 @@ window.onclick = function(event) {
 <!-- Reservation Details Modal -->
 <div id="reservationModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeReservationModal()">&times;</span>
+    <button type="button" class="close" onclick="closeReservationModal()" aria-label="Close">✕</button>
     <h3>Reservation Details</h3>
     <div id="reservationDetailsContent"></div>
   </div>
@@ -5062,7 +5040,7 @@ window.addEventListener('click', function(event){
 <!-- Resident Reservation Details Modal -->
 <div id="residentReservationModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeResidentReservationModal()">&times;</span>
+    <button type="button" class="close" onclick="closeResidentReservationModal()" aria-label="Close">✕</button>
     <h3>Resident Reservation</h3>
     <div id="residentReservationDetailsContent"></div>
   </div>
@@ -5275,7 +5253,8 @@ window.addEventListener('click', function(event){
 </div>
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 <div id="adminConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
-  <div style="background:#fff; border-radius:12px; padding:22px 20px; width:380px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center;">
+  <div style="background:#fff; border-radius:12px; padding:22px 20px; width:380px; max-width:92vw; box-shadow:0 12px 30px rgba(0,0,0,0.25); text-align:center; position:relative;">
+    <button type="button" class="close" id="adminConfirmClose" aria-label="Close">✕</button>
     <div style="font-weight:700; color:#1f2937; font-size:1.05rem; margin-bottom:8px;">Confirm Action</div>
     <div id="adminConfirmMessage" style="font-size:0.95rem; color:#374151; line-height:1.5; margin-bottom:16px;"></div>
     <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
