@@ -87,14 +87,16 @@ if (ctype_digit($rParts[0])) {
   exit;
 }
 
-if ($visitor_email === '' || !filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
-  echo json_encode(['success' => false, 'message' => 'Please provide a valid guest email address.']);
-  exit;
-}
-$vParts = explode('@', $visitor_email);
-if (ctype_digit($vParts[0])) {
-  echo json_encode(['success' => false, 'message' => 'Guest Email Invalid']);
-  exit;
+if ($visitor_email !== '') {
+  if (!filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['success' => false, 'message' => 'Please provide a valid guest email address.']);
+    exit;
+  }
+  $vParts = explode('@', $visitor_email);
+  if (ctype_digit($vParts[0])) {
+    echo json_encode(['success' => false, 'message' => 'Guest Email Invalid']);
+    exit;
+  }
 }
 
 // Handle valid ID upload

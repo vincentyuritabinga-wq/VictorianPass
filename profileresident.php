@@ -659,7 +659,7 @@ body.account-blocked { overflow: hidden; }
     .close-btn { position: absolute; top: 15px; right: 15px; font-size: 20px; cursor: pointer; color: #555; }
 #submitNoticeModal { display: flex; align-items: center; justify-content: center; }
 #submitNoticeModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; height: auto; min-height: unset; }
-#submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #eef2f0; color: #23412e; display: flex; align-items: center; justify-content: center; }
+#submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #111; border: 1px solid #111; display: flex; align-items: center; justify-content: center; }
 
     /* Fix for Resident Dashboard Modal to ensure it fits screen and close button is visible */
     #activityModal .modal-content {
@@ -998,15 +998,15 @@ body.account-blocked { overflow: hidden; }
 
               <h4 style="margin:10px 0 5px;color:#111827;">Resident Information</h4>
               <div class="form-row">
-                <input type="text" id="resident_full_name" name="resident_full_name" placeholder="Resident Full Name*" value="<?php echo htmlspecialchars($fullName); ?>" required>
-                <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required>
+                <input type="text" id="resident_full_name" name="resident_full_name" placeholder="Resident Full Name*" value="<?php echo htmlspecialchars($fullName); ?>" required readonly>
+                <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required readonly>
               </div>
               <div class="form-row">
                 <div style="flex:1;">
-                  <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
+                  <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required readonly>
                 </div>
                 <div style="flex:1;">
-                  <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+                  <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required readonly>
                 </div>
               </div>
 
@@ -1030,7 +1030,7 @@ body.account-blocked { overflow: hidden; }
                 <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Guest Phone Number*" required>
               </div>
               <div class="form-group">
-                <input type="email" id="visitor_email" name="visitor_email" placeholder="Guest Email*" required>
+                <input type="email" id="visitor_email" name="visitor_email" placeholder="Guest Email">
               </div>
 
               <label class="upload-box">
@@ -1679,7 +1679,7 @@ body.account-blocked { overflow: hidden; }
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
       }
-      html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
+      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       
@@ -1714,7 +1714,7 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-title">Incident Status</div>';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
+      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       html+='</div></div></div>';
@@ -1723,7 +1723,7 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-title">Request Details</div>';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label">'+label+'</span></div>';
+      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       html+='</div></div></div>';
@@ -2235,7 +2235,8 @@ body.account-blocked { overflow: hidden; }
       setWarning('resident_email', getEmailError(re));
       valid=false;
     }
-    if(ve && getEmailError(ve)){
+    var veVal=(ve && (ve.value||'').trim())||'';
+    if(ve && veVal!=='' && getEmailError(ve)){
       setWarning('visitor_email', getEmailError(ve));
       valid=false;
     }
@@ -2272,12 +2273,14 @@ body.account-blocked { overflow: hidden; }
     var visContact=visContactEl?visContactEl.value.trim():'';
     var visEmail=visEmailEl?visEmailEl.value.trim():'';
     var vSex=vSexEl?vSexEl.value:'';
+    var vBirth=birthdateEl?birthdateEl.value:'';
     var items=[
       ['Resident',resName||'-'],
       ['House/Unit',resHouse||'-'],
       ['Resident Contact',resContact||'-'],
       ['Guest',(visFirst+' '+visLast).trim()||'-'],
       ['Guest Sex',vSex||'-'],
+      ['Guest Birthdate',vBirth||'-'],
       ['Guest Contact',visContact||'-'],
       ['Guest Email',visEmail||'-']
     ];

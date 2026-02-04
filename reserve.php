@@ -1028,7 +1028,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       <div class="res-label"><small>Total Participants</small></div>
                       <div class="counter">
                         <button type="button" onclick="changePersons(-1)">-</button>
-                        <span id="personCount">1</span>
+                        <input type="number" id="personCount" value="1" min="0" step="1" style="width:70px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-weight:600;">
                         <button type="button" onclick="changePersons(1)">+</button>
                       </div>
                       <div id="personsMaxNote" class="label-help"></div>
@@ -1597,7 +1597,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       ids.forEach(function(id){ const el=document.getElementById(id); if(el){ el.value=''; } });
       const sd=document.getElementById('startDate'); if(sd){ sd.textContent='--'; }
       const ed=document.getElementById('endDate'); if(ed){ ed.textContent='--'; }
-      const pc=document.getElementById('personCount'); if(pc){ pc.textContent='1'; }
+      const pc=document.getElementById('personCount'); if(pc){ if('value' in pc){ pc.value='1'; } else { pc.textContent='1'; } }
       const pi=document.getElementById('personsInput'); if(pi){ pi.value='1'; }
       const rc=document.getElementById('residentsCountInput'); if(rc){ rc.value = currentUserType === 'resident' ? '1' : '0'; }
       const gc=document.getElementById('guestsCountInput'); if(gc){ gc.value = currentUserType === 'resident' ? '0' : '1'; }
@@ -1690,7 +1690,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
 
   async function changePersons(val){
-    let count=parseInt(document.getElementById('personCount').textContent);
+    const pcEl=document.getElementById('personCount');
+    let count=parseInt(((pcEl && (pcEl.value||pcEl.textContent))||'1'),10) || 1;
     const amen=document.getElementById('amenityField').value;
     if(amen==='Pool' && getPoolBookingTypeValue()==='whole_pool'){
       setFieldWarning('personsInput','Whole pool booking fixes participants at 20.');
@@ -1706,7 +1707,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const desired=count+val;
     const minAllowed=(amen==='Pool' && remaining===0) ? 0 : 1;
     count=Math.min(max,Math.max(minAllowed,desired));
-    document.getElementById('personCount').textContent=count;
+    if(pcEl){ if('value' in pcEl){ pcEl.value=String(count); } else { pcEl.textContent=String(count); } }
     document.getElementById('personsInput').value=count;
     if(currentUserType !== 'resident'){
       const rInput=document.getElementById('residentsCountInput'); if(rInput){ rInput.value='0'; }
@@ -1941,7 +1942,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const poolInfo=await getPoolRemainingSlots();
       const remaining=poolInfo.remaining;
       note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:'';
-      const current=parseInt((personsInput?.value||countEl?.textContent||'0'),10);
+      const current=parseInt((personsInput?.value||countEl?.value||countEl?.textContent||'0'),10);
       if(Number.isFinite(remaining) && current>remaining){
         setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`);
       } else {
@@ -2093,7 +2094,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const wrap=document.getElementById('participantWrap');
     if(type==='whole_pool'){
       if(pInput) pInput.value=String(cap);
-      if(pText) pText.textContent=String(cap);
+      if(pText){ if('value' in pText){ pText.value=String(cap); } else { pText.textContent=String(cap); } }
       if(wrap) updateParticipantVisibility();
       let rVal=parseInt(rInput?.value||'0',10);
       if(currentUserType==='resident' && rVal<1){ rVal=1; }
@@ -2107,7 +2108,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(wrap) updateParticipantVisibility();
       const base=Math.max(1, Math.min(cap, parseInt(pInput?.value||'1',10) || 1));
       if(pInput) pInput.value=String(base);
-      if(pText) pText.textContent=String(base);
+      if(pText){ if('value' in pText){ pText.value=String(base); } else { pText.textContent=String(base); } }
       if(currentUserType !== 'resident'){
         if(rInput) rInput.value='0';
         if(rText) rText.textContent='0';
@@ -2678,6 +2679,16 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
       });
     }
+    const personInput=document.getElementById('personCount');
+    if(personInput){
+      personInput.addEventListener('input', async function(){
+        const pHidden=document.getElementById('personsInput');
+        const prev=parseInt(pHidden?.value||'1',10)||1;
+        const desired=Math.max(0, parseInt(personInput.value||'0',10)||0);
+        await changePersons(desired - prev);
+        personInput.value=String(parseInt(document.getElementById('personsInput').value||'1',10));
+      });
+    }
   });
   const cs=document.getElementById('clearStartBtn'); if(cs){ cs.addEventListener('click',clearStartDate); }
   const ce=document.getElementById('clearEndBtn'); if(ce){ ce.addEventListener('click',clearEndDate); }
@@ -2862,8 +2873,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         const gSel=Math.max(0, cap - rSel);
         if(residentsCountInput) residentsCountInput.value=String(rSel);
         if(guestsCountInput) guestsCountInput.value=String(gSel);
-        const pInput=document.getElementById('personsInput'); if(pInput){ pInput.value=String(cap); }
-        const pText=document.getElementById('personCount'); if(pText){ pText.textContent=String(cap); }
+      const pInput=document.getElementById('personsInput'); if(pInput){ pInput.value=String(cap); }
+      const pText=document.getElementById('personCount'); if(pText){ if('value' in pText){ pText.value=String(cap); } else { pText.textContent=String(cap); } }
         setFieldWarning('personsInput','');
         updateDisplayedPrice();
         updateDownpaymentSuggestion();
@@ -2902,7 +2913,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(guestsCountInput) guestsCountInput.value=String(gSel);
       const total=rSel+gSel;
       const pInput=document.getElementById('personsInput'); if(pInput){ pInput.value=String(total); }
-      const pText=document.getElementById('personCount'); if(pText){ pText.textContent=String(total); }
+      const pText=document.getElementById('personCount'); if(pText){ if('value' in pText){ pText.value=String(total); } else { pText.textContent=String(total); } }
       const max=getAmenityMaxPersons(amen);
       if(total < 1){
         setFieldWarning('personsInput','At least 1 participant is required.');
@@ -3246,7 +3257,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     window.__slotRenderTokenCounter=(window.__slotRenderTokenCounter||0)+1; const __token=window.__slotRenderTokenCounter; window.__activeSlotRenderToken=__token; if(!date){ container.innerHTML=''; if(notice){ notice.style.display='none'; notice.textContent=''; } return; } fetchBookedTimesFor(date).then(data=>{ if(window.__activeSlotRenderToken!==__token) return; const booked=data.times||[]; window.__bookedTimesForDate=booked||[]; let anyEnabled=false; let disabledCount=0; slots.forEach(slot=>{ const startHour=parseInt(slot.value.split(':')[0],10); const maxPossible=computeMaxDuration(amen,startHour,booked); const valid=(maxPossible>=hours); const btn=document.createElement('button'); btn.type='button'; btn.className='slot-btn airbnb'; btn.textContent=slot.label; btn.dataset.slot=slot.value; if(!valid){ disabledCount++; btn.classList.add('unavailable'); btn.setAttribute('aria-disabled','true'); btn.onclick=function(){ showToast('This start time cannot fit your selected duration. Try a different start time or duration.','warning'); }; } else { anyEnabled=true; btn.classList.add('available'); btn.onclick=function(){ selectTimeSlot(slot.value); }; } container.appendChild(btn); }); let hasBookedHours=false; (booked||[]).forEach(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return; const bS=parseInt(String(t.start).split(':')[0],10); const bE=parseInt(String(t.end).split(':')[0],10); if(bE>bS){ hasBookedHours=true; } }); if(notice){ if(!anyEnabled){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Fully Booked — no time slots available for this date.' : ''; } else if(disabledCount>0){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Partially Booked — some time slots are unavailable.' : ''; } else { notice.style.display='none'; notice.textContent=''; } } if(!anyEnabled){ showTimeError('No start times fit the selected hours. Try a different duration.'); } else { showTimeError(''); } const st=document.getElementById('startTimeInput').value; if(st){ const selBtn=Array.from(container.children).find(b=>b.tagName==='BUTTON' && b.dataset.slot===st); if(selBtn) selBtn.classList.add('selected'); } updateActionStates(); }); }
 
-  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } showTimeError(''); updateActionStates(); }
+  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } const cont=document.getElementById('timeSlotContainer'); if(cont){ Array.from(cont.querySelectorAll('.slot-btn')).forEach(function(b){ b.classList.remove('selected'); }); const sel=Array.from(cont.querySelectorAll('.slot-btn')).find(function(b){ return b.dataset.slot===start; }); if(sel){ sel.classList.add('selected'); } } showTimeError(''); updateActionStates(); }
   function selectPoolSlot(start,end){ document.getElementById('startTimeInput').value=start; document.getElementById('endTimeInput').value=end; const sh=parseInt(start.split(':')[0],10); const sm=parseInt(start.split(':')[1]||'0',10); const eh=parseInt(end.split(':')[0],10); const em=parseInt(end.split(':')[1]||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeHM(sh,sm)} - ${formatTimeHM(eh,em)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display='block'; } showTimeError(''); updateActionStates(); updateBookingSummary(); }
   function renderHoursDropdownForAmenity(){
     const amen=document.getElementById('amenityField').value;

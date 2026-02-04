@@ -536,6 +536,7 @@ function buildVerifySummary(){
   const visContact = visContactEl ? visContactEl.value.trim() : '';
   const visEmail = visEmailEl ? visEmailEl.value.trim() : '';
   const vSex = vSexEl ? vSexEl.value : '';
+  const vBirth = birthdateEl ? birthdateEl.value : '';
   const personsVal = personsEl && personsEl.value ? personsEl.value : '1';
   const items = [
     ['Resident', resName || '-'],
@@ -543,6 +544,7 @@ function buildVerifySummary(){
     ['Resident Contact', resContact || '-'],
     ['Visitor', (visFirst + ' ' + visLast).trim() || '-'],
     ['Visitor Sex', vSex || '-'],
+    ['Visitor Birthdate', vBirth || '-'],
     ['Visitor Contact', visContact || '-'],
     ['Visitor Email', visEmail || '-']
   ];

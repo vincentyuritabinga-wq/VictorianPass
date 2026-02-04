@@ -41,8 +41,9 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    border: 2px solid #23412e;
-    color: #23412e;
+    border: 2px solid #b38e2e;
+    background-color: #d4af37;
+    color: #111;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -53,8 +54,7 @@ body {
 }
 
 .back-btn:hover {
-    background-color: #23412e;
-    color: #fff;
+    filter: brightness(0.95);
 }
 
 .nav-menu {
@@ -421,8 +421,6 @@ body {
     justify-content: center;
     padding: 2px 10px;
     border-radius: 999px;
-    background: #111827;
-    color: #f9fafb;
     font-size: 0.75rem;
     font-weight: 500;
 }
@@ -647,11 +645,17 @@ body {
 }
 
 .cancel-modal-close {
-    border: none;
-    background: transparent;
+    border: 1px solid #111;
+    background: #fff;
     font-size: 1.2rem;
     cursor: pointer;
-    color: #6b7280;
+    color: #111;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .cancel-modal-body {
@@ -700,14 +704,14 @@ body {
 }
 
 .cancel-modal-confirm {
-    background: #ef4444;
+    background: #23412e;
     color: #ffffff;
 }
 
 .cancel-modal-confirm:hover {
-    background: #dc2626;
+    background: #1a2f22;
     transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);
+    box-shadow: 0 4px 6px rgba(35, 65, 46, 0.25);
 }
 
 .notif-count {

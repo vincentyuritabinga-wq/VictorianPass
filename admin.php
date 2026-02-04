@@ -4841,17 +4841,17 @@ function showVisitorDetails(id, source) {
                 <div class="info-row"><span class="info-label">Valid ID</span><span class="info-value">${validIdValue}</span></div>
               </div>
             </div>
+            ${!isGuestEntry ? `
             <div>
               <div class="section-title">${sectionTitle}</div>
               <div class="info-grid">
                 ${visitDateVal ? `<div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</span></div>` : ''}
                 ${(visitStartTimeVal || visitEndTimeVal) ? `<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</span></div>` : ''}
-                
-                ${details.purpose ? `<div class="info-row"><span class="info-label">Purpose of Visit</span><span class="info-value">${details.purpose}</span></div>` : ''}
                 ${details.amenity && details.amenity !== 'Guest Entry' ? `<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${details.amenity}</span></div>` : ''}
                 ${priceBlock}
               </div>
             </div>
+            ` : ''}
             <div>
               <div class="section-title">Request Status</div>
               <div class="info-grid">

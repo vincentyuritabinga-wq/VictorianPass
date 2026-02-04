@@ -634,9 +634,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         </div>
 
-        <div class="form-actions">
-          <button type="button" class="btn cancel" onclick="window.location.href='mainpage.php'">Cancel</button>
-          <button type="submit" class="btn confirm">Confirm</button>
+        <div class="form-actions" style="display:flex;gap:10px;justify-content:space-between;margin-top:12px;">
+          <button type="button" class="btn cancel" onclick="window.location.href='mainpage.php'" style="background:#e5e7eb;color:#111;border:none;padding:10px 20px;border-radius:10px;font-weight:600;">Cancel</button>
+          <button type="submit" class="btn confirm" style="background:#23412e;color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;">Confirm</button>
         </div>
 
         <p class="login-link">Already have an account? <a href="login.php">Log in</a></p>
@@ -648,7 +648,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Terms Modal -->
     <div id="termsModal" class="modal">
       <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
-        <span class="close" onclick="closeTerms()" style="top: 20px; right: 25px;">&times;</span>
+        <span class="close" onclick="closeTerms()" style="top: 20px; right: 25px; background:#fff; color:#111; border:1px solid #111; width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">&times;</span>
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Terms & Services</h2>
         
         <p style="text-align: center; font-weight: 600; margin-bottom: 25px; line-height: 1.5; color: #000;">

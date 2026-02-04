@@ -36,8 +36,8 @@ $back = isset($_SERVER['HTTP_REFERER']) && $_SERVER['HTTP_REFERER'] !== '' ? $_S
     .text{font-size:.98rem;color:#ddd;margin:0 0 14px}
     .actions{display:flex;gap:10px;justify-content:center}
     .btn{padding:10px 16px;border-radius:10px;font-weight:700;text-decoration:none;display:inline-block}
-    .btn-confirm{background:#c0392b;color:#fff}
-    .btn-cancel{background:#e5e7eb;color:#222}
+    .btn-confirm{background:#23412e;color:#fff}
+    .btn-cancel{background:#e5e7eb;color:#111}
     .btn:hover{transform:translateY(-1px)}
   </style>
 </head>

@@ -450,7 +450,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               <?php foreach ($activeActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
+                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
@@ -743,7 +744,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
   function statusClassFor(s){
     s=(s||'').toLowerCase();
-    if(s.indexOf('approv')!==-1||s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
+    if(s.indexOf('approv')!==-1) return 'status-approved';
+    if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     if(s.indexOf('expired')!==-1) return 'status-denied';

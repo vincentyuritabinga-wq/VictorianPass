@@ -447,8 +447,8 @@ if (empty($error)) {
             text-align: center;
         }
         .btn-confirm {
-            background: #22c55e;
-            color: #000;
+            background: #23412e;
+            color: #fff;
             width: 100%;
             padding: 15px;
             border: none;
@@ -457,7 +457,7 @@ if (empty($error)) {
             font-size: 1rem;
             cursor: pointer;
             text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 4px 15px rgba(35, 65, 46, 0.3);
         }
         .btn-confirm:disabled {
             background: #444;

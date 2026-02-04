@@ -711,9 +711,9 @@ input:focus-visible {
 }
 
 .slot-btn.selected {
-  background: #23412e;
-  color: #fff;
-  border-color: #23412e;
+  background: #fff;
+  color: #111;
+  border-color: #111;
   font-weight: 700;
 }
 
@@ -736,6 +736,12 @@ input:focus-visible {
   border-color: #15803d;
   background: #bbf7d0;
   color: #14532d;
+}
+
+.slot-btn.selected {
+  background: #fff;
+  color: #111;
+  border-color: #111;
 }
 
 .persons {
