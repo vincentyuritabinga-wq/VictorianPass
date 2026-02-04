@@ -846,7 +846,7 @@ function renderVerifyReceiptsCard($con){
                 if ($tp > 0) {
                   $tpStr = number_format($tp, 2, '.', '');
                   $dpStr = $dpRaw !== null ? number_format($dpRaw, 2, '.', '') : '';
-                  echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')">View Price Details</button>';
+                  echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')"><i class="fa-solid fa-eye"></i> View Price Details</button>';
                 } else {
                   echo '<span class="muted">-</span>';
                 }
@@ -864,19 +864,19 @@ function renderVerifyReceiptsCard($con){
                 } else {
                   $targetPage = 'requests';
                 }
-                  echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
+                  echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
                   if($ps!=='verified'){
                     echo '<form method="post">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="verify_receipt">';
-                    echo '<button type="submit" class="btn btn-approve">Verify Payment Receipt</button>';
+                    echo '<button type="submit" class="btn btn-approve"><i class="fa-solid fa-receipt"></i> <i class="fa-solid fa-check"></i> Verify Payment Receipt</button>';
                     echo '</form>';
 
                     echo '<form method="post" onsubmit="return openDenyModal(this)">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
                     echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
-                    echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))">Reject</button>';
+                    echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))"><i class="fa-solid fa-xmark"></i> Reject</button>';
                     echo '</form>';
                   } else {
                   }
@@ -1917,6 +1917,7 @@ $verifyContext = isset($_GET['verify_context']) ? $_GET['verify_context'] : '';
 <link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
 /* Modern Admin Dashboard CSS */
@@ -3243,7 +3244,7 @@ body.modal-open { overflow: hidden; }
           function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard'; if(type==='payment') base='?page=verify'; else if(type==='resident_guest') base='?page=resident_guest_forms'; else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests'); else if(type==='incident') base='?page=report'; var ref=it.ref?String(it.ref):''; if(ref){ base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref); } return base; }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
-            el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'>Open</a><button class='btn btn-remove'>Dismiss</button></div></div>";
+            el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'><i class='fa-solid fa-eye'></i> Open</a><button class='btn btn-remove'><i class='fa-solid fa-xmark'></i> Dismiss</button></div></div>";
             var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); renderNotif({ items: [] }); }); }
             c.appendChild(el); setTimeout(function(){ if(el&&el.parentNode){ el.remove(); } }, 8000);
           }
@@ -3585,15 +3586,15 @@ body.modal-open { overflow: hidden; }
                     if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
                     $stmtPay2->close();
                   }
-                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\">View More Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\"><i class='fa-solid fa-eye'></i> View More Details</button>";
                   if ($isAmenity) {
                     $payStatusLower = strtolower($payStatus ?? '');
                     if (!empty($receiptPath)) {
                       $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                       if ($isPdf) {
-                        echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
+                        echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
                       } else {
-                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
                       }
                     } else {
                       echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -3603,14 +3604,14 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                       echo "<input type='hidden' name='action' value='verify_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                      echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
                       echo "</form>";
                       echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                       echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                       echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
                     } elseif ($payStatusLower === 'verified') {
                       echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -3622,25 +3623,25 @@ body.modal-open { overflow: hidden; }
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='approve_request'>";
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . "><i class='fa-solid fa-check'></i> Approve</button>";
                   echo "</form>";
                   echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                   echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . " onclick='return openDenyModal(this.closest(\"form\"))'>Deny</button>";
+                  echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . " onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                   echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
                       echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " request? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                       echo "<input type='hidden' name='action' value='delete_reservation'>";
-                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                       echo "</form>";
                   } else {
                       $approvedBy = !empty($req['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($req['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3722,15 +3723,15 @@ body.modal-open { overflow: hidden; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabelGar . "</span></td>";
                   
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'>View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
                   $receiptPath = $gar['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -3740,14 +3741,14 @@ body.modal-open { overflow: hidden; }
                     echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
                     echo "<input type='hidden' name='action' value='verify_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                    echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                    echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
                     echo "</form>";
                     echo "<form method='post' style='display:inline;'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($gar['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                     echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                    echo "<button type='submit' class='btn btn-reject'>Reject</button>";
+                    echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-xmark'></i> Reject</button>";
                     echo "</form>";
                   } elseif ($payStatusLower === 'verified') {
                     echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -3759,7 +3760,7 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . "><i class='fa-solid fa-check'></i> Approve</button>";
                       echo "</form>";
 
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -3767,12 +3768,12 @@ body.modal-open { overflow: hidden; }
                       echo "<input type='hidden' name='rr_id' value='" . intval($gar['id']) . "'>";
                       echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                       echo "</form>";
                   } else {
                       $approvedBy = !empty($gar['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($gar['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($gar['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3836,14 +3837,14 @@ body.modal-open { overflow: hidden; }
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'>View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='reservations'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . "><i class='fa-solid fa-check'></i> Approve</button>";
                       echo "</form>";
 
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -3851,12 +3852,12 @@ body.modal-open { overflow: hidden; }
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                     echo "<input type='hidden' name='redirect_page' value='reservations'>";
-                    echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                    echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                     echo "</form>";
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -3901,13 +3902,13 @@ body.modal-open { overflow: hidden; }
               echo "<td>" . $resident['house_number'] . "</td>";
               echo "<td>" . date('M d, Y', strtotime($resident['created_at'])) . "</td>";
               echo "<td class='actions'>";
-              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'>View Details</button>";
+              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($resident['id']) . ",\"resident\")'><i class='fa-solid fa-eye'></i> View Details</button>";
               echo "<form method='post' style='display:inline;' onsubmit='return openAdminConfirm(this, \"Are you sure? This resident will now be deleted\")'>";
               echo "<input type='hidden' name='user_id' value='" . intval($resident['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='suspend_user'>";
               echo "<input type='hidden' name='redirect_page' value='residents'>";
               echo "<input type='text' name='suspension_reason' class='suspend-reason' placeholder='Reason' required maxlength='255'>";
-              echo "<button type='submit' class='btn btn-reject'>Suspend</button>";
+              echo "<button type='submit' class='btn btn-reject'><i class='fa-solid fa-ban'></i> Suspend</button>";
               echo "</form>";
               echo "</td>";
               echo "</tr>";
@@ -3947,12 +3948,12 @@ body.modal-open { overflow: hidden; }
               echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
               echo "<td>" . (!empty($visitor['created_at']) ? date('M d, Y', strtotime($visitor['created_at'])) : '-') . "</td>";
               echo "<td class='actions'>";
-              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'>View Details</button>";
+              echo "<button type='button' class='btn btn-view' onclick='showUserDetails(" . intval($visitor['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
               echo "<form method='post' class='delete-form' onsubmit='return openAdminConfirm(this, \"Are you sure? This visitor will now be deleted\")' style='display:inline;'>";
               echo "<input type='hidden' name='user_id' value='" . intval($visitor['id']) . "'>";
               echo "<input type='hidden' name='user_action' value='delete_user'>";
               echo "<input type='hidden' name='redirect_page' value='visitors'>";
-              echo "<button type='submit' class='btn btn-remove'>Delete Account</button>";
+              echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete Account</button>";
               echo "</form>";
               echo "</td>";
               echo "</tr>";
@@ -4037,7 +4038,7 @@ body.modal-open { overflow: hidden; }
             if ($tp > 0) {
               $tpStr = number_format($tp, 2, '.', '');
               $dpStr = $dpRaw !== null ? number_format($dpRaw, 2, '.', '') : '';
-              echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')">View Price Details</button>';
+              echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')"><i class="fa-solid fa-eye"></i> View Price Details</button>';
             } else {
               echo '<span class="muted">-</span>';
             }
@@ -4054,19 +4055,19 @@ body.modal-open { overflow: hidden; }
             } else {
               $targetPage = 'requests';
             }
-              echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'>View All Details</a>";
+              echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
               if($ps!=='verified'){
                 echo '<form method="post">';
                 echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                 echo '<input type="hidden" name="action" value="verify_receipt">';
-                echo '<button type="submit" class="btn btn-approve">Verify Payment Receipt</button>';
+                echo '<button type="submit" class="btn btn-approve"><i class="fa-solid fa-receipt"></i> <i class="fa-solid fa-check"></i> Verify Payment Receipt</button>';
                 echo '</form>';
 
                 echo '<form method="post">';
                 echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                 echo '<input type="hidden" name="action" value="reject_receipt">';
                 echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
-                echo '<button type="submit" class="btn btn-reject">Reject</button>';
+                echo '<button type="submit" class="btn btn-reject"><i class="fa-solid fa-xmark"></i> Reject</button>';
                 echo '</form>';
               } else {
               }
@@ -4140,8 +4141,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     <textarea id="denyReasonInput" rows="3" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-family:Poppins,Arial,sans-serif;min-height:90px;"></textarea>
     <div id="denyReasonError" style="display:none;color:#b91c1c;font-size:0.85rem;margin-top:6px;">Please enter a reason to continue.</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
-      <button type="button" class="btn btn-view" id="denyReasonCancel">Cancel</button>
-      <button type="button" class="btn btn-reject" id="denyReasonSubmit">Confirm</button>
+      <button type="button" class="btn btn-view" id="denyReasonCancel"><i class="fa-solid fa-xmark"></i> Cancel</button>
+      <button type="button" class="btn btn-reject" id="denyReasonSubmit"><i class="fa-solid fa-check"></i> Confirm</button>
     </div>
   </div>
 </div>
@@ -4344,15 +4345,15 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                 echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                 echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'>View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $receiptPath = $rr['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank'>Open Receipt (PDF)</a>";
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\">View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\"><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted'>No receipt</div>";
@@ -4362,14 +4363,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='verify_receipt'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
-                  echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                  echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
                   echo "</form>";
                   echo "<form method='post' onsubmit='return openDenyModal(this)'>";
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='reject_receipt'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
                   echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
+                  echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                   echo "</form>";
                 } elseif ($payStatusLower === 'verified') {
                   echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -4380,7 +4381,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
                     echo "<input type='hidden' name='redirect_page' value='requests'>";
-                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                    echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . "><i class='fa-solid fa-check'></i> Approve</button>";
                     echo "</form>";
 
                 } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -4388,12 +4389,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                     echo "<input type='hidden' name='redirect_page' value='requests'>";
-                    echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                    echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                     echo "</form>";
                 } else {
                     $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                     if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank'>View QR</a>";
+                      echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                     }
                     echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                 }
@@ -4476,18 +4477,18 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
               if ($status === 'new' || $status === 'in_progress') {
                   echo '<input type="hidden" name="incident_action" value="resolve">';
-                  echo '<button type="submit" class="btn btn-approve">Resolve</button>';
+                  echo '<button type="submit" class="btn btn-approve"><i class="fa-solid fa-check"></i> Resolve</button>';
               }
               echo '</form>';
               echo '<form method="POST" style="display:inline-block;">';
               echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
               echo '<input type="hidden" name="incident_action" value="reject">';
-              echo '<button type="submit" class="btn btn-reject">Reject</button>';
+              echo '<button type="submit" class="btn btn-reject"><i class="fa-solid fa-xmark"></i> Reject</button>';
               echo '</form>';
               echo '<form method="POST" style="display:inline-block;margin-left:6px;" onsubmit="return confirm(\'Delete this incident report? This cannot be undone.\')">';
               echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
               echo '<input type="hidden" name="incident_delete" value="1">';
-              echo '<button type="submit" class="btn btn-delete">Delete</button>';
+              echo '<button type="submit" class="btn btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>';
               echo '</form>';
               echo '</td>';
               echo '</tr>';
@@ -4543,14 +4544,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'>View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $receiptPath = $rr['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'>Open Receipt (PDF)</a>";
+                      echo "<a class='btn btn-receipt' href='" . htmlspecialchars($receiptPath) . "' target='_blank' style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</a>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'>View Uploaded Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> View Uploaded Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
@@ -4560,14 +4561,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='verify_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                    echo "<button type='submit' class='btn btn-approve'>Verify Payment Receipt</button>";
+                    echo "<button type='submit' class='btn btn-approve'><i class='fa-solid fa-receipt'></i> <i class='fa-solid fa-check'></i> Verify Payment Receipt</button>";
                     echo "</form>";
                     echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='reject_receipt'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
                     echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'>Reject</button>";
+                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                     echo "</form>";
                   } elseif ($payStatusLower === 'verified') {
                     echo "<div class='muted' style='margin-top:6px;'>Payment verified</div>";
@@ -4578,7 +4579,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . ">Approve</button>";
+                      echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-approve") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . "><i class='fa-solid fa-check'></i> Approve</button>";
                       echo "</form>";
 
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -4586,12 +4587,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      echo "<button type='submit' class='btn btn-remove'>Delete</button>";
+                      echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                       echo "</form>";
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'>View QR</a>";
+                        echo "<a class='btn btn-view' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -4660,7 +4661,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                echo "<input type='hidden' name='action' value='delete_reservation'>";
                echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
                echo "<input type='hidden' name='redirect_page' value='history'>";
-               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
+               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><i class='fa-solid fa-trash'></i> Delete</button>";
                echo "</form>";
                echo "</td>";
                echo "</tr>";
@@ -4708,7 +4709,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                echo "<input type='hidden' name='action' value='delete_reservation'>";
                echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
                echo "<input type='hidden' name='redirect_page' value='history'>";
-               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><span>🗑️</span> Delete</button>";
+               echo "<button type='submit' class='btn btn-remove' style='display:flex;align-items:center;gap:5px;'><i class='fa-solid fa-trash'></i> Delete</button>";
                echo "</form>";
                echo "</td>";
                echo "</tr>";
@@ -4815,7 +4816,7 @@ function showVisitorDetails(id, source) {
         else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
 
         const fullName = [details.full_name || '', details.middle_name || '', details.last_name || ''].join(' ').replace(/\s+/g,' ').trim();
-        const validIdValue = details.valid_id_path ? `<button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(details.valid_id_path).replace(/'/g, "\\'")}')">View ID</button>` : 'Not uploaded';
+        const validIdValue = details.valid_id_path ? `<button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(details.valid_id_path).replace(/'/g, "\\'")}')"><i class="fa-solid fa-id-card"></i> View ID</button>` : 'Not uploaded';
         const statusBadge = `<div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>`;
 
         const priceBlock = details.price ? (()=>{ 
@@ -5235,7 +5236,7 @@ function showUserDetails(userId, expectedType){
             ${d.birthdate?`<p><strong>Birthdate:</strong> ${new Date(d.birthdate).toLocaleDateString()}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
-            ${d.valid_id_path?`<p><strong>Valid ID:</strong> <button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(d.valid_id_path).replace(/'/g, "\\'")}')">View ID</button></p>`:''}
+            ${d.valid_id_path?`<p><strong>Valid ID:</strong> <button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(d.valid_id_path).replace(/'/g, "\\'")}')"><i class="fa-solid fa-id-card"></i> View ID</button></p>`:''}
           </div>
           <div>
             <h4 style="color:#23412e;margin-bottom:10px;">Residence</h4>
@@ -5278,8 +5279,8 @@ window.addEventListener('click', function(event){
     <div style="font-weight:700; color:#1f2937; font-size:1.05rem; margin-bottom:8px;">Confirm Action</div>
     <div id="adminConfirmMessage" style="font-size:0.95rem; color:#374151; line-height:1.5; margin-bottom:16px;"></div>
     <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-      <button type="button" class="btn btn-cancel" id="adminConfirmCancelBtn" style="min-width:130px;">Cancel</button>
-      <button type="button" class="btn btn-reject" id="adminConfirmOkBtn" style="min-width:130px;">Confirm</button>
+      <button type="button" class="btn btn-cancel" id="adminConfirmCancelBtn" style="min-width:130px;"><i class="fa-solid fa-xmark"></i> Cancel</button>
+      <button type="button" class="btn btn-reject" id="adminConfirmOkBtn" style="min-width:130px;"><i class="fa-solid fa-check"></i> Confirm</button>
     </div>
   </div>
 </div>
