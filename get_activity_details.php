@@ -1,4 +1,5 @@
 <?php
+session_start();
 include 'connect.php';
 
 $code = isset($_GET['code']) ? trim($_GET['code']) : '';
@@ -57,7 +58,7 @@ if ($resGF && $resGF->num_rows > 0) {
     $rPrice = null;
     $rDownpayment = null;
 
-    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, qr_path, payment_status, receipt_path, denial_reason FROM reservations WHERE ref_code = ? LIMIT 1");
+    $stmtR = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, qr_path, payment_status, receipt_path, denial_reason, approval_status, receipt_attempts FROM reservations WHERE ref_code = ? LIMIT 1");
     if ($stmtR) {
         $stmtR->bind_param('s', $row['ref_code']);
         if ($stmtR->execute()) {
@@ -76,6 +77,8 @@ if ($resGF && $resGF->num_rows > 0) {
                 $rPayStatus = strtolower(trim($r['payment_status'] ?? ''));
                 $rReceipt = $r['receipt_path'] ?? '';
                 $rReason = $r['denial_reason'] ?? '';
+                $rApproval = strtolower(trim($r['approval_status'] ?? ''));
+                $rAttempts = isset($r['receipt_attempts']) ? intval($r['receipt_attempts']) : null;
                 $hasReservation = !empty($rAmenity);
                 if (!$qrPath && !empty($r['qr_path'])) { $qrPath = $r['qr_path']; $qrImg = $qrPath; }
                 if ($hasReservation) {
@@ -83,6 +86,9 @@ if ($resGF && $resGF->num_rows > 0) {
                     $expireDate = !empty($rEndDate) ? date('m/d/y', strtotime($rEndDate)) : '';
                     $validWindow = ($publishDate ?: '-') . ($expireDate ? (' → ' . $expireDate) : '');
                 }
+                if ($rApproval !== '') { $statusVal = $rApproval; }
+                else if ($rPayStatus === 'rejected' && $rAttempts !== null && $rAttempts >= 3) { $statusVal = 'denied'; }
+                else if ($rPayStatus === 'rejected') { $statusVal = 'rejected'; }
             }
         }
         $stmtR->close();
@@ -132,7 +138,8 @@ if ($resGF && $resGF->num_rows > 0) {
         'verification' => $verificationLink,
         'payment_status' => isset($rPayStatus) ? $rPayStatus : '',
         'receipt_path' => isset($rReceipt) ? $rReceipt : '',
-        'denial_reason' => isset($rReason) ? $rReason : ''
+        'denial_reason' => isset($rReason) ? $rReason : '',
+        'receipt_attempts' => isset($rAttempts) ? intval($rAttempts) : 0
     ];
 }
 
@@ -147,6 +154,10 @@ if (!$data) {
         $row = $res->fetch_assoc();
         $statusVal = 'pending';
         if (!empty($row['approval_status'])) { $statusVal = $row['approval_status']; }
+        $attempts = isset($row['receipt_attempts']) ? intval($row['receipt_attempts']) : 0;
+        $payStatLower = strtolower(trim($row['payment_status'] ?? ''));
+        if ($statusVal !== 'denied' && $payStatLower === 'rejected' && $attempts >= 3) { $statusVal = 'denied'; }
+        else if ($payStatLower === 'rejected') { $statusVal = 'rejected'; }
 
         $hasEntryPass = !empty($row['entry_pass_id']);
         $uType = isset($row['user_type']) ? strtolower($row['user_type']) : '';
@@ -245,7 +256,8 @@ if (!$data) {
             'verification' => $verificationLink,
             'payment_status' => strtolower(trim($row['payment_status'] ?? '')),
             'receipt_path' => $row['receipt_path'] ?? '',
-            'denial_reason' => $row['denial_reason'] ?? ''
+            'denial_reason' => $row['denial_reason'] ?? '',
+            'receipt_attempts' => $attempts
         ];
     }
 }
@@ -614,6 +626,7 @@ if (!$data) {
 
     <?php 
       $pstat = strtolower(trim($data['payment_status'] ?? ''));
+      $attempts = isset($data['receipt_attempts']) ? intval($data['receipt_attempts']) : 0;
       $receipt = trim($data['receipt_path'] ?? '');
       $denial = trim($data['denial_reason'] ?? '');
       $showPayment = ($pstat !== '' || $receipt !== '');
@@ -625,16 +638,46 @@ if (!$data) {
       <div class="info-row pay-status">
         <span class="info-label">Payment Status</span>
         <?php 
+          $overallDenied = (strpos(strtolower($data['status']), 'denied') !== false);
           $cls = 'pay-badge pay-pending'; $lbl='Pending';
-          if($pstat === 'verified'){ $cls='pay-badge pay-verified'; $lbl='Verified'; }
-          else if($pstat === 'rejected'){ $cls='pay-badge pay-rejected'; $lbl='Rejected'; }
+          if($overallDenied){ $cls='pay-badge pay-rejected'; $lbl='Denied'; }
+          else if($pstat === 'verified'){ $cls='pay-badge pay-verified'; $lbl='Verified'; }
+          else if($pstat === 'rejected'){ $cls='pay-badge pay-rejected'; $lbl='Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
           else if($pstat === 'pending_update'){ $cls='pay-badge pay-pending'; $lbl='Pending Update'; }
         ?>
         <span class="<?php echo $cls; ?>"><?php echo $lbl; ?></span>
       </div>
       <?php endif; ?>
-      <?php if($pstat === 'rejected' && $denial !== ''): ?>
-      <div class="rejection-reason">Reason: <?php echo htmlspecialchars($denial); ?></div>
+      <?php if(($pstat === 'rejected' || $pstat === 'pending_update') && $denial !== ''): ?>
+      <div class="rejection-reason">
+        Reason: <?php echo htmlspecialchars($denial); ?>
+        <?php if(isset($_SESSION['role']) && $_SESSION['role'] === 'admin' && $pstat === 'pending_update'): ?>
+        <button type="button" id="editDenialBtn" style="margin-left:8px;background:transparent;border:none;color:#23412e;font-weight:600;cursor:pointer;">Edit</button>
+        <form id="editDenialForm" method="post" action="admin.php" style="display:none;margin-top:8px;">
+          <input type="hidden" name="action" value="update_denial_reason">
+          <input type="hidden" name="ref_code" value="<?php echo htmlspecialchars($data['code']); ?>">
+          <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+          <textarea name="denial_reason" rows="3" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;padding:10px;"><?php echo htmlspecialchars($denial); ?></textarea>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+            <button type="button" id="cancelEditDenial" class="action-btn" style="background:#e2e8f0;color:#23412e;">Cancel</button>
+            <button type="submit" class="action-btn">Save</button>
+          </div>
+        </form>
+        <script>
+          (function(){
+            var btn=document.getElementById('editDenialBtn');
+            var form=document.getElementById('editDenialForm');
+            var cancel=document.getElementById('cancelEditDenial');
+            if(btn && form){
+              btn.addEventListener('click', function(){ form.style.display='block'; btn.style.display='none'; });
+            }
+            if(cancel && form && btn){
+              cancel.addEventListener('click', function(){ form.style.display='none'; btn.style.display='inline-block'; });
+            }
+          })();
+        </script>
+        <?php endif; ?>
+      </div>
       <?php endif; ?>
       <?php if($receipt !== ''): ?>
       <div class="pay-proof">

@@ -810,7 +810,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <title>VictorianPass - Reserve</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="css/reserve.css">
+  <link rel="stylesheet" href="CSS/reserve.css">
 </head>
 <body>
   <div id="notifyLayer" class="toast"></div>
@@ -960,6 +960,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                 .calendar td.disabled { cursor:not-allowed; opacity:0.95; }
                 .calendar td.today { outline:2px solid #345c40; }
                 .calendar td.active { background:#ffffff; border:2px solid #16a34a; color:#0f172a; box-shadow:none; }
+                .calendar td.active-start,
+                .calendar td.active-end { background:#ffffff !important; color:#23412e; font-weight:800; border:2px solid #23412e; box-shadow:inset 0 0 0 2px rgba(35,65,46,0.15); }
               </style>
               <div class="calendar" style="width:100%">
                 <div class="calendar-header">
@@ -1335,11 +1337,28 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         return;
       }
     } else {
-      if(isSameAsStart){
-        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
-        clearStartDate();
-        clearEndDate();
+      if(isSameAsStart && !selectedEnd){
+        setEnd(dateString);
+        (function(){
+          const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+          cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); });
+          if(selectedStart){
+            const s=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+            if(s){ s.classList.add('active-start'); s.classList.remove('active'); }
+          }
+          if(selectedEnd){
+            const e=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+            if(e){ e.classList.add('active-end'); e.classList.remove('active'); }
+          }
+        })();
         await updatePoolRemainingNote();
+        computeAvailability();
+        renderTimeSlotButtons();
+        markDirty('startDateInput');
+        showIncompleteWarnings(false);
+        updateActionStates();
+        updateSelectedTimeRange();
+        updateBookingSummary();
         return;
       }
       if(isSameAsEnd){
@@ -1349,7 +1368,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         return;
       }
     }
-    document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
     cell.classList.add('active');
     function setStart(ds, ignoreEnd){
       const eVal=document.getElementById('endDateInput').value||'';
@@ -1386,6 +1405,19 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         setStart(dateString, true);
       }
     }
+    await evaluateCalendarAvailability();
+    (function(){
+      const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+      cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); });
+      if(selectedStart){
+        const s=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+        if(s){ s.classList.add('active-start'); s.classList.remove('active'); s.classList.remove('available'); }
+      }
+      if(selectedEnd){
+        const e=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+        if(e){ e.classList.add('active-end'); e.classList.remove('active'); e.classList.remove('available'); }
+      }
+    })();
     await updatePoolRemainingNote();
     computeAvailability();
     renderTimeSlotButtons();
@@ -1402,6 +1434,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     document.getElementById('startDateInput').value='';
     const single = document.getElementById('singleDayToggle')?.checked;
     if(single){ selectedEnd=null; document.getElementById('endDate').textContent='--'; document.getElementById('endDateInput').value=''; }
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
+    evaluateCalendarAvailability();
     computeAvailability();
     renderTimeSlotButtons();
     markDirty('startDateInput');
@@ -1415,6 +1449,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     selectedEnd=null;
     document.getElementById('endDate').textContent='--';
     document.getElementById('endDateInput').value='';
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
+    evaluateCalendarAvailability();
     computeAvailability();
     renderTimeSlotButtons();
     markDirty('endDateInput');
@@ -1439,6 +1475,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(this.checked){
         if(s){ selectedEnd=s; document.getElementById('endDateInput').value=s; document.getElementById('endDate').textContent=formatDateToMMDDYYYY(s); }
       }
+      (function(){
+        const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+        cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); td.classList.remove('active'); });
+        if(selectedStart){
+          const st=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+          if(st){ st.classList.add('active-start'); }
+        }
+        if(selectedEnd){
+          const en=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+          if(en){ en.classList.add('active-end'); }
+        }
+      })();
       computeAvailability();
       renderTimeSlotButtons();
       updateActionStates();

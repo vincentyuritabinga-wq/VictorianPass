@@ -189,7 +189,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, receipt_attempts, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -218,8 +218,12 @@ if ($stmt) {
             $statusVal = $row['status'] ?? 'pending';
         }
         $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
-        if ($paymentStatusLower === 'rejected') { $statusVal = 'rejected'; }
-        elseif ($paymentStatusLower === 'pending_update') { $statusVal = 'pending_update'; }
+        if ($paymentStatusLower === 'rejected') {
+            $atts = intval($row['receipt_attempts'] ?? 0);
+            $statusVal = ($atts >= 3) ? 'denied' : 'rejected';
+        } elseif ($paymentStatusLower === 'pending_update') {
+            $statusVal = 'pending_update';
+        }
         
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal, 'cancel') !== false) {
@@ -257,7 +261,8 @@ if ($stmt) {
             'date' => $row['created_at'],
             'event_timestamp' => $eventTs,
             'ref_code' => $row['ref_code'] ?? 'RES',
-            'payment_status' => $row['payment_status'] ?? null
+            'payment_status' => $row['payment_status'] ?? null,
+            'attempts' => intval($row['receipt_attempts'] ?? 0)
         ];
     }
     $stmt->close();
@@ -364,6 +369,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   .account-blocked-content .btn-logout-only { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #c0392b; color: #fff; text-decoration: none; font-weight: 600; border: 0; cursor: pointer; }
   .account-blocked-content .btn-logout-only:hover { filter: brightness(0.95); }
 </style>
+<style>.note-error{color:#b91c1c;font-weight:700;}</style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
 <?php if ($flashNotice !== '') { ?>
@@ -480,7 +486,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   }
                   $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -559,7 +565,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   }
                   $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -636,6 +642,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <h3>Upload the Updated Proof Here</h3>
     <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
     <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
+    <div id="updateProofPreview" class="update-proof-preview" style="display:none; margin-top:10px;"></div>
     <div class="update-proof-actions">
       <button type="button" id="updateProofEditBtn" class="update-proof-btn update-proof-edit">Edit</button>
       <button type="button" id="updateProofRemoveBtn" class="update-proof-btn update-proof-remove" disabled>Remove</button>
@@ -1001,6 +1008,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             li.setAttribute('data-status',newStatus);
             if(newItem.payment_status !== undefined){
               li.setAttribute('data-payment-status', newItem.payment_status || '');
+            }
+            if(newItem.attempts !== undefined){
+              li.setAttribute('data-attempts', String(newItem.attempts || 0));
             }
 
             var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
@@ -1471,6 +1481,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(updateProofFileName) updateProofFileName.textContent = file ? file.name : 'No file selected';
       if(updateProofRemoveBtn) updateProofRemoveBtn.disabled = !file;
       if(updateProofSubmitBtn) updateProofSubmitBtn.disabled = !file;
+      var preview=document.getElementById('updateProofPreview');
+      if(preview){
+        preview.innerHTML='';
+        preview.style.display='none';
+        if(file){
+          var type=(file.type||'').toLowerCase();
+          if(type.indexOf('image/')===0){
+            var reader=new FileReader();
+            reader.onload=function(e){
+              preview.innerHTML='<img src="'+e.target.result+'" alt="Preview" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;">';
+              preview.style.display='block';
+            };
+            reader.readAsDataURL(file);
+          } else if(type.indexOf('pdf')!==-1){
+            var url=URL.createObjectURL(file);
+            preview.innerHTML='<a href="'+url+'" target="_blank" style="color:#23412e;text-decoration:underline;font-weight:600;">Open selected PDF</a>';
+            preview.style.display='block';
+          }
+        }
+      }
     });
   }
   if(updateProofSubmitBtn){
@@ -1673,7 +1703,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
     if(type==='reservation' && paymentStatus==='rejected'){
-        statusNote='Payment proof was rejected. Please update your proof of payment.';
+        var att = isNaN(attempts)?0:attempts;
+        if(att >= 3){
+          statusNote='This request was denied.';
+        }else{
+          statusNote='Your reservation payment was rejected. Please upload a clear and legible payment receipt to avoid denial. You have 3 attempts. ';
+          statusNote+='Attempt '+Math.max(att,1)+' of 3.';
+        }
     } else if (type==='reservation' && paymentStatus==='pending_update'){
         statusNote='Payment proof resubmitted. Awaiting verification.';
     }
@@ -1710,6 +1746,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
     
+    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
+    if (type==='reservation' && paymentStatus==='rejected') {
+      var att = isNaN(attempts)?0:attempts;
+      var headerBadge = li.querySelector('.status-badge');
+      if(att >= 3){
+        label = 'Denied';
+        if (headerBadge) { headerBadge.textContent = label; }
+        canUpdateProof=false; canCancel=false; canMoveHistory=false; canDelete=false;
+      }else{
+        label = 'Rejected (Attempt '+Math.max(att,1)+' of 3)';
+        if (headerBadge) { headerBadge.textContent = label; }
+        canUpdateProof=true; canCancel=false; canMoveHistory=false; canDelete=false;
+      }
+    }
     var html='';
     html+='<div class="item-extra-section">';
     var qrSrcForDownload = '';
@@ -1729,7 +1779,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(showStatusLabel){
       html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
     }
-    if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+    var noteClass='item-extra-note'+((type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts) < 3)?' note-error':'');
+    if(statusNote) html+='<div class="'+noteClass+'">'+esc(statusNote)+'</div>';
     if(reasonText){
       html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
     }
@@ -1753,20 +1804,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(canUpdateProof && ref){
         html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
     }
-    if(canCancel && ref){
-        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
-    }
-    if(canMoveHistory && ref){
-        html+='<button type="button" class="item-extra-move-history" data-ref="'+esc(ref)+'">Move to History</button>';
-    }
-    if(canDelete && ref){
-         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
-    }
-    
-    if(isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'"><i class="fa-solid fa-qrcode"></i> Download QR code</button>';
-        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
-    } else {
+    if(ref){
         html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
     }
     html+='</div>';

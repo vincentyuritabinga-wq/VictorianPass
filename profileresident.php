@@ -248,7 +248,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.receipt_attempts, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -263,8 +263,12 @@ if ($stmt) {
             $statusVal = $row['status'] ?? 'pending';
         }
         $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
-        if ($paymentStatusLower === 'rejected') { $statusVal = 'rejected'; }
-        elseif ($paymentStatusLower === 'pending_update') { $statusVal = 'pending_update'; }
+        if ($paymentStatusLower === 'rejected') {
+            $atts = intval($row['receipt_attempts'] ?? 0);
+            $statusVal = ($atts >= 3) ? 'denied' : 'rejected';
+        } elseif ($paymentStatusLower === 'pending_update') {
+            $statusVal = 'pending_update';
+        }
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal ?? '', 'cancel') !== false) {
             $resTitle .= ' - Cancelled';
@@ -310,7 +314,8 @@ if ($stmt) {
             'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
-            'payment_status' => $row['payment_status'] ?? null
+            'payment_status' => $row['payment_status'] ?? null,
+            'attempts' => intval($row['receipt_attempts'] ?? 0)
         ];
     }
     $stmt->close();
@@ -701,6 +706,8 @@ body.account-blocked { overflow: hidden; }
 
 /* Sidebar UI Improvements */
 /* Moved to dashboard.css */
+.note-error{color:#b91c1c;font-weight:700;}
+.notif-error { color:#b91c1c; font-weight:700; }
 </style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
@@ -898,7 +905,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -981,7 +988,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -1212,6 +1219,7 @@ body.account-blocked { overflow: hidden; }
       <h3>Upload the Updated Proof Here</h3>
       <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
       <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
+      <div id="updateProofPreview" class="update-proof-preview" style="display:none; margin-top:10px;"></div>
       <div class="update-proof-actions">
         <button type="button" id="updateProofEditBtn" class="update-proof-btn update-proof-edit">Edit</button>
         <button type="button" id="updateProofRemoveBtn" class="update-proof-btn update-proof-remove" disabled>Remove</button>
@@ -1417,6 +1425,7 @@ body.account-blocked { overflow: hidden; }
   var updateProofEditBtn=document.getElementById('updateProofEditBtn');
   var updateProofRemoveBtn=document.getElementById('updateProofRemoveBtn');
   var updateProofSubmitBtn=document.getElementById('updateProofSubmitBtn');
+  var updateProofPreview=document.getElementById('updateProofPreview');
   var updateProofRef=null;
   var updateProofLi=null;
 
@@ -1425,6 +1434,7 @@ body.account-blocked { overflow: hidden; }
     if(updateProofFileName) updateProofFileName.textContent='No file selected';
     if(updateProofRemoveBtn) updateProofRemoveBtn.disabled=true;
     if(updateProofSubmitBtn) updateProofSubmitBtn.disabled=true;
+    if(updateProofPreview){ updateProofPreview.innerHTML=''; updateProofPreview.style.display='none'; }
   }
 
   function openUpdateProofModal(li, ref){
@@ -1456,7 +1466,9 @@ body.account-blocked { overflow: hidden; }
       var title=String(it.title||'').replace(/[<>]/g,'');
       var message=formatNotifMessage(it.message||'');
       var time=formatNotifDateTime(it.created_at||'');
-      html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
+      var t=String(it.type||'').toLowerCase();
+      var subCls='notif-popup-sub'+(t==='error'?' notif-error':'');
+      html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="'+subCls+'">'+message+(time?' • '+time:'')+'</div></div>';
     }
     notifPopup.innerHTML=html;
     notifPopup.style.display='block';
@@ -1734,6 +1746,25 @@ body.account-blocked { overflow: hidden; }
       if(updateProofFileName) updateProofFileName.textContent = file ? file.name : 'No file selected';
       if(updateProofRemoveBtn) updateProofRemoveBtn.disabled = !file;
       if(updateProofSubmitBtn) updateProofSubmitBtn.disabled = !file;
+      if(updateProofPreview){
+        updateProofPreview.innerHTML='';
+        updateProofPreview.style.display='none';
+        if(file){
+          var type=(file.type||'').toLowerCase();
+          if(type.indexOf('image/')===0){
+            var reader=new FileReader();
+            reader.onload=function(e){
+              updateProofPreview.innerHTML='<img src="'+e.target.result+'" alt="Preview" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;">';
+              updateProofPreview.style.display='block';
+            };
+            reader.readAsDataURL(file);
+          } else if(type.indexOf('pdf')!==-1){
+            var url=URL.createObjectURL(file);
+            updateProofPreview.innerHTML='<a href="'+url+'" target="_blank" style="color:#23412e;text-decoration:underline;font-weight:600;">Open selected PDF</a>';
+            updateProofPreview.style.display='block';
+          }
+        }
+      }
     });
   }
   if(updateProofSubmitBtn){
@@ -1823,7 +1854,13 @@ body.account-blocked { overflow: hidden; }
     else if(s.indexOf('resolved')!==-1) statusNote='This item has been marked as resolved by the admin.';
     else if(s.indexOf('expired')!==-1) statusNote='This pass is expired and can no longer be used.';
     if(type==='reservation' && paymentStatus==='rejected'){
-        statusNote='Payment proof was rejected. Please update your proof of payment.';
+        var att = isNaN(attempts)?0:attempts;
+        if(att >= 3){
+          statusNote='This request was denied.';
+        }else{
+          statusNote='Your reservation payment was rejected. Please upload a clear and legible payment receipt to avoid denial. You have 3 attempts. ';
+          statusNote+='Attempt '+Math.max(att,1)+' of 3.';
+        }
     } else if (type==='reservation' && paymentStatus==='pending_update'){
         statusNote='Payment proof resubmitted. Awaiting verification.';
     }
@@ -1858,6 +1895,20 @@ body.account-blocked { overflow: hidden; }
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
+    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
+    if (type==='reservation' && paymentStatus==='rejected') {
+      var att = isNaN(attempts)?0:attempts;
+      var headerBadge = li.querySelector('.status-badge');
+      if(att >= 3){
+        label = 'Denied';
+        if (headerBadge) { headerBadge.textContent = label; }
+        canUpdateProof=false; canCancel=false; canMoveHistory=false; canDelete=false;
+      }else{
+        label = 'Rejected (Attempt '+Math.max(att,1)+' of 3)';
+        if (headerBadge) { headerBadge.textContent = label; }
+        canUpdateProof=true; canCancel=false; canMoveHistory=false; canDelete=false;
+      }
+    }
     var html='';
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
@@ -1877,7 +1928,8 @@ body.account-blocked { overflow: hidden; }
       if(showStatusLabel){
         html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       }
-      if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+    var noteClass='item-extra-note'+((type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts) < 3)?' note-error':'');
+    if(statusNote) html+='<div class="'+noteClass+'">'+esc(statusNote)+'</div>';
       if(reasonText){
         html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
       }
@@ -1898,26 +1950,10 @@ body.account-blocked { overflow: hidden; }
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       
       html+='<div class="item-actions">';
-      if(type==='guest_form' && isApproved){
-         html+='<button type="button" class="item-extra-link view-details-btn" onclick="document.querySelector(\'[data-section=panel-my-guests]\').click()">Go to My Guests</button>';
-      }
       if(canUpdateProof && ref){
         html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
       }
-      if(canCancel && ref){
-        var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
-        html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">'+cancelLabel+'</button>';
-      }
-      if(canMoveHistory && ref){
-        html+='<button type="button" class="item-extra-move-history" data-ref="'+esc(ref)+'">Move to History</button>';
-      }
-      if(canDelete && ref){
-         html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
-      }
-      if(type!=='guest_form' && isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'" data-type="'+esc(type)+'"><i class="fa-solid fa-qrcode"></i> Download QR code</button>';
-        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
-      } else {
+      if(ref){
         html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
       }
       html+='</div>';
@@ -2056,7 +2092,9 @@ body.account-blocked { overflow: hidden; }
         var title=String(it.title||'').replace(/[<>]/g,'');
         var message=formatNotifMessage(it.message||'');
         var time=formatNotifDateTime(it.created_at||'');
-        html+='<div class="notif-item"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+message+'</div>';
+        var t=String(it.type||'').toLowerCase();
+        var subCls='notif-item-sub'+(t==='error'?' notif-error':'');
+        html+='<div class="notif-item"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="'+subCls+'">'+message+'</div>';
         if(time) html+='<div class="notif-item-time">'+time+'</div>';
         html+='</div></div>';
       }

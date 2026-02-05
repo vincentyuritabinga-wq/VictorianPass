@@ -599,7 +599,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <title>VictorianPass - Reserve</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="css/reserve.css">
+  <link rel="stylesheet" href="CSS/reserve.css">
   <style>
     .hero .layout { max-width:1400px; margin:0 auto; padding:0 24px; }
     .reservation-card { width:100%; margin:0; max-width:none !important; }
@@ -1142,7 +1142,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }catch(_){ }
   }
 
-  function handleDateClick(cell,dateString){
+  async function handleDateClick(cell,dateString){
     if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else if(dateString && dateString < minDateStr){ showStartDateError('Reservations must be made at least 1 day in advance.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
     const single = document.getElementById('singleDayToggle')?.checked;
     const isSameAsStart = selectedStart && dateString === selectedStart;
@@ -1154,10 +1154,29 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         return;
       }
     } else {
-      if(isSameAsStart){
-        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
-        clearStartDate();
-        clearEndDate();
+      if(isSameAsStart && !selectedEnd){
+        setEnd(dateString);
+        await evaluateCalendarAvailability();
+        (function(){
+          const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+          cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); });
+          if(selectedStart){
+            const s=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+            if(s){ s.classList.add('active-start'); s.classList.remove('active'); s.classList.remove('available'); }
+          }
+          if(selectedEnd){
+            const e=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+            if(e){ e.classList.add('active-end'); e.classList.remove('active'); e.classList.remove('available'); }
+          }
+        })();
+        computeAvailability();
+        renderTimeSlotButtons();
+        markDirty('startDateInput');
+        markDirty('startDateInput');
+        showIncompleteWarnings(false);
+        updateActionStates();
+        updateSelectedTimeRange();
+        updateBookingSummary();
         return;
       }
       if(isSameAsEnd){
@@ -1166,7 +1185,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         return;
       }
     }
-    document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
     cell.classList.add('active');
     function setStart(ds, ignoreEnd){
       const eVal=document.getElementById('endDateInput').value||'';
@@ -1203,6 +1222,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         setStart(dateString, true);
       }
     }
+    (function(){
+      const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+      cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); });
+      if(selectedStart){
+        const s=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+        if(s){ s.classList.add('active-start'); s.classList.remove('active'); s.classList.remove('available'); }
+      }
+      if(selectedEnd){
+        const e=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+        if(e){ e.classList.add('active-end'); e.classList.remove('active'); e.classList.remove('available'); }
+      }
+    })();
     computeAvailability();
     renderTimeSlotButtons();
     markDirty('startDateInput');
@@ -1218,6 +1249,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     document.getElementById('startDateInput').value='';
     const single = document.getElementById('singleDayToggle')?.checked;
     if(single){ selectedEnd=null; document.getElementById('endDate').textContent='--'; document.getElementById('endDateInput').value=''; }
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
+    evaluateCalendarAvailability();
     computeAvailability();
     renderTimeSlotButtons();
     markDirty('startDateInput');
@@ -1231,6 +1264,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     selectedEnd=null;
     document.getElementById('endDate').textContent='--';
     document.getElementById('endDateInput').value='';
+    document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
+    evaluateCalendarAvailability();
     computeAvailability();
     renderTimeSlotButtons();
     markDirty('endDateInput');
@@ -1255,6 +1290,18 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(this.checked){
         if(s){ selectedEnd=s; document.getElementById('endDateInput').value=s; document.getElementById('endDate').textContent=formatDateToMMDDYYYY(s); }
       }
+      (function(){
+        const cells=Array.from(document.querySelectorAll('.calendar td[data-date]'));
+        cells.forEach(td=>{ td.classList.remove('active-start'); td.classList.remove('active-end'); td.classList.remove('active'); });
+        if(selectedStart){
+          const st=cells.find(td=>td.getAttribute('data-date')===selectedStart);
+          if(st){ st.classList.add('active-start'); }
+        }
+        if(selectedEnd){
+          const en=cells.find(td=>td.getAttribute('data-date')===selectedEnd);
+          if(en){ en.classList.add('active-end'); }
+        }
+      })();
       computeAvailability();
       renderTimeSlotButtons();
       updateActionStates();

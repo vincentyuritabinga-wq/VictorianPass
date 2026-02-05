@@ -125,6 +125,7 @@ ensureDenialReasonColumns($con);
 ensureEmailStatusColumns($con);
 ensureDownpaymentColumn($con);
 ensureHouseRange($con);
+ensureReceiptAttemptsColumn($con);
 
 // Handle AJAX request for user details (admin resident profile)
 if (isset($_GET['action']) && $_GET['action'] == 'get_user_details' && isset($_GET['id'])) {
@@ -806,7 +807,7 @@ function renderVerifyReceiptsCard($con){
         </thead>
         <tbody>
           <?php
-            $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
+            $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id, r.receipt_attempts,
                                            r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
                                            ep.full_name, ep.middle_name, ep.last_name,
                                            u.first_name AS res_first_name, u.last_name AS res_last_name, u.user_type,
@@ -875,16 +876,25 @@ function renderVerifyReceiptsCard($con){
                 } else {
                   $targetPage = 'requests';
                 }
-                  echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
-                  if($ps!=='verified'){
+                echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
+                if($ps!=='verified' && $ps!=='rejected'){
+                  $attempts = intval($row['receipt_attempts'] ?? 0);
+                  if ($attempts >= 3) {
+                    echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='deny_request'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                    echo "</form>";
+                  } else {
                     echo '<form method="post" onsubmit="return openDenyModal(this)">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
                     echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
                     echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))"><i class="fa-solid fa-xmark"></i> Reject</button>';
                     echo '</form>';
-                  } else {
                   }
+                }
                 echo '</td>';
                 echo '</tr>';
               }
@@ -963,7 +973,6 @@ function getResidentOnlyReservations($con) {
               AND (r.booking_for IS NULL OR r.booking_for = 'resident')
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
-              AND (r.payment_status IS NULL OR r.payment_status != 'rejected')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -976,7 +985,6 @@ function getVisitorAccountReservations($con) {
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
               AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
               AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
-              AND (r.payment_status IS NULL OR r.payment_status != 'rejected')
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1311,6 +1319,14 @@ function ensureDenialReasonColumns($con) {
         if ($check && $check->num_rows === 0) {
             @$con->query("ALTER TABLE $t ADD COLUMN denial_reason TEXT NULL");
         }
+    }
+}
+
+function ensureReceiptAttemptsColumn($con) {
+    $t = "reservations";
+    $check = @$con->query("SHOW COLUMNS FROM $t LIKE 'receipt_attempts'");
+    if (!$check || $check->num_rows === 0) {
+        @$con->query("ALTER TABLE $t ADD COLUMN receipt_attempts INT NULL DEFAULT 0");
     }
 }
 
@@ -1863,15 +1879,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt = $con->prepare($query);
             $stmt->bind_param("sisi", $payment_status, $staff_id, $reasonToSave, $reservation_id);
             $stmt->execute();
+            if ($payment_status === 'rejected') {
+              $stmtInc = $con->prepare("UPDATE reservations SET receipt_attempts = COALESCE(receipt_attempts,0) + 1 WHERE id = ?");
+              $stmtInc->bind_param('i', $reservation_id);
+              $stmtInc->execute();
+              $stmtInc->close();
+            }
             
-            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null; $startDate = null; $startTime = null; $endTime = null;
-            $stmtInfo = $con->prepare("SELECT r.ref_code, r.entry_pass_id, r.amenity, r.approval_status, r.user_id, r.start_date, r.start_time, r.end_time, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.id = ? LIMIT 1");
+            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null; $startDate = null; $startTime = null; $endTime = null; $attempts = 0;
+            $stmtInfo = $con->prepare("SELECT r.ref_code, r.entry_pass_id, r.amenity, r.approval_status, r.user_id, r.start_date, r.start_time, r.end_time, r.receipt_attempts, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.id = ? LIMIT 1");
             $stmtInfo->bind_param('i', $reservation_id);
             $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
             $approvedNow=false; $approvalStatusRes=null;
-            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); $userType = strtolower($rw['user_type'] ?? ''); $startDate = $rw['start_date'] ?? null; $startTime = $rw['start_time'] ?? null; $endTime = $rw['end_time'] ?? null; }
+            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); $userType = strtolower($rw['user_type'] ?? ''); $startDate = $rw['start_date'] ?? null; $startTime = $rw['start_time'] ?? null; $endTime = $rw['end_time'] ?? null; $attempts = intval($rw['receipt_attempts'] ?? 0); }
             $stmtInfo->close();
             if ($payment_status === 'verified' && $refCode) {
+            }
+            if ($attempts >= 3 && $payment_status === 'rejected') {
+                $stmtDeny = $con->prepare("UPDATE reservations SET approval_status = 'denied' WHERE id = ?");
+                $stmtDeny->bind_param('i', $reservation_id);
+                $stmtDeny->execute();
+                $stmtDeny->close();
             }
             if ($notifUserId) {
                 $title = ($payment_status === 'verified') ? 'Payment Verified' : 'Payment Rejected';
@@ -1895,7 +1923,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                   $msg = 'Your reservation payment';
                   if ($amenityLabel !== '') { $msg .= ' for ' . $amenityLabel; }
                   if ($scheduleLabel !== '') { $msg .= ' on ' . $scheduleLabel; }
-                  $msg .= ' has been rejected. Please update your proof of payment.';
+                  if ($attempts <= 1) {
+                    $msg .= ' was rejected. Please upload a clear and legible payment receipt to avoid denial. You have 3 attempts. Attempt ' . max($attempts, 1) . ' of 3.';
+                  } else {
+                    $msg .= ' was rejected. Please update your proof of payment. Attempt ' . max($attempts, 1) . ' of 3.';
+                  }
                 }
                 if ($payment_status !== 'verified' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
                 notifyUser($con, $notifUserId, $title, $msg, ($payment_status === 'verified' ? 'success' : 'error'));
@@ -1922,6 +1954,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               }
             }
             header("Location: $redirect");
+            exit;
+        }
+        
+        // Handle updating rejection message when payment proof is resubmitted
+        if ($action === 'update_denial_reason') {
+            $refCode = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
+            $redirectUrl = isset($_POST['redirect']) ? trim($_POST['redirect']) : '';
+            if ($refCode === '') {
+                header("Location: admin.php?page=requests");
+                exit;
+            }
+            $canUpdate = false;
+            $stmtChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtChk->bind_param('s', $refCode);
+            $stmtChk->execute();
+            $resChk = $stmtChk->get_result();
+            if ($resChk && ($rw = $resChk->fetch_assoc())) {
+                $ps = strtolower(trim($rw['payment_status'] ?? ''));
+                if ($ps === 'pending_update') { $canUpdate = true; }
+            }
+            $stmtChk->close();
+            if ($canUpdate) {
+                $stmtUp = $con->prepare("UPDATE reservations SET denial_reason = ? WHERE ref_code = ?");
+                $stmtUp->bind_param('ss', $denialReason, $refCode);
+                $stmtUp->execute();
+                $stmtUp->close();
+            }
+            if ($redirectUrl !== '') {
+                header("Location: " . $redirectUrl);
+            } else {
+                header("Location: admin.php?page=requests&ref=" . urlencode($refCode));
+            }
             exit;
         }
     }
@@ -3605,16 +3669,20 @@ body.modal-open { overflow: hidden; }
                   echo "<td>" . $reqDate . "</td>";
                   
                   echo "<td class='actions'>";
+                  $__ps2 = strtolower($rr['payment_status'] ?? '');
+                  if ($__ps2 !== 'rejected') {
+                  $__ps = strtolower($gar['payment_status'] ?? '');
+                  if ($__ps !== 'rejected') {
                   $approval_status = $req['approval_status'] ?? 'pending';
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   echo "<div style='margin-bottom: 8px;'><span class='badge $statusClass'>" . ucfirst($approval_status) . "</span></div>";
 
                   $payStatus = null; $resIdMatch = null; $receiptPath = null; $isAmenity = !empty($req['amenity']);
                   if (!empty($req['ref_code'])) {
-                    $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path, receipt_attempts FROM reservations WHERE ref_code = ? LIMIT 1");
                     $stmtPay2->bind_param('s', $req['ref_code']);
                     $stmtPay2->execute(); $rp2 = $stmtPay2->get_result();
-                    if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; }
+                    if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; $receiptAttempts = intval($pr2['receipt_attempts'] ?? 0); }
                     $stmtPay2->close();
                   }
                   echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\"><i class='fa-solid fa-eye'></i> View More Details</button>";
@@ -3631,13 +3699,23 @@ body.modal-open { overflow: hidden; }
                       echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                     }
                     if ($resIdMatch && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                      echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
-                      echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
-                      echo "<input type='hidden' name='action' value='reject_receipt'>";
-                      echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
-                      echo "</form>";
+                      if (($receiptAttempts ?? 0) >= 3) {
+                        echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                        echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
+                        echo "<input type='hidden' name='action' value='deny_request'>";
+                        echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                        echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                        echo "</form>";
+                      } else {
+                        echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
+                        echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
+                        echo "<input type='hidden' name='action' value='reject_receipt'>";
+                        echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                        echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
+                        echo "</form>";
+                      }
                     }
                   }
                   if ($approval_status == 'pending') {
@@ -3667,6 +3745,8 @@ body.modal-open { overflow: hidden; }
                         echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
+                  }
+                  }
                   }
                   echo "</td>";
                   echo "</tr>";
@@ -3741,13 +3821,19 @@ body.modal-open { overflow: hidden; }
                   
                   $approval_status = $gar['approval_status'] ?? 'pending';
                   $payStatusLowerGar = strtolower($gar['payment_status'] ?? '');
-                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                  $statusLabelGar = ($payStatusLowerGar === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  $attemptsGar = intval($gar['receipt_attempts'] ?? 0);
+                  $statusClass = 'badge-pending';
+                  $statusLabelGar = ucfirst($approval_status);
+                  if ($approval_status === 'approved') { $statusClass = 'badge-approved'; }
+                  else if ($approval_status === 'denied' || $approval_status === 'cancelled') { $statusClass = 'badge-rejected'; $statusLabelGar = ucfirst($approval_status); }
+                  else if ($payStatusLowerGar === 'pending_update') { $statusClass = 'badge-pending'; $statusLabelGar = 'Pending (Resubmitted)'; }
+                  else if ($payStatusLowerGar === 'rejected') { $statusClass = 'badge-rejected'; $statusLabelGar = 'Rejected (Attempt ' . max($attemptsGar,1) . ' of 3)'; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabelGar . "</span></td>";
                   
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
+                  if ($payStatusLower === 'rejected') { echo "</td>"; echo "</tr>"; continue; }
                   $receiptPath = $gar['receipt_path'] ?? null;
                     if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
@@ -3848,11 +3934,19 @@ body.modal-open { overflow: hidden; }
                   $dateRange = (!empty($rr['start_date']) && !empty($rr['end_date'])) ? (date('M d', strtotime($rr['start_date'])) . ' - ' . date('M d, Y', strtotime($rr['end_date']))) : '<span class=\'muted\'>-</span>';
                   echo "<td>" . $dateRange . "</td>";
                   $approval_status = $rr['approval_status'] ?? 'pending';
-                  $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                  $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                  $attemptsRr = intval($rr['receipt_attempts'] ?? 0);
+                  $statusClass = 'badge-pending';
+                  $statusLabel = ucfirst($approval_status);
+                  if ($approval_status === 'approved') { $statusClass = 'badge-approved'; }
+                  else if ($approval_status === 'denied' || $approval_status === 'cancelled') { $statusClass = 'badge-rejected'; $statusLabel = ucfirst($approval_status); }
+                  else if ($payStatusLower === 'pending_update') { $statusClass = 'badge-pending'; $statusLabel = 'Pending (Resubmitted)'; }
+                  else if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attemptsRr,1) . ' of 3)'; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
+                  $psTmp = strtolower($rr['payment_status'] ?? '');
+                  if ($psTmp === 'rejected') { echo "</td>"; echo "</tr>"; continue; }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -4268,13 +4362,25 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
                 $approval_status = $rr['approval_status'] ?? 'pending';
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                $attempts = intval($rr['receipt_attempts'] ?? 0);
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
                 echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                 echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
+                echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $receiptPath = $rr['receipt_path'] ?? null;
+                $attempts = intval($rr['receipt_attempts'] ?? 0);
+                if ($attempts >= 3) {
+                  echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                  echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                  echo "<input type='hidden' name='action' value='deny_request'>";
+                  echo "<input type='hidden' name='redirect_page' value='requests'>";
+                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                  echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                  echo "</form>";
+                } else if ($payStatusLower !== 'rejected') {
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
@@ -4285,14 +4391,25 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   } else {
                     echo "<div class='muted'>No receipt</div>";
                   }
-                if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                  echo "<form method='post' onsubmit='return openDenyModal(this)'>";
-                  echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
-                  echo "<input type='hidden' name='action' value='reject_receipt'>";
-                  echo "<input type='hidden' name='redirect_page' value='requests'>";
-                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                  echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
-                  echo "</form>";
+                  if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
+                    if ($attempts >= 3) {
+                      echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='deny_request'>";
+                      echo "<input type='hidden' name='redirect_page' value='requests'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                      echo "</form>";
+                    } else {
+                      echo "<form method='post' onsubmit='return openDenyModal(this)'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='reject_receipt'>";
+                      echo "<input type='hidden' name='redirect_page' value='requests'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
+                      echo "</form>";
+                    }
+                  }
                 }
                 if ($approval_status == 'pending') {
                     $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
@@ -4459,11 +4576,24 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 
                   $approval_status = $rr['approval_status'] ?? 'pending';
                   $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                  $attempts = intval($rr['receipt_attempts'] ?? 0);
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
+                  $attempts = intval($rr['receipt_attempts'] ?? 0);
+                  if ($attempts >= 3) {
+                    echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                    echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                    echo "<input type='hidden' name='action' value='deny_request'>";
+                    echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                    echo "</form>";
+                  }
+                  if ($payStatusLower !== 'rejected') {
                   $receiptPath = $rr['receipt_path'] ?? null;
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
@@ -4476,13 +4606,24 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                   }
                   if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
-                    echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
-                    echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
-                    echo "<input type='hidden' name='action' value='reject_receipt'>";
-                    echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
-                    echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
-                    echo "</form>";
+                    $attempts = intval($rr['receipt_attempts'] ?? 0);
+                    if ($attempts >= 3) {
+                      echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='deny_request'>";
+                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
+                      echo "</form>";
+                    } else {
+                      echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
+                      echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
+                      echo "<input type='hidden' name='action' value='reject_receipt'>";
+                      echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
+                      echo "</form>";
+                    }
                   }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
@@ -4506,6 +4647,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                         echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
+                  }
                   }
                   echo "</td>";
                   echo "</tr>";
