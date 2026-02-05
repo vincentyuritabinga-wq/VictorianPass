@@ -567,7 +567,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <!-- House verification section (Duplicate removed) -->
 
         <div class="input-wrap">
-          <input type="text" id="addressField" name="address" placeholder="Enter your full address*" required>
+          <input type="text" id="addressField" name="address" placeholder="Blk 00 Lot 00, Street, Subdivision*" required>
         </div>
         <div class="form-row">
           <div class="form-group">

@@ -456,21 +456,58 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
+                  $isReservation = (($act['type'] ?? '') === 'reservation');
+                  $detailsText = (string)($act['details'] ?? '');
+                  $reasonText = '';
+                  $scheduleText = $detailsText;
+                  if ($isReservation && strpos($detailsText, 'Reason:') !== false) {
+                    $reasonText = trim(substr($detailsText, strpos($detailsText, 'Reason:')));
+                    $scheduleText = trim(substr($detailsText, 0, strpos($detailsText, 'Reason:')));
+                  }
+                  $displayTitle = (string)($act['title'] ?? '');
+                  if ($isReservation) {
+                    $rawTitle = $displayTitle;
+                    $prefix = 'Reservation Schedule - ';
+                    if (stripos($rawTitle, $prefix) === 0) {
+                      $rest = substr($rawTitle, strlen($prefix));
+                      $parts = explode(' - ', $rest);
+                      $displayTitle = trim($parts[0] ?? '');
+                    }
+                    if ($displayTitle === '') { $displayTitle = 'Amenity'; }
+                    $amenityName = $displayTitle;
+                    if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
+                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                  }
+                  $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
-                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                     <div>
+                   <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                     <div class="item-left">
                        <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
-                       <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
-                       <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                       <?php if ($isReservation): ?>
+                       <span class="item-amenity"><?php echo htmlspecialchars($displayTitle); ?></span>
+                       <?php else: ?>
+                       <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
+                       <?php endif; ?>
+                      <?php if ($isReservation): ?>
+                        <?php if ($reasonText !== ''): ?>
+                        <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
+                        <?php else: ?>
+                        <span class="item-details" style="display:none;"></span>
+                        <?php endif; ?>
+                      <?php else: ?>
+                        <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                      <?php endif; ?>
                      </div>
-                     <div class="item-time"><?php echo date('h:i A', strtotime($act['date'])); ?></div>
+                     <div class="item-created"><?php echo htmlspecialchars($createdText); ?></div>
                    </div>
+                   <?php if (!$isReservation): ?>
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
                    </div>
+                   <?php endif; ?>
                    <div class="item-extra" data-loaded="0"></div>
                  </div>
               </div>
@@ -502,17 +539,52 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
+                  $isReservation = (($act['type'] ?? '') === 'reservation');
+                  $detailsText = (string)($act['details'] ?? '');
+                  $reasonText = '';
+                  $scheduleText = $detailsText;
+                  if ($isReservation && strpos($detailsText, 'Reason:') !== false) {
+                    $reasonText = trim(substr($detailsText, strpos($detailsText, 'Reason:')));
+                    $scheduleText = trim(substr($detailsText, 0, strpos($detailsText, 'Reason:')));
+                  }
+                  $displayTitle = (string)($act['title'] ?? '');
+                  if ($isReservation) {
+                    $rawTitle = $displayTitle;
+                    $prefix = 'Reservation Schedule - ';
+                    if (stripos($rawTitle, $prefix) === 0) {
+                      $rest = substr($rawTitle, strlen($prefix));
+                      $parts = explode(' - ', $rest);
+                      $displayTitle = trim($parts[0] ?? '');
+                    }
+                    if ($displayTitle === '') { $displayTitle = 'Amenity'; }
+                    $amenityName = $displayTitle;
+                    if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
+                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                  }
+                  $createdText = date('m.d.y h:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
-                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                     <div>
+                   <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                     <div class="item-left">
                        <span class="status-badge <?php echo $statusClass; ?>"><?php echo $displayStatus; ?></span>
-                       <span class="item-title"><?php echo htmlspecialchars($act['title']); ?></span>
-                       <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                       <?php if ($isReservation): ?>
+                       <span class="item-amenity"><?php echo htmlspecialchars($displayTitle); ?></span>
+                       <?php else: ?>
+                       <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
+                       <?php endif; ?>
+                       <?php if ($isReservation): ?>
+                         <?php if ($reasonText !== ''): ?>
+                         <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
+                         <?php else: ?>
+                         <span class="item-details" style="display:none;"></span>
+                         <?php endif; ?>
+                       <?php else: ?>
+                         <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
+                       <?php endif; ?>
                      </div>
-                     <div class="item-time"><?php echo date('m.d.y', strtotime($act['date'])); ?></div>
+                     <div class="item-created"><?php echo htmlspecialchars($createdText); ?></div>
                    </div>
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
@@ -726,9 +798,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         
         if(!wasExpanded){
             this.classList.add('expanded');
-            var icon = this.querySelector('.item-icon i');
-            if(icon) { icon.classList.remove('fa-chevron-right'); icon.classList.add('fa-chevron-down'); }
-            
             var extra = this.querySelector('.item-extra');
             if(extra && extra.getAttribute('data-loaded')!=='1'){
                 buildExtraContent(this, extra);
@@ -736,8 +805,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             }
         } else {
             this.classList.remove('expanded');
-            var icon = this.querySelector('.item-icon i');
-            if(icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-right'); }
         }
     });
   });
@@ -1480,6 +1547,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var status=(li.getAttribute('data-status')||'').toLowerCase();
     var ref=li.getAttribute('data-ref-code')||'';
     var label=fmtLabel(status);
+    var scheduleText=li.getAttribute('data-schedule')||'';
+    var reasonText=li.getAttribute('data-reason')||'';
     var statusNote='';
     var s=status.toLowerCase();
     var paymentStatus=(li.getAttribute('data-payment-status')||'').toLowerCase();
@@ -1520,6 +1589,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
+    var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
     
     var html='';
     html+='<div class="item-extra-section">';
@@ -1540,6 +1610,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     
     html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
     if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+    if(type==='reservation' && scheduleText){
+      html+='<div class="item-extra-schedule '+statusClassFor(status)+'">Reservation Schedule: '+esc(scheduleText)+'</div>';
+    }
+    if(reasonText){
+      html+='<div class="item-reason'+(isRejectedReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
+    }
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
     html+='<div class="item-actions">';

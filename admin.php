@@ -5238,6 +5238,14 @@ function showUserDetails(userId, expectedType){
         modalTitle.textContent = titleText;
       }
       const fullName = [d.first_name||'', d.middle_name||'', d.last_name||''].join(' ').replace(/\s+/g,' ').trim();
+      const residenceBlock = userType === 'resident' ? `
+          <div>
+            <h4 style="color:#23412e;margin-bottom:10px;">Residence</h4>
+            ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
+            ${d.address?`<p><strong>Address:</strong> ${d.address}</p>`:''}
+            ${d.created_at?`<p><strong>Registered:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
+            ${d.status?`<p><strong>Status:</strong> ${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</p>`:''}
+          </div>` : '';
       const content = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
           <div>
@@ -5249,13 +5257,7 @@ function showUserDetails(userId, expectedType){
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
             ${d.valid_id_path?`<p><strong>Valid ID:</strong> <button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(d.valid_id_path).replace(/'/g, "\\'")}')"><i class="fa-solid fa-id-card"></i> View ID</button></p>`:''}
           </div>
-          <div>
-            <h4 style="color:#23412e;margin-bottom:10px;">Residence</h4>
-            ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
-            ${d.address?`<p><strong>Address:</strong> ${d.address}</p>`:''}
-            ${d.created_at?`<p><strong>Registered:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
-            ${d.status?`<p><strong>Status:</strong> ${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</p>`:''}
-          </div>
+          ${residenceBlock}
         </div>`;
       document.getElementById('userDetailsContent').innerHTML = content;
     })
