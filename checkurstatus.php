@@ -9,6 +9,7 @@ session_start();
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Check Status - VictorianPass</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 
@@ -50,18 +51,22 @@ session_start();
       position: absolute;
       top: 30px;
       left: 30px;
-      background: #d4af37;
-      color: #111;
+      background: #fff;
+      color: #111827;
       font-weight: 600;
       padding: 8px 16px;
       border-radius: 8px;
       text-decoration: none;
       font-size: 0.9rem;
-      border: 1px solid #b38e2e;
+      border: 1px solid #f2c24f;
       box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
       transition: filter 0.2s ease, transform 0.2s ease;
       z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
+    .btn-back i { color: #f2c24f; }
 
     .btn-back:hover {
       transform: scale(1.03);
@@ -176,7 +181,7 @@ session_start();
 <body>
 
   <!-- Go Back Button -->
-  <a href="mainpage.php" class="btn-back">← Go Back</a>
+  <a href="mainpage.php" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Go Back</a>
 
   <!-- STATUS BOX -->
   <div class="status-box">

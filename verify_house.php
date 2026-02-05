@@ -63,6 +63,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <title>Verify House Number</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       font-family: 'Poppins', sans-serif;
@@ -92,6 +93,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       color: #23412e; text-decoration: none;
     }
     a:hover { text-decoration: underline; }
+    .back-link{display:inline-flex;align-items:center;gap:8px}
+    .back-link i{color:#f2c24f}
   </style>
 </head>
 <body>
@@ -102,7 +105,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <input type="text" name="house_number" placeholder="e.g., VH-1023" required>
       <button type="submit">Verify</button>
     </form>
-    <a href="signup.php">← Back to Sign Up</a>
+    <a href="signup.php" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Sign Up</a>
   </div>
 </body>
 </html>

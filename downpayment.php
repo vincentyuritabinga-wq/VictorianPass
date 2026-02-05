@@ -287,6 +287,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     <link rel="icon" type="image/png" href="images/logo.svg">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     *{font-family:'Poppins',sans-serif}
     body{margin:0;background:#fafbfc;color:#111827;padding-top:76px}
@@ -298,7 +299,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .btn{background:#23412e;color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease;font-size:.95rem}
     .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,0.4);opacity:.95}
     .btn[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none;transform:none}
-    .btn-outline{background:#fff;color:#23412e;border:1px solid #d1d5db}
+    .btn-outline{background:#e5e7eb;color:#111827;border:1px solid #d1d5db}
     .code{background:#f3f4f6;border-radius:10px;padding:8px 12px;display:inline-block;margin-top:8px;color:#111827;font-weight:600}
     .break{margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb}
     .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb;font-size:.9rem}
@@ -328,7 +329,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,0.95);backdrop-filter:blur(10px);position:fixed;top:0;left:0;right:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
     .logo{display:flex;align-items:center;gap:12px}
     .back-row{max-width:720px;margin:14px auto 0;padding:0 16px}
-    .back-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:#d4af37;color:#111;border:1px solid #b38e2e;border-radius:999px;font-weight:700;text-decoration:none;font-size:1.1rem;box-shadow:0 4px 10px rgba(15,23,42,0.08);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease,filter .2s ease}
+    .back-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:#fff;color:#111;border:1px solid #f2c24f;border-radius:999px;font-weight:700;text-decoration:none;font-size:1.1rem;box-shadow:0 4px 10px rgba(15,23,42,0.08);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease,filter .2s ease}
+    .back-btn i{color:#f2c24f;}
     .back-btn:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,0.12);filter:brightness(0.95)}
     .logo img{width:42px;height:42px}
     .brand-text h1{margin:0;font-size:1.3rem;font-weight:700;color:#f4f4f4}
@@ -367,7 +369,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     </div>
   </header>
   <div class="back-row">
-    <a href="<?php echo htmlspecialchars($backLink); ?>" class="back-btn" id="backBtn" aria-label="Back">←</a>
+    <a href="<?php echo htmlspecialchars($backLink); ?>" class="back-btn" id="backBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></a>
   </div>
   <div class="wrap">
     <div class="card">

@@ -229,7 +229,7 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
     }
     .login-modal .modal-btn {
       border: 0;
-      background: #c0392b;
+      background: #23412e;
       color: #fff;
       padding: 10px 18px;
       border-radius: 8px;

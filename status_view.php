@@ -82,7 +82,7 @@
     .status-badge { padding: 5px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; }
     .status-approved { background: #d6eaff; color: #0044cc; }
     .status-pending { background: #fff4cc; color: #b68b00; }
-    .cancel-btn { background:#8a2a2a; color:#fff; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; }
+    .cancel-btn { background:#e5e7eb; color:#111827; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; }
     .cancel-btn:disabled { background:#ccc; color:#666; cursor:not-allowed; }
     .status-expired { background: #f0f0f0; color: #555; }
     .status-denied { background: #ffe6e6; color: #b30000; }
@@ -92,7 +92,23 @@
     .details-content { width: 480px; max-width: 92vw; max-height: 85vh; overflow-y: auto; background:#fff; border-radius:14px; box-shadow:0 8px 18px rgba(0,0,0,0.12); }
     .modal-header { display:flex; align-items:center; justify-content:space-between; background:#fff; padding:12px 16px; border-bottom:1px solid #e6ebe6; }
     .modal-header h3{ margin:0; color:#23412e; font-size:1.05rem; font-weight:700; }
-    .close-btn { font-size:20px; cursor:pointer; color:#23412e; }
+    .close-btn {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #fff;
+      color: #111827;
+      border: 1px solid #333;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .close-btn:hover { color: #000; border-color: #000; transform: scale(1.06); }
     .details-body { padding: 16px; color: #222; font-size: 0.95rem; background:#fff; }
     .details-section { margin-bottom: 14px; }
     .details-section h4 { margin: 0 0 8px 0; font-size: 1rem; color: #23412e; font-weight:700; }

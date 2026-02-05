@@ -20,6 +20,7 @@ $visitor_last_name  = trim($_POST['visitor_last_name'] ?? '');
 $visitor_sex        = trim($_POST['visitor_sex'] ?? '');
 $visitor_birthdate  = trim($_POST['visitor_birthdate'] ?? '');
 $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
+ $visitor_address    = trim($_POST['visitor_address'] ?? '');
 
 if ($visitor_birthdate !== '') {
   $today = date('Y-m-d');
@@ -39,7 +40,7 @@ $wants_amenity = 0;
 
 if ($resident_full_name === '' || $resident_house === '' || $resident_email === '' || $resident_contact === '' ||
     $visitor_first_name === '' || $visitor_last_name === '' || $visitor_sex === '' || $visitor_birthdate === '' ||
-    $visitor_contact === '') {
+    $visitor_contact === '' || $visitor_address === '') {
   echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
   exit;
 }
@@ -140,6 +141,7 @@ $con->query("CREATE TABLE IF NOT EXISTS guest_forms (
   visitor_birthdate DATE NULL,
   visitor_contact VARCHAR(50) NULL,
   visitor_email VARCHAR(150) NULL,
+  visitor_address VARCHAR(255) NULL,
   valid_id_path VARCHAR(255) NULL,
   visit_date DATE NULL,
   visit_time VARCHAR(20) NULL,
@@ -156,6 +158,11 @@ $con->query("CREATE TABLE IF NOT EXISTS guest_forms (
   INDEX idx_resident_user_id (resident_user_id),
   INDEX idx_ref_code (ref_code)
 ) ENGINE=InnoDB");
+
+$columnCheck = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'visitor_address'");
+if ($columnCheck && $columnCheck->num_rows === 0) {
+  $con->query("ALTER TABLE guest_forms ADD COLUMN visitor_address VARCHAR(255) NULL");
+}
 
 // Generate a reference code for this guest form
 $ref_code = 'VP-' . strtoupper(bin2hex(random_bytes(4)));
@@ -182,12 +189,13 @@ if ($resident_user_id === null) {
 $stmtGF = $con->prepare("INSERT INTO guest_forms (
   resident_user_id, resident_house, resident_email,
   visitor_first_name, visitor_middle_name, visitor_last_name,
-  visitor_sex, visitor_birthdate, visitor_contact, visitor_email,
+  visitor_sex, visitor_birthdate, visitor_contact, visitor_email, visitor_address,
   valid_id_path, visit_date, visit_time, purpose, persons, wants_amenity, ref_code, approval_status
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
+$types = 'i' . str_repeat('s', 14) . 'ii' . 's';
 $stmtGF->bind_param(
-  'isssssssssssssiis',
+  $types,
   $resident_user_id,
   $resident_house,
   $resident_email,
@@ -198,6 +206,7 @@ $stmtGF->bind_param(
   $visitor_birthdate,
   $visitor_contact,
   $visitor_email,
+  $visitor_address,
   $validIdPath,
   $visit_date,
   $visit_time,

@@ -1578,6 +1578,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     function esc(t){
       return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
+    function scheduleParts(text){
+      var t=String(text||'').trim();
+      if(!t) return { date:'', time:'' };
+      var timeRange=t.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+      if(timeRange){
+        var timePart=timeRange[1]+' - '+timeRange[2];
+        var datePart=t.replace(timeRange[0],'').trim();
+        return { date:datePart, time:timePart };
+      }
+      return { date:t, time:'' };
+    }
     var summaryParts=[];
     if(titleEl){ summaryParts.push(titleEl.textContent.trim()); }
     if(detailsEl){ summaryParts.push(detailsEl.textContent.replace(/^\s*-\s*/,'').trim()); }
@@ -1611,7 +1622,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
     if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
     if(type==='reservation' && scheduleText){
-      html+='<div class="item-extra-schedule '+statusClassFor(status)+'">Reservation Schedule: '+esc(scheduleText)+'</div>';
+      var parts=scheduleParts(scheduleText);
+      var rows='';
+      if(parts.date){
+        rows+='<div class="schedule-row"><div class="schedule-key">Date</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
+      }
+      if(parts.time){
+        rows+='<div class="schedule-row"><div class="schedule-key">Time</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
+      }
+      if(!rows){
+        rows='<div class="schedule-row"><div class="schedule-key">Schedule</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
+      }
+      html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
     }
     if(reasonText){
       html+='<div class="item-reason'+(isRejectedReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
@@ -1634,10 +1656,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     
     if(isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn view-details-btn" data-qr="'+esc(qrSrcForDownload)+'">Download QR code</button>';
-        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'"><i class="fa-solid fa-qrcode"></i> Download QR code</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
     } else {
-        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
     }
     html+='</div>';
     html+='</div></div></div>';
@@ -1659,8 +1681,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       });
     }
     
-    var viewBtn = extra.querySelector('.view-details-btn');
-    if(viewBtn) viewBtn.addEventListener('click', function(){ window.openActivityModal(ref); });
+    var viewBtns = extra.querySelectorAll('.view-details-trigger');
+    viewBtns.forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var code = btn.getAttribute('data-ref') || ref;
+        if(code) window.openActivityModal(code);
+      });
+    });
 
     var downloadBtn = extra.querySelector('.download-qr-btn');
     if(downloadBtn) downloadBtn.addEventListener('click', function(e){

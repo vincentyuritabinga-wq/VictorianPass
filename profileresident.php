@@ -1106,6 +1106,10 @@ body.account-blocked { overflow: hidden; }
               <div class="form-group">
                 <input type="email" id="visitor_email" name="visitor_email" placeholder="Guest Email">
               </div>
+              <div class="input-wrap">
+                <input type="text" id="visitor_address" name="visitor_address" placeholder="Guest Address (e.g., Blk 00 Lot 00)*" required>
+                <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: Blk 00 Lot 00</span>
+              </div>
 
               <label class="upload-box">
                 <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
@@ -1124,7 +1128,7 @@ body.account-blocked { overflow: hidden; }
               </div>
 
               <div class="form-actions">
-                <a href="#" class="btn-back" id="guestFormBackBtn">Back</a>
+                <a href="#" class="btn-back" id="guestFormBackBtn"><i class="fa-solid fa-arrow-left"></i> Back</a>
                 <button type="submit" class="btn-next" id="submitBtn">Save Guest</button>
               </div>
             </form>
@@ -1727,6 +1731,17 @@ body.account-blocked { overflow: hidden; }
     function esc(t){
       return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
+    function scheduleParts(text){
+      var t=String(text||'').trim();
+      if(!t) return { date:'', time:'' };
+      var timeRange=t.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+      if(timeRange){
+        var timePart=timeRange[1]+' - '+timeRange[2];
+        var datePart=t.replace(timeRange[0],'').trim();
+        return { date:datePart, time:timePart };
+      }
+      return { date:t, time:'' };
+    }
     var summaryParts=[];
     if(titleEl){ summaryParts.push(titleEl.textContent.trim()); }
     if(detailsEl){ summaryParts.push(detailsEl.textContent.replace(/^\s*-\s*/,'').trim()); }
@@ -1759,7 +1774,18 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(type==='reservation' && scheduleText){
-        html+='<div class="item-extra-schedule '+statusClassFor(status)+'">Reservation Schedule: '+esc(scheduleText)+'</div>';
+        var parts=scheduleParts(scheduleText);
+        var rows='';
+        if(parts.date){
+          rows+='<div class="schedule-row"><div class="schedule-key">Date</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
+        }
+        if(parts.time){
+          rows+='<div class="schedule-row"><div class="schedule-key">Time</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
+        }
+        if(!rows){
+          rows='<div class="schedule-row"><div class="schedule-key">Schedule</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
+        }
+        html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
       }
       if(reasonText){
         html+='<div class="item-reason'+(isRejectedReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
@@ -1785,10 +1811,10 @@ body.account-blocked { overflow: hidden; }
          html+='<button type="button" class="item-extra-delete" data-ref="'+esc(ref)+'" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; cursor:pointer; font-weight:500;"><i class="fa-solid fa-trash"></i> Remove from History</button>';
       }
       if(type!=='guest_form' && isApproved && ref){
-        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'" data-type="'+esc(type)+'">Download QR code</button>';
-        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'" data-type="'+esc(type)+'"><i class="fa-solid fa-qrcode"></i> Download QR code</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
       } else {
-        html+='<button type="button" class="item-extra-link view-details-btn" data-ref="'+esc(ref)+'">View details</button>';
+        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
       }
       html+='</div>';
       html+='</div></div></div>';
@@ -1833,13 +1859,14 @@ body.account-blocked { overflow: hidden; }
         performMoveToHistory(li, ref);
       });
     }
-    var viewBtn=extra.querySelector('.view-details-btn');
-    if(viewBtn && ref){
-      viewBtn.addEventListener('click',function(ev){
+    var viewBtns=extra.querySelectorAll('.view-details-trigger');
+    viewBtns.forEach(function(btn){
+      btn.addEventListener('click',function(ev){
         ev.stopPropagation();
-        openActivityModal(ref);
+        var code=btn.getAttribute('data-ref')||ref;
+        if(code) openActivityModal(code);
       });
-    }
+    });
     var downloadBtn=extra.querySelector('.download-qr-btn');
     if(downloadBtn){
       downloadBtn.addEventListener('click',function(ev){
@@ -2281,7 +2308,7 @@ body.account-blocked { overflow: hidden; }
 
   function validateGuestForm(){
     var valid=true;
-    var reqIds=['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','birthdate','visitor_contact'];
+    var reqIds=['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','visitor_address','birthdate','visitor_contact'];
     reqIds.forEach(function(id){
       var el=document.getElementById(id);
       if(!el) return;
@@ -2347,6 +2374,7 @@ body.account-blocked { overflow: hidden; }
     var visLastEl=document.getElementById('visitor_last_name');
     var visContactEl=document.getElementById('visitor_contact');
     var visEmailEl=document.getElementById('visitor_email');
+    var visAddressEl=document.getElementById('visitor_address');
     var vSexEl=document.getElementById('visitor_sex');
     var resName=resNameEl?resNameEl.value.trim():'';
     var resHouse=resHouseEl?resHouseEl.value.trim():'';
@@ -2355,6 +2383,7 @@ body.account-blocked { overflow: hidden; }
     var visLast=visLastEl?visLastEl.value.trim():'';
     var visContact=visContactEl?visContactEl.value.trim():'';
     var visEmail=visEmailEl?visEmailEl.value.trim():'';
+    var visAddress=visAddressEl?visAddressEl.value.trim():'';
     var vSex=vSexEl?vSexEl.value:'';
     var vBirth=birthdateEl?birthdateEl.value:'';
     var items=[
@@ -2365,7 +2394,8 @@ body.account-blocked { overflow: hidden; }
       ['Guest Sex',vSex||'-'],
       ['Guest Birthdate',vBirth||'-'],
       ['Guest Contact',visContact||'-'],
-      ['Guest Email',visEmail||'-']
+      ['Guest Email',visEmail||'-'],
+      ['Guest Address',visAddress||'-']
     ];
     verifySummary.innerHTML=items.map(function(x){
       return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>';

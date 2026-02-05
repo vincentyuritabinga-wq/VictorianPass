@@ -1713,7 +1713,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       </div>
       <h3 style="color: #c0392b; margin-bottom: 10px;">Error</h3>
       <div id="errorModalMessage" style="color: #555; font-size: 1rem;"></div>
-      <button class="btn confirm" onclick="document.getElementById('errorModal').style.display='none'" style="margin-top: 20px; background-color: #c0392b; width: 100%;">OK</button>
+      <button class="btn confirm" onclick="document.getElementById('errorModal').style.display='none'" style="margin-top: 20px; background-color: #23412e; width: 100%;">OK</button>
     </div>
   </div>
 

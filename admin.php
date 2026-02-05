@@ -3343,21 +3343,13 @@ body.modal-open { overflow: hidden; }
       <div class="dashboard-widget-value"><?php echo getResidentCount($con); ?></div>
       <div class="dashboard-widget-label">Residents</div>
     </a>
-    <a class="dashboard-widget" href="?page=summary" aria-label="View Active Passes">
-      <div class="dashboard-widget-value"><?php echo getActivePassesCount($con); ?></div>
-      <div class="dashboard-widget-label">Active Passes</div>
-    </a>
     <a class="dashboard-widget" href="?page=resident_guest_forms" aria-label="View Pending Resident Guest Requests">
       <div class="dashboard-widget-value"><?php echo getPendingResidentRequestsCountNew($con); ?></div>
-      <div class="dashboard-widget-label">Pending Resident Guests Requests</div>
+      <div class="dashboard-widget-label">Pending Residents Request</div>
     </a>
     <a class="dashboard-widget" href="?page=visitor_requests" aria-label="View Pending Visitor Requests">
       <div class="dashboard-widget-value"><?php echo getPendingVisitorRequestsCountNew($con); ?></div>
       <div class="dashboard-widget-label">Pending Visitor Requests</div>
-    </a>
-    <a class="dashboard-widget" href="?page=verify" aria-label="View Verified Payment Receipts">
-      <div class="dashboard-widget-value"><?php echo getPaymentReceiptsCount($con); ?></div>
-      <div class="dashboard-widget-label">Verified Payment Receipts</div>
     </a>
     <a class="dashboard-widget" href="?page=residents" aria-label="View Resident Accounts">
       <div class="dashboard-widget-value"><?php echo getPendingResidentAccountsCount($con); ?></div>
@@ -3365,7 +3357,7 @@ body.modal-open { overflow: hidden; }
     </a>
     <a class="dashboard-widget" href="?page=visitors" aria-label="View Visitor Accounts">
       <div class="dashboard-widget-value"><?php echo getVisitorAccountsCount($con); ?></div>
-      <div class="dashboard-widget-label">Total Visitor Accounts</div>
+      <div class="dashboard-widget-label">Visitors Accounts</div>
     </a>
   </div>
 </section>

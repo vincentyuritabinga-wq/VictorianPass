@@ -351,12 +351,52 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 }
 
 .btn-secondary.back-account-btn{
-  background:#facc6b;
-  color:#4b2e12;
-  border-color:#fbbf24;
+  background:#fff;
+  color:#111827;
+  border-color:#f2c24f;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
 }
 .btn-secondary.back-account-btn:hover{
-  background:#fbbf24;
+  background:#fff7e6;
+}
+.btn-secondary.back-account-btn i{
+  color:#f2c24f;
+}
+.btn-confirm{
+  background:#23412e;
+  color:#fff;
+  border:none;
+  padding:12px 24px;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+  text-decoration:none;
+  display:inline-block;
+  transition:transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-confirm:hover{
+  transform:translateY(-2px);
+  opacity:0.95;
+  box-shadow:0 4px 12px rgba(35, 65, 46, 0.4);
+}
+.btn-cancel{
+  background:#e5e7eb;
+  color:#111827;
+  border:none;
+  padding:12px 24px;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+  text-decoration:none;
+  display:inline-block;
+  transition:transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-cancel:hover{
+  transform:translateY(-2px);
+  opacity:0.95;
+  box-shadow:0 4px 12px rgba(0, 0, 0, 0.12);
 }
 .counter {
   display: flex;
@@ -513,6 +553,7 @@ select:focus {
   width: 90%;
   max-width: 450px;
   text-align: center;
+  position: relative;
   animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.35);
   border: 1px solid #e5e7eb;
@@ -522,6 +563,25 @@ select:focus {
   margin: 0 0 12px;
   font-weight: 700;
   color: #23412e;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eef2f0;
+  color: #23412e;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  z-index: 2;
 }
 
 .ref-code {

@@ -665,7 +665,8 @@ tr:hover { background-color: #f8fafc; }
 .modal.modal-top { z-index: 3000; }
 .modal-content { background-color: var(--bg-surface); margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); position: relative; display: flex; flex-direction: column; gap: 12px; width: min(92vw, 640px); aspect-ratio: auto; max-height: 90vh; overflow: hidden; }
 .modal-content h3 { padding: 12px 16px; border-bottom: 1px solid var(--border-light); margin: 0; font-size: 1.05rem; background: var(--bg-surface); position: sticky; top: 0; z-index: 10; color: #23412e; font-weight: 700; }
-.modal-close { background: transparent; border: none; font-size: 1.4rem; cursor: pointer; line-height: 1; }
+.modal-close { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #ffffff; color: #111827; border: 1px solid #333; font-size: 20px; cursor: pointer; line-height: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+.modal-close:hover { transform: translateY(-1px); color: #0f172a; border-color: #111827; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; }
 .incident-details-content { overflow-y: auto; flex: 1; padding: 18px 20px 22px; }
 .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

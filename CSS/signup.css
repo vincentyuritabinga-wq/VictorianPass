@@ -213,23 +213,23 @@ input[type="tel"] {
 
 /* Cancel Button */
 .cancel {
-  background: #23412e;
-  color: #fff;
+  background: #e5e7eb;
+  color: #111827;
 }
 .cancel:hover {
   transform: scale(1.05);
-  opacity: 0.9;
-  box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
+  opacity: 0.95;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 /* Confirm Button */
 .confirm {
-  background: #28a745; /* Green */
+  background: #23412e;
   color: #fff;
 }
 .confirm:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+  box-shadow: 0 4px 12px rgba(35, 65, 46, 0.4);
   opacity: 0.95;
 }
 

@@ -809,6 +809,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass - Reserve</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/reserve.css">
 </head>
 <body>
@@ -830,7 +831,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <div class="layout">
     <div class="left-panel">
       <div class="top-actions">
-        <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'">&#8592; Back to Account</button>
+        <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'"><i class="fa-solid fa-arrow-left"></i> Back to Account</button>
       </div>
       
       <?php $isResident = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'); ?>
@@ -1138,7 +1139,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   </div>
   <div id="amenityImageModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
     <div style="position:relative; background:#fff; border-radius:12px; padding:12px; max-width:90vw; max-height:90vh;">
-      <button type="button" id="amenityImageClose" style="position:absolute; top:8px; right:8px; background:#8a2a2a; color:#fff; border:none; border-radius:8px; padding:4px 8px; cursor:pointer;">Close</button>
+      <button type="button" id="amenityImageClose" class="modal-close" aria-label="Close">&times;</button>
       <img id="amenityImageModalImg" src="" alt="Amenity" style="display:block; max-width:85vw; max-height:80vh;">
     </div>
   </div>
@@ -1147,31 +1148,34 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
 <div id="verifyModal" class="modal" style="display:none;">
   <div class="modal-content">
+    <button type="button" class="modal-close" id="verifyCloseBtn" aria-label="Close">&times;</button>
     <h2>Confirm Details</h2>
     <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="btn-secondary" id="verifyCancelBtn">Cancel</button>
-      <button type="button" class="close-btn" id="verifyConfirmBtn">Confirm</button>
+      <button type="button" class="btn-cancel" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="btn-confirm" id="verifyConfirmBtn">Confirm</button>
     </div>
   </div>
   </div>
 
 <div id="changeAmenityModal" class="modal" style="display:none;">
   <div class="modal-content">
+    <button type="button" class="modal-close" id="changeAmenityCloseBtn" aria-label="Close">&times;</button>
     <h2>Change amenity?</h2>
     <p style="margin:8px 0 16px;color:#4b5563;">Are you sure you want to change amenities? This will reset your current selection.</p>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="close-btn" id="changeAmenityCancelBtn">Cancel</button>
-      <button type="button" class="btn-secondary" id="changeAmenityConfirmBtn">Yes, change</button>
+      <button type="button" class="btn-cancel" id="changeAmenityCancelBtn">Cancel</button>
+      <button type="button" class="btn-confirm" id="changeAmenityConfirmBtn">Yes, change</button>
     </div>
   </div>
 </div>
 <div id="resetReservationModal" class="modal" style="display:none;">
   <div class="modal-content">
+    <button type="button" class="modal-close" id="resetReservationCloseBtn" aria-label="Close">&times;</button>
     <h2>Reservation reset</h2>
     <p style="margin:8px 0 16px;color:#4b5563;">You need to make the reservation again since you clicked back on the downpayment page.</p>
     <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button type="button" class="btn-secondary" id="resetReservationOkBtn">OK</button>
+      <button type="button" class="btn-confirm" id="resetReservationOkBtn">OK</button>
     </div>
   </div>
 </div>
@@ -2664,7 +2668,35 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     renderTimeSlotButtons();
     const pbt=document.getElementById('poolBookingType');
     if(pbt){
+      pbt.setAttribute('data-prev', String(pbt.value||''));
       pbt.addEventListener('change',function(){
+        const prev=String(pbt.getAttribute('data-prev')||'');
+        const next=String(pbt.value||'');
+        if(prev==='whole_pool' && next==='per_person'){
+          const pHidden=document.getElementById('personsInput');
+          if(pHidden) pHidden.value='1';
+          const pText=document.getElementById('personCount');
+          if(pText){
+            if('value' in pText){ pText.value='1'; }
+            else { pText.textContent='1'; }
+          }
+          const rInput=document.getElementById('residentsCountInput');
+          const rText=document.getElementById('residentsCountText');
+          const gInput=document.getElementById('guestsCountInput');
+          const gText=document.getElementById('guestsCountText');
+          if(typeof currentUserType !== 'undefined' && currentUserType !== 'resident'){
+            if(rInput) rInput.value='0';
+            if(rText) rText.textContent='0';
+            if(gInput) gInput.value='1';
+            if(gText) gText.textContent='1';
+          } else {
+            if(rInput) rInput.value='1';
+            if(rText) rText.textContent='1';
+            if(gInput) gInput.value='0';
+            if(gText) gText.textContent='0';
+          }
+        }
+        pbt.setAttribute('data-prev', next);
         applyPoolBookingTypeSelection();
         computeAvailability();
         evaluateCalendarAvailability();
@@ -2817,9 +2849,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   (function(){
     const vm=document.getElementById('verifyModal');
     const cBtn=document.getElementById('verifyCancelBtn');
+    const xBtn=document.getElementById('verifyCloseBtn');
     const pBtn=document.getElementById('verifyConfirmBtn');
     window.__verifyConfirmed=false;
     if(cBtn){ cBtn.addEventListener('click', function(){ if(vm){ vm.style.display='none'; } }); }
+    if(xBtn){ xBtn.addEventListener('click', function(){ if(vm){ vm.style.display='none'; } }); }
     if(pBtn){
       pBtn.addEventListener('click', function(){
         showIncompleteWarnings();
@@ -3010,9 +3044,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const modal=document.getElementById('changeAmenityModal');
     if(!modal) return;
     const cancelBtn=document.getElementById('changeAmenityCancelBtn');
+    const closeBtn=document.getElementById('changeAmenityCloseBtn');
     const confirmBtn=document.getElementById('changeAmenityConfirmBtn');
     if(cancelBtn){
       cancelBtn.addEventListener('click',function(){
+        modal.style.display='none';
+      });
+    }
+    if(closeBtn){
+      closeBtn.addEventListener('click',function(){
         modal.style.display='none';
       });
     }
@@ -3190,8 +3230,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     document.addEventListener('DOMContentLoaded', function(){
       var modal = document.getElementById('resetReservationModal');
       var okBtn = document.getElementById('resetReservationOkBtn');
+      var closeBtn = document.getElementById('resetReservationCloseBtn');
       if(modal){ modal.style.display='flex'; }
       if(okBtn){ okBtn.addEventListener('click', function(){ if(modal) modal.style.display='none'; }); }
+      if(closeBtn){ closeBtn.addEventListener('click', function(){ if(modal) modal.style.display='none'; }); }
       if(modal){ modal.addEventListener('click', function(e){ if(e.target === modal){ modal.style.display='none'; } }); }
     });
   })();

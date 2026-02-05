@@ -67,6 +67,7 @@ if ($con instanceof mysqli) {
 <link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 <?php echo file_get_contents('css/guestform.css') ?: '';?>
 /* Inline warnings copied from signup style */
@@ -188,6 +189,10 @@ if ($con instanceof mysqli) {
     <div class="form-group">
       <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
     </div>
+    <div class="input-wrap">
+      <input type="text" id="visitor_address" name="visitor_address" placeholder="Guest Address (e.g., Blk 00 Lot 00)*" required>
+      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: Blk 00 Lot 00</span>
+    </div>
 
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
@@ -206,7 +211,7 @@ if ($con instanceof mysqli) {
     </div>
 
     <div class="form-actions">
-      <a href="profileresident.php" class="btn-back">Back</a>
+      <a href="profileresident.php" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Back</a>
       <button type="submit" class="btn-next" id="submitBtn">Save Guest</button>
     </div>
   </form>
@@ -476,7 +481,7 @@ if (birthdateEl) {
 
   function validateForm(){
   let valid = true;
-  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','birthdate','visitor_contact'];
+  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','visitor_address','birthdate','visitor_contact'];
   reqIds.forEach(function(id){
     const el = document.getElementById(id);
     if(!el) return;
@@ -526,6 +531,7 @@ function buildVerifySummary(){
   const visLastEl = document.getElementById('visitor_last_name');
   const visContactEl = document.getElementById('visitor_contact');
   const visEmailEl = document.getElementById('visitor_email');
+  const visAddressEl = document.getElementById('visitor_address');
   const vSexEl = document.getElementById('visitor_sex');
   const personsEl = document.getElementById('visit_persons');
   const resName = resNameEl ? resNameEl.value.trim() : '';
@@ -535,6 +541,7 @@ function buildVerifySummary(){
   const visLast = visLastEl ? visLastEl.value.trim() : '';
   const visContact = visContactEl ? visContactEl.value.trim() : '';
   const visEmail = visEmailEl ? visEmailEl.value.trim() : '';
+  const visAddress = visAddressEl ? visAddressEl.value.trim() : '';
   const vSex = vSexEl ? vSexEl.value : '';
   const vBirth = birthdateEl ? birthdateEl.value : '';
   const personsVal = personsEl && personsEl.value ? personsEl.value : '1';
@@ -546,7 +553,8 @@ function buildVerifySummary(){
     ['Visitor Sex', vSex || '-'],
     ['Visitor Birthdate', vBirth || '-'],
     ['Visitor Contact', visContact || '-'],
-    ['Visitor Email', visEmail || '-']
+    ['Visitor Email', visEmail || '-'],
+    ['Visitor Address', visAddress || '-']
   ];
   verifySummary.innerHTML = items.map(function(x){
     return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>';

@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS guest_forms (
   visitor_birthdate DATE NULL,
   visitor_contact VARCHAR(50) NULL,
   visitor_email VARCHAR(150) NULL,
+  visitor_address VARCHAR(255) NULL,
   valid_id_path VARCHAR(255) NULL,
   visit_date DATE NULL,
   visit_time VARCHAR(20) NULL,
