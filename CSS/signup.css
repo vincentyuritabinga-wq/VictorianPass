@@ -439,18 +439,27 @@ input[type="tel"] {
 }
 
 .close {
-  color: #aaa;
   position: absolute;
-  top: 15px;
-  right: 20px;
-  font-size: 28px;
-  font-weight: bold;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
   cursor: pointer;
-  transition: color 0.2s ease;
+  line-height: 1;
+  border: 0;
+  padding: 0;
+  transition: filter 0.2s ease;
 }
 
 .close:hover {
-  color: #23412e;
+  filter: brightness(0.95);
 }
 
 /* ===== Terms section on signup ===== */

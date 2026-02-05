@@ -1864,21 +1864,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("sisi", $payment_status, $staff_id, $reasonToSave, $reservation_id);
             $stmt->execute();
             
-            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null;
-            $stmtInfo = $con->prepare("SELECT r.ref_code, r.entry_pass_id, r.amenity, r.approval_status, r.user_id, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.id = ? LIMIT 1");
+            $refCode = null; $entryId = null; $amenityName = null; $notifUserId = null; $userType = null; $startDate = null; $startTime = null; $endTime = null;
+            $stmtInfo = $con->prepare("SELECT r.ref_code, r.entry_pass_id, r.amenity, r.approval_status, r.user_id, r.start_date, r.start_time, r.end_time, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.id = ? LIMIT 1");
             $stmtInfo->bind_param('i', $reservation_id);
             $stmtInfo->execute(); $resInfo = $stmtInfo->get_result();
             $approvedNow=false; $approvalStatusRes=null;
-            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); $userType = strtolower($rw['user_type'] ?? ''); }
+            if($resInfo && ($rw=$resInfo->fetch_assoc())){ $refCode = $rw['ref_code'] ?? null; $entryId = $rw['entry_pass_id'] ?? null; $amenityName = $rw['amenity'] ?? null; $approvalStatusRes = $rw['approval_status'] ?? null; $notifUserId = intval($rw['user_id'] ?? 0); $userType = strtolower($rw['user_type'] ?? ''); $startDate = $rw['start_date'] ?? null; $startTime = $rw['start_time'] ?? null; $endTime = $rw['end_time'] ?? null; }
             $stmtInfo->close();
             if ($payment_status === 'verified' && $refCode) {
             }
             if ($notifUserId) {
                 $title = ($payment_status === 'verified') ? 'Payment Verified' : 'Payment Rejected';
-                $msg = ($payment_status === 'verified') ? 'Your payment has been verified.' : 'Your payment proof was rejected. Please update your proof of payment.';
+                if ($payment_status === 'verified') {
+                  $msg = 'Your payment has been verified.';
+                } else {
+                  $amenityLabel = trim((string)$amenityName);
+                  if ($amenityLabel !== '') { $amenityLabel = strtoupper($amenityLabel); }
+                  $dateLabel = '';
+                  if (!empty($startDate)) {
+                    $dateLabel = date('m.d.y', strtotime($startDate));
+                  }
+                  $timeLabel = '';
+                  if (!empty($startTime)) {
+                    $timeLabel = date('h:i A', strtotime($startTime));
+                    if (!empty($endTime)) {
+                      $timeLabel .= ' - ' . date('h:i A', strtotime($endTime));
+                    }
+                  }
+                  $scheduleLabel = trim($dateLabel . ($timeLabel !== '' ? ' ' . $timeLabel : ''));
+                  $msg = 'Your reservation payment';
+                  if ($amenityLabel !== '') { $msg .= ' for ' . $amenityLabel; }
+                  if ($scheduleLabel !== '') { $msg .= ' on ' . $scheduleLabel; }
+                  $msg .= ' has been rejected. Please update your proof of payment.';
+                }
                 if ($payment_status !== 'verified' && $denialReason) { $msg .= ' Reason: ' . $denialReason; }
-                if (!empty($refCode)) { $msg .= ' Code: ' . $refCode . '.'; }
-                if (!empty($amenityName)) { $msg .= ' Amenity: ' . $amenityName . '.'; }
                 notifyUser($con, $notifUserId, $title, $msg, ($payment_status === 'verified' ? 'success' : 'error'));
             }
             $redirectPage = isset($_POST['redirect_page']) ? preg_replace('/[^a-z_]/', '', $_POST['redirect_page']) : '';
@@ -1886,7 +1905,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               $redirect = 'admin.php?page=' . $redirectPage;
               if (!empty($refCode)) { $redirect .= '&ref=' . urlencode($refCode); }
             } else {
-              $redirect = 'admin.php?page=verify';
+              $redirect = 'admin.php?page=requests';
               if ($payment_status === 'verified' && !empty($refCode)) {
                 $stmtGF = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? LIMIT 1");
                 $stmtGF->bind_param('s', $refCode);
@@ -1910,6 +1929,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 // Get current page from URL parameter or default to dashboard
 $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
+if ($currentPage === 'verify') {
+  $currentPage = 'requests';
+}
 $verifyContext = isset($_GET['verify_context']) ? $_GET['verify_context'] : '';
 ?>
 
@@ -3106,7 +3128,6 @@ body.modal-open { overflow: hidden; }
       'reservations' => 'Reservations',
       'report' => 'View Reported Incidents',
       'security' => 'Security Guards',
-      'verify' => 'Verify Payment Receipts',
       'residents' => 'Residents',
       'cancelled' => 'Cancelled Requests',
       'summary' => 'Summary Report',
@@ -3259,7 +3280,7 @@ body.modal-open { overflow: hidden; }
           }
           function pollNotifications(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(function(data){ renderNotif(data); }).catch(function(){}); }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard'; if(type==='payment') base='?page=verify'; else if(type==='resident_guest') base='?page=resident_guest_forms'; else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests'); else if(type==='incident') base='?page=report'; var ref=it.ref?String(it.ref):''; if(ref){ base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref); } return base; }
+          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard'; if(type==='payment') base='?page=requests'; else if(type==='resident_guest') base='?page=resident_guest_forms'; else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests'); else if(type==='incident') base='?page=report'; var ref=it.ref?String(it.ref):''; if(ref){ base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref); } return base; }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'><i class='fa-solid fa-eye'></i> Open</a><button class='btn btn-remove'><i class='fa-solid fa-xmark'></i> Dismiss</button></div></div>";
@@ -3978,119 +3999,6 @@ body.modal-open { overflow: hidden; }
       ?>
     </tbody>
   </table>
-</section>
-<?php endif; ?>
-
-<!-- VERIFY RECEIPTS -->
-<?php if ($currentPage == 'verify'): ?>
-<section class="panel" id="verify-panel">
-  <div class="content-row">
-    <div class="card-box">
-      <h3>Verify Payment Receipts</h3>
-      <div class="notice">Use View All Details to jump to the matching request. Verify or reject the receipt below.</div>
-      <table class="table table-verify">
-    <thead>
-      <tr>
-        <th>User Type</th>
-        <th>Name</th>
-        <th>Receipt</th>
-        <th>Proof of Payment Upload Date</th>
-        <th>Price Details</th>
-        <th>Payment Status</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php
-        $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id,
-                                       r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
-                                       ep.full_name, ep.middle_name, ep.last_name,
-                                       u.first_name AS res_first_name, u.last_name AS res_last_name, u.user_type,
-                                       gf.id AS gf_id
-                                  FROM reservations r
-                                  LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
-                                  LEFT JOIN users u ON r.user_id = u.id
-                                  LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
-                                  WHERE r.receipt_path IS NOT NULL
-                                  ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) DESC");
-        if ($resList && $resList->num_rows > 0) {
-          while ($row = $resList->fetch_assoc()) {
-            echo '<tr data-ref="' . htmlspecialchars($row['ref_code'] ?? '') . '">';
-            $userType = 'Resident';
-            if (!empty($row['user_type'])) {
-                $userType = ucfirst($row['user_type']);
-            } elseif (!empty($row['entry_pass_id'])) {
-                $userType = 'Visitor';
-            }
-            if (!empty($row['gf_id'])) {
-                $userType = "Resident’s Guest";
-            }
-            echo '<td>' . $userType . '</td>';
-            $fullName = !empty($row['entry_pass_id'])
-              ? trim(($row['full_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))
-              : trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
-            if ($fullName === '') { $fullName = $userType; }
-            echo '<td>' . htmlspecialchars($fullName) . '</td>';
-            
-                $ps = strtolower($row['payment_status'] ?? 'pending');
-                $canVerify = $ps !== 'verified';
-                if (!empty($row['receipt_path'])) {
-              $rp = $row['receipt_path'];
-              $isPdf = (bool)preg_match('/\.pdf$/i', (string)$rp);
-              if ($isPdf) {
-                echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;">Open Receipt (PDF)</a></td>';
-              } else {
-                    echo '<td><a class="receipt-link" href="#" onclick="openReceiptModal(\'' . htmlspecialchars($rp) . '\', ' . ($canVerify ? intval($row['id']) : 0) . ', \'requests\'); return false;"><img class="receipt-thumbnail" src="' . htmlspecialchars($rp) . '" alt="Receipt"></a></td>';
-              }
-            } else {
-              echo '<td><span class="muted">No receipt</span></td>';
-            }
-            $uploadedAt = !empty($row['receipt_uploaded_at']) ? $row['receipt_uploaded_at'] : ($row['created_at'] ?? null);
-            $uploadedStr = $uploadedAt ? date('Y-m-d H:i', strtotime($uploadedAt)) : '-';
-            echo '<td>' . htmlspecialchars($uploadedStr) . '</td>';
-            $tp = isset($row['price']) ? floatval($row['price']) : 0.0;
-            $dpRaw = (isset($row['downpayment']) && $row['downpayment'] !== null) ? floatval($row['downpayment']) : null;
-            echo '<td>';
-            if ($tp > 0) {
-              $tpStr = number_format($tp, 2, '.', '');
-              $dpStr = $dpRaw !== null ? number_format($dpRaw, 2, '.', '') : '';
-              echo '<button type="button" class="btn btn-view" onclick="openPriceDetails(\''.$tpStr.'\', \''.$dpStr.'\')"><i class="fa-solid fa-eye"></i> View Price Details</button>';
-            } else {
-              echo '<span class="muted">-</span>';
-            }
-            echo '</td>';
-            $psClass = $ps==='verified' ? 'badge-approved' : ($ps==='rejected' ? 'badge-rejected' : 'badge-pending');
-            echo '<td><span class="badge ' . $psClass . '">' . ucfirst($ps) . '</span></td>';
-            echo '<td class="actions">';
-            $ref = urlencode($row['ref_code']);
-            if (!empty($row['gf_id'])) {
-              $targetPage = 'resident_guest_forms';
-            } else if (!empty($row['entry_pass_id']) || strtolower($row['user_type'] ?? '') === 'visitor') {
-              $targetPage = 'visitor_requests';
-            } else {
-              $targetPage = 'requests';
-            }
-              echo "<a class='btn btn-view btn-view-details' href='admin.php?page=".$targetPage."&ref=".$ref."'><i class='fa-solid fa-eye'></i> View All Details</a>";
-              if($ps!=='verified'){
-                echo '<form method="post">';
-                echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
-                echo '<input type="hidden" name="action" value="reject_receipt">';
-                echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
-                echo '<button type="submit" class="btn btn-reject"><i class="fa-solid fa-xmark"></i> Reject</button>';
-                echo '</form>';
-              } else {
-              }
-            echo '</td>';
-            echo '</tr>';
-          }
-        } else {
-          echo '<tr><td colspan="7" style="text-align:center;">No receipts to verify</td></tr>';
-        }
-      ?>
-    </tbody>
-      </table>
-    </div>
-  </div>
 </section>
 <?php endif; ?>
 

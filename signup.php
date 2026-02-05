@@ -664,7 +664,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Terms Modal -->
     <div id="termsModal" class="modal">
       <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
-        <button type="button" class="close" onclick="closeTerms()" aria-label="Close" style="top: 20px; right: 25px;">&times;</button>
+        <button type="button" class="close" onclick="closeTerms()" aria-label="Close">&times;</button>
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Terms & Services</h2>
         
         <p style="text-align: center; font-weight: 600; margin-bottom: 25px; line-height: 1.5; color: #000;">
@@ -728,7 +728,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Privacy Modal -->
     <div id="privacyModal" class="modal">
       <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
-        <button type="button" class="close" onclick="closePrivacy()" aria-label="Close" style="top: 20px; right: 25px;">&times;</button>
+        <button type="button" class="close" onclick="closePrivacy()" aria-label="Close">&times;</button>
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Privacy Policy</h2>
         
         <div style="font-size: 0.95rem; color: #333; line-height: 1.6;">
@@ -1588,7 +1588,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- Image Preview Modal -->
   <div id="imagePreviewModal" class="center-modal" style="display:none; background-color: rgba(0,0,0,0.8);">
     <div class="center-modal-content" style="background: transparent; box-shadow: none; width: auto; max-width: 90%; text-align: center; padding: 0;">
-      <button type="button" class="close-center" onclick="closeImagePreview()" aria-label="Close" style="top: -30px; right: 0; font-size: 30px; opacity: 1;">&times;</button>
+      <button type="button" class="close-center" onclick="closeImagePreview()" aria-label="Close">&times;</button>
       <img id="fullImagePreview" src="" alt="Full Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 2px solid #fff;">
     </div>
   </div>

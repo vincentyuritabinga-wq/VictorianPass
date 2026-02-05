@@ -1324,12 +1324,36 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       }
       return;
     }
+    const single = document.getElementById('singleDayToggle')?.checked;
+    const isSameAsStart = selectedStart && dateString === selectedStart;
+    const isSameAsEnd = selectedEnd && dateString === selectedEnd;
+    if(single){
+      if(isSameAsStart && isSameAsEnd){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearStartDate();
+        await updatePoolRemainingNote();
+        return;
+      }
+    } else {
+      if(isSameAsStart){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearStartDate();
+        clearEndDate();
+        await updatePoolRemainingNote();
+        return;
+      }
+      if(isSameAsEnd){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearEndDate();
+        await updatePoolRemainingNote();
+        return;
+      }
+    }
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
-    const single = document.getElementById('singleDayToggle')?.checked;
-    function setStart(ds){
+    function setStart(ds, ignoreEnd){
       const eVal=document.getElementById('endDateInput').value||'';
-      if(eVal && ds > eVal){ showStartDateError('Start date cannot be later than end date.'); return false; }
+      if(!ignoreEnd && eVal && ds > eVal){ showStartDateError('Start date cannot be later than end date.'); return false; }
       selectedStart=ds;
       document.getElementById('startDate').textContent=formatDateToMMDDYYYY(selectedStart);
       document.getElementById('startDateInput').value=selectedStart;
@@ -1355,14 +1379,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       } else if(!selectedEnd){
         setEnd(dateString);
       } else {
-        // Start a new range; ensure new start does not violate current end
-        if(!setStart(dateString)){
-          // keep previous dates if invalid
-        } else {
-          selectedEnd=null;
-          document.getElementById('endDate').textContent='--';
-          document.getElementById('endDateInput').value='';
-        }
+        selectedEnd=null;
+        document.getElementById('endDate').textContent='--';
+        document.getElementById('endDateInput').value='';
+        showDateError('');
+        setStart(dateString, true);
       }
     }
     await updatePoolRemainingNote();

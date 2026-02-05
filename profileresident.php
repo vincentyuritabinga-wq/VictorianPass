@@ -659,7 +659,7 @@ body.account-blocked { overflow: hidden; }
     .close-btn { position: absolute; top: 15px; right: 15px; font-size: 20px; cursor: pointer; color: #555; }
 #submitNoticeModal { display: flex; align-items: center; justify-content: center; }
 #submitNoticeModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; height: auto; min-height: unset; }
-#submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #111; border: 1px solid #111; display: flex; align-items: center; justify-content: center; }
+#submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; color: #111827; border: 0; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0; cursor: pointer; }
 
     /* Fix for Resident Dashboard Modal to ensure it fits screen and close button is visible */
     #activityModal .modal-content {
@@ -707,7 +707,7 @@ body.account-blocked { overflow: hidden; }
 <?php if ($flashNotice !== '') { ?>
   <div id="submitNoticeModal" class="modal" style="display:flex;">
     <div class="modal-content" style="max-width:420px;text-align:center;">
-      <span class="close" id="submitNoticeClose">&times;</span>
+      <button type="button" class="close" id="submitNoticeClose" aria-label="Close">&times;</button>
       <div style="font-size:1.1rem;font-weight:700;color:#23412e;margin-bottom:6px;">Request submitted</div>
       <div style="color:#555;"><?php echo htmlspecialchars($flashNotice); ?></div>
       <button type="button" id="submitNoticeBtn" style="margin-top:18px;background:#23412e;color:#fff;border:none;border-radius:8px;padding:10px 16px;cursor:pointer;font-weight:600;">Close</button>
@@ -909,12 +909,8 @@ body.account-blocked { overflow: hidden; }
                        <?php else: ?>
                        <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
                        <?php endif; ?>
-                      <?php if ($isReservation): ?>
-                        <?php if ($reasonText !== ''): ?>
-                        <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
-                        <?php else: ?>
+                     <?php if ($isReservation): ?>
                         <span class="item-details" style="display:none;"></span>
-                        <?php endif; ?>
                       <?php else: ?>
                         <?php if(!empty($act['details'])): ?>
                         <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
@@ -997,11 +993,7 @@ body.account-blocked { overflow: hidden; }
                        <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
                        <?php endif; ?>
                        <?php if ($isReservation): ?>
-                         <?php if ($reasonText !== ''): ?>
-                         <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
-                         <?php else: ?>
                          <span class="item-details" style="display:none;"></span>
-                         <?php endif; ?>
                        <?php else: ?>
                          <?php if(!empty($act['details'])): ?>
                          <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
@@ -1214,6 +1206,19 @@ body.account-blocked { overflow: hidden; }
       </div>
     </div>
   </div>
+  <div id="updateProofModal" class="update-proof-modal">
+    <div class="update-proof-content">
+      <button type="button" class="update-proof-close" aria-label="Close">&times;</button>
+      <h3>Upload the Updated Proof Here</h3>
+      <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
+      <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
+      <div class="update-proof-actions">
+        <button type="button" id="updateProofEditBtn" class="update-proof-btn update-proof-edit">Edit</button>
+        <button type="button" id="updateProofRemoveBtn" class="update-proof-btn update-proof-remove" disabled>Remove</button>
+        <button type="button" id="updateProofSubmitBtn" class="update-proof-btn update-proof-submit" disabled>Submit</button>
+      </div>
+    </div>
+  </div>
   <div id="refModal" class="modal">
     <div class="modal-content">
       <h2>Request Submitted!</h2>
@@ -1405,6 +1410,38 @@ body.account-blocked { overflow: hidden; }
   var cancelModalRef=null;
   var cancelModalLi=null;
   var modalAction = 'cancel';
+  var updateProofModal=document.getElementById('updateProofModal');
+  var updateProofClose=updateProofModal?updateProofModal.querySelector('.update-proof-close'):null;
+  var updateProofFile=document.getElementById('updateProofFile');
+  var updateProofFileName=document.getElementById('updateProofFileName');
+  var updateProofEditBtn=document.getElementById('updateProofEditBtn');
+  var updateProofRemoveBtn=document.getElementById('updateProofRemoveBtn');
+  var updateProofSubmitBtn=document.getElementById('updateProofSubmitBtn');
+  var updateProofRef=null;
+  var updateProofLi=null;
+
+  function resetUpdateProofForm(){
+    if(updateProofFile) updateProofFile.value='';
+    if(updateProofFileName) updateProofFileName.textContent='No file selected';
+    if(updateProofRemoveBtn) updateProofRemoveBtn.disabled=true;
+    if(updateProofSubmitBtn) updateProofSubmitBtn.disabled=true;
+  }
+
+  function openUpdateProofModal(li, ref){
+    if(!updateProofModal) return;
+    updateProofLi=li;
+    updateProofRef=ref;
+    resetUpdateProofForm();
+    updateProofModal.style.display='flex';
+  }
+
+  function closeUpdateProofModal(){
+    if(!updateProofModal) return;
+    updateProofModal.style.display='none';
+    updateProofLi=null;
+    updateProofRef=null;
+    resetUpdateProofForm();
+  }
 
   function renderNotifPopup(items){
     if(!notifPopup) return;
@@ -1676,6 +1713,71 @@ body.account-blocked { overflow: hidden; }
     });
   }
 
+  if(updateProofClose){
+    updateProofClose.addEventListener('click',function(){
+      closeUpdateProofModal();
+    });
+  }
+  if(updateProofEditBtn && updateProofFile){
+    updateProofEditBtn.addEventListener('click',function(){
+      updateProofFile.click();
+    });
+  }
+  if(updateProofRemoveBtn){
+    updateProofRemoveBtn.addEventListener('click',function(){
+      resetUpdateProofForm();
+    });
+  }
+  if(updateProofFile){
+    updateProofFile.addEventListener('change',function(){
+      var file = updateProofFile.files && updateProofFile.files[0];
+      if(updateProofFileName) updateProofFileName.textContent = file ? file.name : 'No file selected';
+      if(updateProofRemoveBtn) updateProofRemoveBtn.disabled = !file;
+      if(updateProofSubmitBtn) updateProofSubmitBtn.disabled = !file;
+    });
+  }
+  if(updateProofSubmitBtn){
+    updateProofSubmitBtn.addEventListener('click',function(){
+      var file = updateProofFile && updateProofFile.files ? updateProofFile.files[0] : null;
+      if(!file || !updateProofRef || !updateProofLi) return;
+      var fd=new FormData();
+      fd.append('ref_code', updateProofRef);
+      fd.append('receipt', file);
+      updateProofSubmitBtn.disabled=true;
+      fetch('upload_receipt.php',{method:'POST',body:fd})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(!data || !data.success){
+            updateProofSubmitBtn.disabled=false;
+            alert(data && data.message ? data.message : 'Upload failed.');
+            return;
+          }
+          var newPayStatus = (data.payment_status || 'pending_update');
+          updateProofLi.setAttribute('data-payment-status', newPayStatus);
+          updateProofLi.setAttribute('data-status', newPayStatus);
+          var badge=updateProofLi.querySelector('.status-badge');
+          if(badge){
+            badge.textContent=fmtLabel(newPayStatus);
+            badge.className='status-badge '+statusClassFor(newPayStatus);
+          }
+          var extraEl=updateProofLi.querySelector('.item-extra');
+          if(extraEl){
+            extraEl.setAttribute('data-loaded','0');
+            extraEl.innerHTML='';
+            if(updateProofLi.classList.contains('expanded')){
+              buildExtraContent(updateProofLi, extraEl);
+              extraEl.setAttribute('data-loaded','1');
+            }
+          }
+          closeUpdateProofModal();
+        })
+        ["catch"](function(){
+          updateProofSubmitBtn.disabled=false;
+          alert('Network error. Please try again.');
+        });
+    });
+  }
+
   // Sidebar Toggle Logic
   var menuToggle = document.getElementById('menuToggle');
   var sidebar = document.querySelector('.sidebar');
@@ -1754,6 +1856,8 @@ body.account-blocked { overflow: hidden; }
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
+    var showStatusLabel=!isRejectedReason;
+    var highlightReason=(paymentStatus==='rejected');
     var html='';
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
@@ -1763,16 +1867,20 @@ body.account-blocked { overflow: hidden; }
         var statusLink=location.origin+basePath+'/qr_view.php?code='+encodeURIComponent(ref);
         var qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(statusLink);
         qrSrcForDownload = qrSrc;
-        html+='<div class="item-extra-title">Entry Request Status</div>';
+        html+='<div class="item-extra-title">Entry QR Pass</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
       }else{
-        html+='<div class="item-extra-title">Entry Request Status</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
       }
-      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      if(showStatusLabel){
+        html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      }
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+      if(reasonText){
+        html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
+      }
       if(type==='reservation' && scheduleText){
         var parts=scheduleParts(scheduleText);
         var rows='';
@@ -1787,9 +1895,6 @@ body.account-blocked { overflow: hidden; }
         }
         html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
       }
-      if(reasonText){
-        html+='<div class="item-reason'+(isRejectedReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
-      }
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       
       html+='<div class="item-actions">';
@@ -1798,7 +1903,6 @@ body.account-blocked { overflow: hidden; }
       }
       if(canUpdateProof && ref){
         html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
-        html+='<input type="file" class="update-proof-input" accept="image/*" style="display:none;">';
       }
       if(canCancel && ref){
         var cancelLabel = (type === 'guest_form') ? 'Cancel Request' : 'Cancel Reservation';
@@ -1905,44 +2009,10 @@ body.account-blocked { overflow: hidden; }
       });
     }
     var updateBtn=extra.querySelector('.update-proof-btn');
-    var updateInput=extra.querySelector('.update-proof-input');
-    if(updateBtn && updateInput && ref){
+    if(updateBtn && ref){
       updateBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
-        updateInput.click();
-      });
-      updateInput.addEventListener('change',function(){
-        if(!updateInput.files || !updateInput.files[0]) return;
-        var fd=new FormData();
-        fd.append('ref_code', ref);
-        fd.append('receipt', updateInput.files[0]);
-        updateBtn.disabled=true;
-        fetch('upload_receipt.php',{method:'POST',body:fd})
-          .then(function(r){ return r.json(); })
-          .then(function(data){
-            if(!data || !data.success){
-              updateBtn.disabled=false;
-              alert(data && data.message ? data.message : 'Upload failed.');
-              return;
-            }
-            li.setAttribute('data-payment-status','pending_update');
-            li.setAttribute('data-status','pending_update');
-            var badge=li.querySelector('.status-badge');
-            if(badge){
-              badge.textContent=fmtLabel('pending_update');
-              badge.className='status-badge '+statusClassFor('pending_update');
-            }
-            extra.setAttribute('data-loaded','0');
-            extra.innerHTML='';
-            if(li.classList.contains('expanded')){
-              buildExtraContent(li, extra);
-              extra.setAttribute('data-loaded','1');
-            }
-          })
-          ["catch"](function(){
-            updateBtn.disabled=false;
-            alert('Network error. Please try again.');
-          });
+        openUpdateProofModal(li, ref);
       });
     }
   }
@@ -2038,6 +2108,9 @@ body.account-blocked { overflow: hidden; }
   window.addEventListener('click', function(event) {
      if (event.target == activityModal) {
        activityModal.style.display = "none";
+     }
+     if (event.target == updateProofModal) {
+       closeUpdateProofModal();
      }
    });
    

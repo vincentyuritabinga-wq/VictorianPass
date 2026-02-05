@@ -1144,12 +1144,33 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   function handleDateClick(cell,dateString){
     if(cell.classList.contains('disabled')){ if(cell.classList.contains('fully-booked')){ showStartDateError('Fully Booked — no time slots available for this date.'); } else if(dateString && dateString < todayStr){ showStartDateError('Past date — cannot be booked.'); } else if(dateString && dateString < minDateStr){ showStartDateError('Reservations must be made at least 1 day in advance.'); } else { showStartDateError('Unavailable date — cannot be booked.'); } return; }
+    const single = document.getElementById('singleDayToggle')?.checked;
+    const isSameAsStart = selectedStart && dateString === selectedStart;
+    const isSameAsEnd = selectedEnd && dateString === selectedEnd;
+    if(single){
+      if(isSameAsStart && isSameAsEnd){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearStartDate();
+        return;
+      }
+    } else {
+      if(isSameAsStart){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearStartDate();
+        clearEndDate();
+        return;
+      }
+      if(isSameAsEnd){
+        document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
+        clearEndDate();
+        return;
+      }
+    }
     document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
     cell.classList.add('active');
-    const single = document.getElementById('singleDayToggle')?.checked;
-    function setStart(ds){
+    function setStart(ds, ignoreEnd){
       const eVal=document.getElementById('endDateInput').value||'';
-      if(eVal && ds > eVal){ showStartDateError('Start date cannot be later than end date.'); return false; }
+      if(!ignoreEnd && eVal && ds > eVal){ showStartDateError('Start date cannot be later than end date.'); return false; }
       selectedStart=ds;
       document.getElementById('startDate').textContent=formatDateToMMDDYYYY(selectedStart);
       document.getElementById('startDateInput').value=selectedStart;
@@ -1175,14 +1196,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       } else if(!selectedEnd){
         setEnd(dateString);
       } else {
-        // Start a new range; ensure new start does not violate current end
-        if(!setStart(dateString)){
-          // keep previous dates if invalid
-        } else {
-          selectedEnd=null;
-          document.getElementById('endDate').textContent='--';
-          document.getElementById('endDateInput').value='';
-        }
+        selectedEnd=null;
+        document.getElementById('endDate').textContent='--';
+        document.getElementById('endDateInput').value='';
+        showDateError('');
+        setStart(dateString, true);
       }
     }
     computeAvailability();

@@ -491,12 +491,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                        <?php else: ?>
                        <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
                        <?php endif; ?>
-                      <?php if ($isReservation): ?>
-                        <?php if ($reasonText !== ''): ?>
-                        <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
-                        <?php else: ?>
+                     <?php if ($isReservation): ?>
                         <span class="item-details" style="display:none;"></span>
-                        <?php endif; ?>
                       <?php else: ?>
                         <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
                       <?php endif; ?>
@@ -575,11 +571,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                        <span class="item-title"><?php echo htmlspecialchars($displayTitle); ?></span>
                        <?php endif; ?>
                        <?php if ($isReservation): ?>
-                         <?php if ($reasonText !== ''): ?>
-                         <span class="item-details">- <?php echo htmlspecialchars($reasonText); ?></span>
-                         <?php else: ?>
                          <span class="item-details" style="display:none;"></span>
-                         <?php endif; ?>
                        <?php else: ?>
                          <span class="item-details">- <?php echo htmlspecialchars($act['details']); ?></span>
                        <?php endif; ?>
@@ -634,6 +626,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <button type="button" class="cancel-modal-keep">Keep Reservation</button>
         <button type="button" class="cancel-modal-confirm">Confirm Cancel</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="updateProofModal" class="update-proof-modal">
+  <div class="update-proof-content">
+    <button type="button" class="update-proof-close" aria-label="Close">&times;</button>
+    <h3>Upload the Updated Proof Here</h3>
+    <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
+    <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
+    <div class="update-proof-actions">
+      <button type="button" id="updateProofEditBtn" class="update-proof-btn update-proof-edit">Edit</button>
+      <button type="button" id="updateProofRemoveBtn" class="update-proof-btn update-proof-remove" disabled>Remove</button>
+      <button type="button" id="updateProofSubmitBtn" class="update-proof-btn update-proof-submit" disabled>Submit</button>
     </div>
   </div>
 </div>
@@ -1174,6 +1180,38 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   var cancelModalRef=null;
   var cancelModalLi=null;
   var modalAction = 'cancel';
+  var updateProofModal=document.getElementById('updateProofModal');
+  var updateProofClose=updateProofModal?updateProofModal.querySelector('.update-proof-close'):null;
+  var updateProofFile=document.getElementById('updateProofFile');
+  var updateProofFileName=document.getElementById('updateProofFileName');
+  var updateProofEditBtn=document.getElementById('updateProofEditBtn');
+  var updateProofRemoveBtn=document.getElementById('updateProofRemoveBtn');
+  var updateProofSubmitBtn=document.getElementById('updateProofSubmitBtn');
+  var updateProofRef=null;
+  var updateProofLi=null;
+
+  function resetUpdateProofForm(){
+    if(updateProofFile) updateProofFile.value='';
+    if(updateProofFileName) updateProofFileName.textContent='No file selected';
+    if(updateProofRemoveBtn) updateProofRemoveBtn.disabled=true;
+    if(updateProofSubmitBtn) updateProofSubmitBtn.disabled=true;
+  }
+
+  function openUpdateProofModal(li, ref){
+    if(!updateProofModal) return;
+    updateProofLi=li;
+    updateProofRef=ref;
+    resetUpdateProofForm();
+    updateProofModal.style.display='flex';
+  }
+
+  function closeUpdateProofModal(){
+    if(!updateProofModal) return;
+    updateProofModal.style.display='none';
+    updateProofLi=null;
+    updateProofRef=null;
+    resetUpdateProofForm();
+  }
 
   window.openCancelModal = function(li,ref){
     if(!cancelModal) return;
@@ -1412,6 +1450,71 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     });
   }
 
+  if(updateProofClose){
+    updateProofClose.addEventListener('click',function(){
+      closeUpdateProofModal();
+    });
+  }
+  if(updateProofEditBtn && updateProofFile){
+    updateProofEditBtn.addEventListener('click',function(){
+      updateProofFile.click();
+    });
+  }
+  if(updateProofRemoveBtn){
+    updateProofRemoveBtn.addEventListener('click',function(){
+      resetUpdateProofForm();
+    });
+  }
+  if(updateProofFile){
+    updateProofFile.addEventListener('change',function(){
+      var file = updateProofFile.files && updateProofFile.files[0];
+      if(updateProofFileName) updateProofFileName.textContent = file ? file.name : 'No file selected';
+      if(updateProofRemoveBtn) updateProofRemoveBtn.disabled = !file;
+      if(updateProofSubmitBtn) updateProofSubmitBtn.disabled = !file;
+    });
+  }
+  if(updateProofSubmitBtn){
+    updateProofSubmitBtn.addEventListener('click',function(){
+      var file = updateProofFile && updateProofFile.files ? updateProofFile.files[0] : null;
+      if(!file || !updateProofRef || !updateProofLi) return;
+      var fd=new FormData();
+      fd.append('ref_code', updateProofRef);
+      fd.append('receipt', file);
+      updateProofSubmitBtn.disabled=true;
+      fetch('upload_receipt.php',{method:'POST',body:fd})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(!data || !data.success){
+            updateProofSubmitBtn.disabled=false;
+            alert(data && data.message ? data.message : 'Upload failed.');
+            return;
+          }
+          var newPayStatus = (data.payment_status || 'pending_update');
+          updateProofLi.setAttribute('data-payment-status', newPayStatus);
+          updateProofLi.setAttribute('data-status', newPayStatus);
+          var badge=updateProofLi.querySelector('.status-badge');
+          if(badge){
+            badge.textContent=fmtLabel(newPayStatus);
+            badge.className='status-badge '+statusClassFor(newPayStatus);
+          }
+          var extraEl=updateProofLi.querySelector('.item-extra');
+          if(extraEl){
+            extraEl.setAttribute('data-loaded','0');
+            extraEl.innerHTML='';
+            if(updateProofLi.classList.contains('expanded')){
+              buildExtraContent(updateProofLi, extraEl);
+              extraEl.setAttribute('data-loaded','1');
+            }
+          }
+          closeUpdateProofModal();
+        })
+        ["catch"](function(){
+          updateProofSubmitBtn.disabled=false;
+          alert('Network error. Please try again.');
+        });
+    });
+  }
+
   // Sidebar Toggle Logic
   var menuToggle = document.getElementById('menuToggle');
   var sidebar = document.querySelector('.sidebar');
@@ -1538,6 +1641,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if (e.target === cancelModal) {
           cancelModal.style.display = 'none';
       }
+      if (e.target === updateProofModal) {
+          closeUpdateProofModal();
+      }
   });
 
 
@@ -1601,6 +1707,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
+    var showStatusLabel=!isRejectedReason;
+    var highlightReason=(paymentStatus==='rejected');
     
     var html='';
     html+='<div class="item-extra-section">';
@@ -1614,13 +1722,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         html+='<div class="item-extra-qr-wrap"><img class="item-extra-qr" src="'+qrSrc+'" alt="Entry QR Code"></div>';
         html+='<div class="item-extra-info">';
     }else{
-        html+='<div class="item-extra-title">Entry Request Status</div>';
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
     }
     
-    html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+    if(showStatusLabel){
+      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+    }
     if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
+    if(reasonText){
+      html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
+    }
     if(type==='reservation' && scheduleText){
       var parts=scheduleParts(scheduleText);
       var rows='';
@@ -1635,15 +1747,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
       html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
     }
-    if(reasonText){
-      html+='<div class="item-reason'+(isRejectedReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
-    }
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
     html+='<div class="item-actions">';
     if(canUpdateProof && ref){
         html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
-        html+='<input type="file" class="update-proof-input" accept="image/*" style="display:none;">';
     }
     if(canCancel && ref){
         html+='<button type="button" class="item-extra-cancel" data-ref="'+esc(ref)+'">Cancel Request</button>';
@@ -1724,44 +1832,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
     });
     var updateBtn=extra.querySelector('.update-proof-btn');
-    var updateInput=extra.querySelector('.update-proof-input');
-    if(updateBtn && updateInput && ref){
+    if(updateBtn && ref){
       updateBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
-        updateInput.click();
-      });
-      updateInput.addEventListener('change',function(){
-        if(!updateInput.files || !updateInput.files[0]) return;
-        var fd=new FormData();
-        fd.append('ref_code', ref);
-        fd.append('receipt', updateInput.files[0]);
-        updateBtn.disabled=true;
-        fetch('upload_receipt.php',{method:'POST',body:fd})
-          .then(function(r){ return r.json(); })
-          .then(function(data){
-            if(!data || !data.success){
-              updateBtn.disabled=false;
-              alert(data && data.message ? data.message : 'Upload failed.');
-              return;
-            }
-            li.setAttribute('data-payment-status','pending_update');
-            li.setAttribute('data-status','pending_update');
-            var badge=li.querySelector('.status-badge');
-            if(badge){
-              badge.textContent=fmtLabel('pending_update');
-              badge.className='status-badge '+statusClassFor('pending_update');
-            }
-            extra.setAttribute('data-loaded','0');
-            extra.innerHTML='';
-            if(li.classList.contains('expanded')){
-              buildExtraContent(li, extra);
-              extra.setAttribute('data-loaded','1');
-            }
-          })
-          ["catch"](function(){
-            updateBtn.disabled=false;
-            alert('Network error. Please try again.');
-          });
+        openUpdateProofModal(li, ref);
       });
     }
   }
