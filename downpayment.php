@@ -320,12 +320,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .nonrefundable{background:#fee2e2;color:#b30000;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-weight:700;margin-top:10px;display:block;font-size:.9rem;border-left:4px solid #dc2626}
     body.modal-open{overflow:hidden}
     .proceed-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);align-items:center;justify-content:center;z-index:2000}
-    .proceed-content{background:#fff;border-radius:14px;padding:22px 24px;width:92%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.25)}
+    .proceed-content{background:#fff;border-radius:14px;padding:22px 24px;width:92%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.25);position:relative}
     .proceed-content h3{margin:0;color:#111827;font-size:1.1rem}
     .proceed-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
     .proceed-actions .btn{background:#23412e;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;transition:transform .2s ease, box-shadow .2s ease}
     .proceed-actions .btn:hover{transform:translateY(-2px);box-shadow:0 8px 16px rgba(15,23,42,.12)}
     .proceed-actions .btn.btn-outline{background:#e5e7eb;color:#111}
+    .proceed-close{position:absolute;top:10px;right:12px;width:28px;height:28px;border-radius:50%;background:#f3f4f6;color:#111827;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer}
     .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,0.95);backdrop-filter:blur(10px);position:fixed;top:0;left:0;right:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
     .logo{display:flex;align-items:center;gap:12px}
     .back-row{max-width:720px;margin:14px auto 0;padding:0 16px}
@@ -426,6 +427,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
   </div>
   <div class="proceed-modal" id="proceedModal">
     <div class="proceed-content">
+      <button type="button" class="proceed-close" id="proceedCloseBtn" aria-label="Close">&times;</button>
       <h3>Do you want to proceed?</h3>
       <div class="proceed-actions">
         <button type="button" class="btn btn-outline" id="proceedNo">Cancel</button>
@@ -435,6 +437,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
   </div>
   <div class="proceed-modal" id="backModal">
     <div class="proceed-content">
+      <button type="button" class="proceed-close" id="backCloseBtn" aria-label="Close">&times;</button>
       <h3>Going back will reset your reservation.</h3>
       <p style="margin:10px 0 0;color:#4b5563;font-size:.95rem;">You will need to enter your details again.</p>
       <div class="proceed-actions">
@@ -457,6 +460,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       const backModal=document.getElementById('backModal');
       const backConfirm=document.getElementById('backConfirm');
       const backCancel=document.getElementById('backCancel');
+      const backCloseBtn=document.getElementById('backCloseBtn');
+      const proceedCloseBtn=document.getElementById('proceedCloseBtn');
       let pendingSubmit=false;
       function renderPreview(file){
         if(!file){ preview.style.display='none'; preview.innerHTML=''; return; }
@@ -538,6 +543,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           closeProceed();
         });
       }
+      if(proceedCloseBtn){
+        proceedCloseBtn.addEventListener('click', function(){
+          closeProceed();
+        });
+      }
       if(proceedModal){
         proceedModal.addEventListener('click', function(e){
           if(e.target === proceedModal){ closeProceed(); }
@@ -552,6 +562,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       }
       if(backCancel){
         backCancel.addEventListener('click', function(){
+          closeBack();
+        });
+      }
+      if(backCloseBtn){
+        backCloseBtn.addEventListener('click', function(){
           closeBack();
         });
       }

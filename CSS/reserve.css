@@ -351,18 +351,23 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 }
 
 .btn-secondary.back-account-btn{
-  background:#fff;
-  color:#111827;
-  border-color:#f2c24f;
+  background:#d4a017;
+  color:#ffffff;
+  border:none;
+  width:42px;
+  height:42px;
+  padding:0;
+  border-radius:50%;
   display:inline-flex;
   align-items:center;
-  gap:6px;
+  justify-content:center;
+  box-shadow:0 6px 14px rgba(212, 160, 23, 0.35);
 }
 .btn-secondary.back-account-btn:hover{
-  background:#fff7e6;
+  background:#b68912;
 }
 .btn-secondary.back-account-btn i{
-  color:#f2c24f;
+  color:#ffffff;
 }
 .btn-confirm{
   background:#23412e;

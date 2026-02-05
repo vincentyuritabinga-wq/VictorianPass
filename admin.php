@@ -2573,23 +2573,23 @@ table td.actions .delete-form.show { width: 100%; }
     position: absolute;
     top: 12px;
     right: 12px;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #fff;
-    color: #111827;
-    border: 1px solid #333;
-    font-size: 20px;
+    background: #eef2f0;
+    color: #23412e;
+    border: none;
+    font-size: 16px;
     cursor: pointer;
     line-height: 1;
     z-index: 100;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    transition: transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, color 0.2s ease, filter 0.2s ease;
 }
-.close:hover { color: #000; border-color: #000; transform: scale(1.1); }
+.close:hover { filter: brightness(0.95); transform: scale(1.05); }
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

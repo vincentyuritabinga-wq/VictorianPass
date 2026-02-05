@@ -38,12 +38,12 @@ body {
 }
 
 .back-btn {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
-    border: 2px solid #f2c24f;
-    background-color: #ffffff;
-    color: #111827;
+    border: none;
+    background-color: #d4a017;
+    color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,7 +52,7 @@ body {
     font-weight: bold;
     transition: all 0.2s;
 }
-.back-btn i { color: #f2c24f; }
+.back-btn i { color: #ffffff; }
 
 .back-btn:hover {
     filter: brightness(0.95);

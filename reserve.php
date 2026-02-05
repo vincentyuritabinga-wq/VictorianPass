@@ -831,7 +831,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   <div class="layout">
     <div class="left-panel">
       <div class="top-actions">
-        <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'"><i class="fa-solid fa-arrow-left"></i> Back to Account</button>
+        <button type="button" id="accountBackBtn" class="btn-secondary back-account-btn" aria-label="Back" onclick="window.location.href='<?php echo htmlspecialchars($accountLink, ENT_QUOTES); ?>'"><i class="fa-solid fa-arrow-left"></i></button>
       </div>
       
       <?php $isResident = (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'); ?>

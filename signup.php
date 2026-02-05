@@ -229,6 +229,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <title>Sign Up</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="css/signup.css">
   <style>
     .success-banner {
@@ -439,13 +440,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     .center-modal-btn:hover {
       background-color: #1a3022;
     }
+    .close,
     .close-center {
       position: absolute;
-      top: 10px;
-      right: 15px;
-      font-size: 24px;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      color: #111827;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
       cursor: pointer;
-      color: #888;
+      line-height: 1;
+      border: 0;
+      padding: 0;
+    }
+    .close:hover,
+    .close-center:hover {
+      filter: brightness(0.95);
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(-20px); }
@@ -467,8 +483,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
 
     <div class="form-side">
-      <a href="mainpage.php" class="back-arrow">
-        <img src="images/signuppage/back.svg" alt="Back">
+      <a href="mainpage.php" class="back-arrow" aria-label="Back">
+        <i class="fa-solid fa-arrow-left"></i>
       </a>
 
       <img src="images/loginpage/biglogo.svg" alt="Logo" class="biglogo">
@@ -648,7 +664,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Terms Modal -->
     <div id="termsModal" class="modal">
       <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
-        <span class="close" onclick="closeTerms()" style="top: 20px; right: 25px; background:#fff; color:#111; border:1px solid #111; width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;">&times;</span>
+        <button type="button" class="close" onclick="closeTerms()" aria-label="Close" style="top: 20px; right: 25px;">&times;</button>
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Terms & Services</h2>
         
         <p style="text-align: center; font-weight: 600; margin-bottom: 25px; line-height: 1.5; color: #000;">
@@ -712,7 +728,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Privacy Modal -->
     <div id="privacyModal" class="modal">
       <div class="modal-content" style="max-width: 700px; padding: 40px; border-radius: 20px;">
-        <span class="close" onclick="closePrivacy()" style="top: 20px; right: 25px;">&times;</span>
+        <button type="button" class="close" onclick="closePrivacy()" aria-label="Close" style="top: 20px; right: 25px;">&times;</button>
         <h2 style="text-align: center; font-weight: 700; font-size: 1.5rem; margin-bottom: 20px; color: #222;">Privacy Policy</h2>
         
         <div style="font-size: 0.95rem; color: #333; line-height: 1.6;">
@@ -1492,7 +1508,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- Center Warning Modal -->
   <div id="centerWarningModal" class="center-modal">
     <div class="center-modal-content">
-      <span class="close-center" onclick="closeCenterModal()">&times;</span>
+      <button type="button" class="close-center" onclick="closeCenterModal()" aria-label="Close">&times;</button>
       <h3 id="centerModalTitle">Warning</h3>
       <div id="centerModalBody"></div>
     </div>
@@ -1572,7 +1588,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- Image Preview Modal -->
   <div id="imagePreviewModal" class="center-modal" style="display:none; background-color: rgba(0,0,0,0.8);">
     <div class="center-modal-content" style="background: transparent; box-shadow: none; width: auto; max-width: 90%; text-align: center; padding: 0;">
-      <span class="close-center" onclick="closeImagePreview()" style="color: #fff; top: -30px; right: 0; font-size: 30px; opacity: 1;">&times;</span>
+      <button type="button" class="close-center" onclick="closeImagePreview()" aria-label="Close" style="top: -30px; right: 0; font-size: 30px; opacity: 1;">&times;</button>
       <img id="fullImagePreview" src="" alt="Full Preview" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 2px solid #fff;">
     </div>
   </div>
@@ -1707,7 +1723,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Generic Error Modal -->
   <div id="errorModal" class="modal">
     <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px; border-radius: 12px; position: relative; top: 50%; transform: translateY(-50%); margin: auto;">
-      <span class="close" onclick="document.getElementById('errorModal').style.display='none'">&times;</span>
+      <button type="button" class="close" onclick="document.getElementById('errorModal').style.display='none'" aria-label="Close">&times;</button>
       <div style="margin-bottom: 15px;">
          <span style="font-size: 3rem;">⚠️</span>
       </div>

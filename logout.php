@@ -31,7 +31,7 @@ $back = isset($_SERVER['HTTP_REFERER']) && $_SERVER['HTTP_REFERER'] !== '' ? $_S
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     body{margin:0;font-family:'Poppins',sans-serif;background:#111;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .modal{background:#1b1816;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:520px;width:92%;padding:20px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.35)}
+    .modal{background:#1b1816;border:1px solid rgba(255,255,255,.12);border-radius:14px;max-width:520px;width:92%;padding:20px;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.35);position:relative}
     .title{font-weight:800;font-size:1.2rem;margin:0 0 8px;color:#e74c3c}
     .text{font-size:.98rem;color:#ddd;margin:0 0 14px}
     .actions{display:flex;gap:10px;justify-content:center}
@@ -39,10 +39,13 @@ $back = isset($_SERVER['HTTP_REFERER']) && $_SERVER['HTTP_REFERER'] !== '' ? $_S
     .btn-confirm{background:#23412e;color:#fff}
     .btn-cancel{background:#e5e7eb;color:#111}
     .btn:hover{transform:translateY(-1px)}
+    .close-btn{position:absolute;top:10px;right:12px;width:32px;height:32px;border-radius:50%;background:#2a2623;color:#fff;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;font-size:18px}
+    .close-btn:hover{filter:brightness(1.1)}
   </style>
 </head>
 <body>
   <div class="modal" role="dialog" aria-label="Logout confirmation">
+    <a class="close-btn" href="<?php echo htmlspecialchars($back); ?>" aria-label="Close">&times;</a>
     <div class="title">Confirm Logout</div>
     <div class="text">Are you sure you want to log out?</div>
     <div class="actions">

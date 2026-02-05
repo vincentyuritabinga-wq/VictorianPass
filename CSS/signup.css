@@ -98,9 +98,19 @@ body {
   position: absolute;
   top: 1.5rem;
   left: 1.5rem;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #d4a017;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 6px 14px rgba(212, 160, 23, 0.35);
 }
-.back-arrow img {
-  width: 24px;
+.back-arrow i {
+  font-size: 18px;
+  color: #ffffff;
   cursor: pointer;
 }
 

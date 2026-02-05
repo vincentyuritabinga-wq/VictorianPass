@@ -152,6 +152,7 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
   <link rel="icon" type="image/png" href="images/logo.svg">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
         body {
   animation: fadeIn 0.6s ease-in-out;
@@ -299,9 +300,19 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
   position: absolute;
   top: 1.5rem;
   left: 1.5rem;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #d4a017;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 6px 14px rgba(212, 160, 23, 0.35);
 }
-.back-arrow img {
-  width: 24px;
+.back-arrow i {
+  font-size: 18px;
+  color: #ffffff;
   cursor: pointer;
 }
 
@@ -514,8 +525,8 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
 
     <!-- Right Side -->
     <div class="login-right">
-      <a href="mainpage.php" class="back-arrow">
-        <img src="images/signuppage/back.svg" alt="Back">
+      <a href="mainpage.php" class="back-arrow" aria-label="Back">
+        <i class="fa-solid fa-arrow-left"></i>
       </a>
 
       <div class="login-box">
