@@ -82,7 +82,7 @@
     .status-badge { padding: 5px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; }
     .status-approved { background: #d6eaff; color: #0044cc; }
     .status-pending { background: #fff4cc; color: #b68b00; }
-    .cancel-btn { background:#e5e7eb; color:#111827; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; }
+    .cancel-btn { background:#c0392b; color:#fff; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; white-space: nowrap; display:inline-flex; align-items:center; justify-content:center; min-width:180px; font-weight:600; }
     .cancel-btn:disabled { background:#ccc; color:#666; cursor:not-allowed; }
     .status-expired { background: #f0f0f0; color: #555; }
     .status-denied { background: #ffe6e6; color: #b30000; }
@@ -90,6 +90,7 @@
 
     /* Details Modal Styles (match site cards) */
     .details-content { width: 480px; max-width: 92vw; max-height: 85vh; overflow-y: auto; background:#fff; border-radius:14px; box-shadow:0 8px 18px rgba(0,0,0,0.12); }
+    #cancelModal .modal-content { width: 520px; max-width: 92vw; }
     .modal-header { display:flex; align-items:center; justify-content:space-between; background:#fff; padding:12px 16px; border-bottom:1px solid #e6ebe6; }
     .modal-header h3{ margin:0; color:#23412e; font-size:1.05rem; font-weight:700; }
     .close-btn {
@@ -172,7 +173,7 @@
   
   <div class="dashboard" id="dashboard">
     <div class="dashboard-header">
-      <img src="images/logo.svg" alt="VictorianPass Logo" />
+      <a href="mainpage.php" aria-label="Go to Main Page"><img src="images/logo.svg" alt="VictorianPass Logo" /></a>
       <button onclick="goBack()" class="qr-btn">Go Back</button>
     </div>
     <div id="dashboardStatusTitle" style="text-align:center; margin-bottom:15px; display:none;">
@@ -205,7 +206,7 @@
   <div class="modal" id="qrModal">
     <div class="modal-content">
       <div class="modal-header">
-        <img src="images/logo.svg" alt="Victorian Heights" />
+        <a href="mainpage.php" aria-label="Go to Main Page"><img src="images/logo.svg" alt="Victorian Heights" /></a>
         <span class="close-btn" onclick="closeQR()">&times;</span>
       </div>
       <div class="qr-section">
@@ -238,7 +239,7 @@
         <p>Are you sure you want to cancel this reservation?</p>
         <p style="font-size:0.9rem;color:#d9534f;font-weight:bold">Note: Downpayment is non-refundable. Cancelling will forfeit your downpayment.</p>
       </div>
-      <div style="display:flex; gap:10px; padding: 0 16px 16px 16px; justify-content:flex-end;">
+      <div style="display:flex; gap:10px; padding: 0 16px 16px 16px; justify-content:center; flex-wrap:nowrap;">
         <button type="button" class="qr-btn" onclick="closeCancelModal()">Keep Reservation</button>
         <button type="button" class="cancel-btn" onclick="performCancel()">Confirm Cancel</button>
       </div>
@@ -524,7 +525,7 @@
     function confirmCancel(){
       const data = window.statusData || {};
       const statusLower = String(data.status || '').toLowerCase();
-      if(statusLower !== 'pending'){ alert('Cancel only available for pending reservations.'); return; }
+      if(statusLower !== 'pending' && statusLower !== 'pending_update'){ alert('Cancel only available for pending reservations.'); return; }
       
       const modal = document.getElementById('cancelModal');
       const isGuest = String(data.type || '').toLowerCase() === 'guest entry';
@@ -560,7 +561,7 @@
       const statusLower = String(d.status || '').toLowerCase();
       const isGuest = String(d.type || '').toLowerCase() === 'guest entry';
 
-      if(statusLower !== 'pending'){ alert(isGuest ? 'Unable to cancel: only pending requests can be canceled' : 'Unable to cancel: only pending reservations can be canceled'); return; }
+      if(statusLower !== 'pending' && statusLower !== 'pending_update'){ alert(isGuest ? 'Unable to cancel: only pending requests can be canceled' : 'Unable to cancel: only pending reservations can be canceled'); return; }
       if(!code){ alert('Missing reservation code'); return; }
       fetch('status.php',{
         method:'POST',

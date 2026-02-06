@@ -156,6 +156,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_visitor_details' && isset(
                                     r.payment_status AS r_payment_status, r.price AS r_price, r.downpayment AS r_downpayment,
                                     r.amenity AS r_amenity, r.start_date AS r_start_date, r.end_date AS r_end_date,
                                     r.start_time AS r_start_time, r.end_time AS r_end_time,
+                                    r.receipt_path AS r_receipt_path, r.receipt_attempts AS receipt_attempts,
                                     r.persons AS r_persons, r.ref_code AS r_ref_code
                              FROM guest_forms gf
                              LEFT JOIN users u ON gf.resident_user_id = u.id
@@ -243,7 +244,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     $id = intval($_GET['id']);
     $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
-                                    r.price, r.downpayment, r.payment_status, r.booking_for, r.booked_by_role, r.booked_by_name,
+                                    r.price, r.downpayment, r.payment_status, r.receipt_path, r.booking_for, r.booked_by_role, r.booked_by_name,
                                     u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
                                     gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
                                     gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
@@ -282,6 +283,23 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details' && is
     } else {
         echo json_encode(['success' => false, 'message' => 'Reservation details not found']);
     }
+    exit;
+}
+
+// Handle AJAX request to fetch reservation by ref_code
+if (isset($_GET['action']) && $_GET['action'] == 'get_reservation_details_by_ref' && isset($_GET['ref'])) {
+    header('Content-Type: application/json');
+    $ref = trim($_GET['ref']);
+    $stmt = $con->prepare("SELECT r.*, u.user_type, gf.id AS gf_id FROM reservations r LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code WHERE r.ref_code = ? ORDER BY r.id DESC LIMIT 1");
+    $stmt->bind_param('s', $ref);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res && ($row = $res->fetch_assoc())) {
+        echo json_encode(['success' => true, 'id' => $row['id'], 'details' => $row]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Reservation not found']);
+    }
+    $stmt->close();
     exit;
 }
 
@@ -337,8 +355,39 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     
     // Fetch system notifications (cancellations, etc.)
     $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 8");
-    if($notifs){ while($row=$notifs->fetch_assoc()){ 
-        $requests[] = ['id'=>$row['id'], 'type'=>'notification','label'=>'System','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+    if($notifs){ while($row=$notifs->fetch_assoc()){
+        $msg = (string)($row['message'] ?? '');
+        $ref = null;
+        if (preg_match('/(?:Reservation|Amenity request|Guest request)\\s+([A-Za-z0-9\\-]+)/i', $msg, $m)) {
+            $ref = $m[1];
+        }
+        // Rewrite "by user" to actual user type for reservation cancellations
+        if ($ref && stripos($msg, 'reservation') !== false && stripos($msg, 'cancelled') !== false) {
+            $who = 'resident';
+            $stmtW = $con->prepare("SELECT entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+            if ($stmtW) {
+                $stmtW->bind_param('s', $ref);
+                $stmtW->execute();
+                $resW = $stmtW->get_result();
+                if ($resW && ($rw = $resW->fetch_assoc())) {
+                    $eid = intval($rw['entry_pass_id'] ?? 0);
+                    if ($eid > 0) $who = 'visitor';
+                }
+                $stmtW->close();
+            }
+            $msg = "Reservation $ref cancelled by $who.";
+        }
+        $requests[] = [
+            'id'=>$row['id'],
+            'type'=>'notification',
+            'label'=>'System',
+            'source'=>'system',
+            'title'=>$msg,
+            'ref'=>$ref,
+            'amenity'=>null,
+            'time'=>$row['created_at'],
+            'epoch'=>intval($row['epoch'])
+        ];
     } }
 
     $items = array_merge($receipts, $requests);
@@ -668,8 +717,28 @@ function getRecentNotifications($con){
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
   $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 5");
-  if($notifs){ while($row=$notifs->fetch_assoc()){ 
-      $items[] = ['id'=>$row['id'], 'type'=>'notification','source'=>'system','title'=>$row['message'],'ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
+  if($notifs){ while($row=$notifs->fetch_assoc()){
+      $msg = (string)($row['message'] ?? '');
+      $ref = null;
+      if (preg_match('/(?:Reservation|Amenity request|Guest request)\\s+([A-Za-z0-9\\-]+)/i', $msg, $m)) {
+          $ref = $m[1];
+      }
+      if ($ref && stripos($msg, 'reservation') !== false && stripos($msg, 'cancelled') !== false) {
+          $who = 'resident';
+          $stmtW = $con->prepare("SELECT entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+          if ($stmtW) {
+              $stmtW->bind_param('s', $ref);
+              $stmtW->execute();
+              $resW = $stmtW->get_result();
+              if ($resW && ($rw = $resW->fetch_assoc())) {
+                  $eid = intval($rw['entry_pass_id'] ?? 0);
+                  if ($eid > 0) $who = 'visitor';
+              }
+              $stmtW->close();
+          }
+          $msg = "Reservation $ref cancelled by $who.";
+      }
+      $items[] = ['id'=>$row['id'], 'type'=>'notification','source'=>'system','title'=>$msg,'ref'=>$ref,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
   } }
   usort($items, function($a, $b){
     $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
@@ -3360,7 +3429,27 @@ body.modal-open { overflow: hidden; }
           }
           function pollNotifications(){ fetch('admin.php?action=get_notifications').then(function(r){ return r.json(); }).then(function(data){ renderNotif(data); }).catch(function(){}); }
           var lastSeenEpoch = 0;
-          function linkFor(it){ var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard'; if(type==='payment') base='?page=requests'; else if(type==='resident_guest') base='?page=resident_guest_forms'; else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests'); else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests'); else if(type==='incident') base='?page=report'; var ref=it.ref?String(it.ref):''; if(ref){ base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref); } return base; }
+          function linkFor(it){
+            var type=(it.type||'').toLowerCase(), src=(it.source||''), base='?page=dashboard';
+            if(type==='payment') base='?page=requests';
+            else if(type==='resident_guest') base='?page=resident_guest_forms';
+            else if(type==='amenity'||type==='approval') base=(src==='guest_form' ? '?page=resident_guest_forms' : '?page=requests');
+            else if(type==='request') base=(src==='resident'? '?page=requests' : '?page=visitor_requests');
+            else if(type==='incident') base='?page=report';
+            else if(type==='notification'){
+              var msg=String(it.title||'').toLowerCase();
+              base = (msg.indexOf('cancel')!==-1 ? '?page=history' : '?page=dashboard');
+            }
+            var ref = it.ref ? String(it.ref) : '';
+            if(!ref && type==='notification'){
+              var m = String(it.title||'').match(/(?:Reservation|Amenity request|Guest request)\s+([A-Za-z0-9\-]+)/i);
+              if(m){ ref = m[1]; }
+            }
+            if(ref){
+              base += (base.indexOf('?')>=0 ? '&' : '?') + 'ref=' + encodeURIComponent(ref);
+            }
+            return base;
+          }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'><i class='fa-solid fa-eye'></i> Open</a><button class='btn btn-remove'><i class='fa-solid fa-xmark'></i> Dismiss</button></div></div>";
@@ -3440,11 +3529,7 @@ body.modal-open { overflow: hidden; }
 <section class="panel" id="dashboard-panel">
   <h3>Community Overview</h3>
   <div class="dashboard-grid">
-    <a class="dashboard-widget" href="?page=residents" aria-label="View Residents">
-      <div class="dashboard-widget-value"><?php echo getResidentCount($con); ?></div>
-      <div class="dashboard-widget-label">Residents</div>
-    </a>
-    <a class="dashboard-widget" href="?page=resident_guest_forms" aria-label="View Pending Resident Guest Requests">
+    <a class="dashboard-widget" href="?page=requests" aria-label="View Pending Resident Requests">
       <div class="dashboard-widget-value"><?php echo getPendingResidentRequestsCountNew($con); ?></div>
       <div class="dashboard-widget-label">Pending Residents Request</div>
     </a>
@@ -5149,6 +5234,16 @@ function showReservationDetails(reservationId, expectedType){
           <div class="info-row price-balance"><span class="info-label">Onsite Payment (Remaining)</span><span class="info-value">₱${rem.toLocaleString()}</span></div>
         </div>`; 
       })() : '';
+      const receiptPath = (d.receipt_path||'').toString().trim();
+      const payStatus = (d.payment_status||'').toString().toLowerCase();
+      const isPdf = /\.pdf$/i.test(receiptPath);
+      const receiptHtml = (receiptPath && payStatus==='verified') ? (
+        `<div class="details-section" style="animation: fadeIn 0.5s ease;">
+          <h4>Proof of Payment</h4>
+          ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
+          <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
+        </div>`
+      ) : '';
       const content = `
         <div class="request-details">
           <div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>
@@ -5178,6 +5273,7 @@ function showReservationDetails(reservationId, expectedType){
             ${d.persons?`<div class="info-row"><span class="info-label">Persons</span><span class="info-value">${d.persons}</span></div>`:''}
             ${priceBlock}
           </div>
+          ${receiptHtml}
           <div class="section-title">Request Status</div>
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
@@ -5275,6 +5371,15 @@ function showResidentReservationDetails(rrId){
           <div class="info-row price-balance"><span class="info-label">Onsite Payment (Remaining)</span><span class="info-value">₱${rem.toLocaleString()}</span></div>
         </div>`; 
       })() : '';
+      const receiptPath = (d.receipt_path||'').toString().trim();
+      const isPdf = /\.pdf$/i.test(receiptPath);
+      const receiptHtml = (receiptPath && ps==='verified') ? (
+        `<div class="details-section" style="animation: fadeIn 0.5s ease;">
+          <h4>Proof of Payment</h4>
+          ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
+          <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
+        </div>`
+      ) : '';
       const content = `
           <div class="request-details">
             <div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>
@@ -5305,6 +5410,7 @@ function showResidentReservationDetails(rrId){
               ${priceBlock}
               <div class="info-row"><span class="info-label">Downpayment</span><span class="info-value"><span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></span></div>
             </div>
+            ${receiptHtml}
             <div class="section-title">Request Status</div>
             <div class="info-grid">
               <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
@@ -5321,6 +5427,28 @@ function showResidentReservationDetails(rrId){
     });
 }
 
+function showReservationDetailsByRef(ref){
+  fetch('admin.php?action=get_reservation_details_by_ref&ref=' + encodeURIComponent(ref))
+    .then(r => r.json())
+    .then(data => {
+      if(!data.success) return;
+      var id = parseInt(data.id, 10);
+      var d = data.details || {};
+      var isResidentGuest = !!d.gf_id;
+      var utype = (d.user_type||'').toString().toLowerCase();
+      if(isResidentGuest){ showResidentReservationDetails(id); }
+      else { showReservationDetails(id, utype==='visitor'?'visitor':'resident'); }
+    })
+    .catch(function(){});
+}
+
+window.addEventListener('DOMContentLoaded', function(){
+  try {
+    var u = new URL(window.location.href);
+    var ref = u.searchParams.get('ref');
+    if(ref){ showReservationDetailsByRef(ref); }
+  } catch(e) {}
+});
 function closeResidentReservationModal(){
   var m = document.getElementById('residentReservationModal');
   if(m){ m.style.display = 'none'; }

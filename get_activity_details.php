@@ -629,18 +629,21 @@ if (!$data) {
       $attempts = isset($data['receipt_attempts']) ? intval($data['receipt_attempts']) : 0;
       $receipt = trim($data['receipt_path'] ?? '');
       $denial = trim($data['denial_reason'] ?? '');
-      $showPayment = ($pstat !== '' || $receipt !== '');
+      $overall = strtolower(trim($data['status'] ?? ''));
+      $overallCancelled = (strpos($overall, 'cancel') !== false);
+      $showPayment = ($pstat !== '' || $receipt !== '' || $overallCancelled);
       if ($showPayment):
     ?>
     <div class="section-title">Payment</div>
     <div class="info-grid">
-      <?php if($pstat !== ''): ?>
+      <?php if($pstat !== '' || $overallCancelled): ?>
       <div class="info-row pay-status">
         <span class="info-label">Payment Status</span>
         <?php 
-          $overallDenied = (strpos(strtolower($data['status']), 'denied') !== false);
+          $overallDenied = (strpos($overall, 'denied') !== false);
           $cls = 'pay-badge pay-pending'; $lbl='Pending';
-          if($overallDenied){ $cls='pay-badge pay-rejected'; $lbl='Denied'; }
+          if($overallCancelled){ $cls='pay-badge pay-rejected'; $lbl='Cancelled'; }
+          else if($overallDenied){ $cls='pay-badge pay-rejected'; $lbl='Denied'; }
           else if($pstat === 'verified'){ $cls='pay-badge pay-verified'; $lbl='Verified'; }
           else if($pstat === 'rejected'){ $cls='pay-badge pay-rejected'; $lbl='Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
           else if($pstat === 'pending_update'){ $cls='pay-badge pay-pending'; $lbl='Pending Update'; }

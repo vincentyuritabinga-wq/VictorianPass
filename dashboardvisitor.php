@@ -370,6 +370,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   .account-blocked-content .btn-logout-only:hover { filter: brightness(0.95); }
 </style>
 <style>.note-error{color:#b91c1c;font-weight:700;}</style>
+<style>
+.item-extra-link.item-extra-cancel{background:#c0392b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
+.item-extra-link.item-extra-cancel:hover{filter:brightness(0.95)}
+.cancel-modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:nowrap}
+.cancel-modal-actions .cancel-modal-keep,.cancel-modal-actions .cancel-modal-confirm{padding:10px 16px;min-width:180px;border-radius:8px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:0}
+.cancel-modal-actions .cancel-modal-keep{background:#eef2f0;color:#23412e}
+.cancel-modal-actions .cancel-modal-confirm{background:#c0392b;color:#fff}
+.cancel-modal-content{width:520px;max-width:92vw}
+.cancel-modal-note{color:#b91c1c;font-weight:700}
+.item-extra-link.update-proof-btn{background:#f59e0b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
+.item-extra-link.update-proof-btn:hover{filter:brightness(0.95)}
+</style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
 <?php if ($flashNotice !== '') { ?>
@@ -419,7 +431,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <header class="top-header">
       <div class="header-brand">
         <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
-        <img src="images/logo.svg" alt="Logo">
+        <a href="mainpage.php" aria-label="Go to Main Page"><img src="images/logo.svg" alt="Logo"></a>
         <div class="brand-text">
           <span class="brand-main">VictorianPass</span>
           <span class="brand-sub">Victorian Heights Subdivision</span>
@@ -482,7 +494,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     if ($displayTitle === '') { $displayTitle = 'Amenity'; }
                     $amenityName = $displayTitle;
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
-                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                    $displayTitle = 'Reservation – ' . $amenityName;
                   }
                   $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
@@ -561,7 +573,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     if ($displayTitle === '') { $displayTitle = 'Amenity'; }
                     $amenityName = $displayTitle;
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
-                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                    $displayTitle = 'Reservation – ' . $amenityName;
                   }
                   $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
@@ -1122,6 +1134,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           }
         }
 
+        function esc(t){
+          return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
         function moveHistoryItems(items){
           var historyList=document.getElementById('list-history');
           var activeList=document.getElementById('list-active');
@@ -1135,7 +1150,73 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
             if(existing) return;
             var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
-            if(!li) return;
+            if(!li){
+              var s=(String(item.status||'').toLowerCase());
+              var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
+              if(s.indexOf('moved_to_history')!==-1) statusText='Denied';
+              var statusCls=(function(){
+                if(s.indexOf('approv')!==-1 || s.indexOf('resolved')!==-1 || s.indexOf('ongoing')!==-1) return 'status-completed';
+                if(s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('moved_to_history')!==-1) return 'status-denied';
+                if(s.indexOf('cancel')!==-1) return 'status-cancelled';
+                if(s.indexOf('expired')!==-1) return 'status-denied';
+                return 'status-pending';
+              })();
+              var isReservation=(String(item.type||'').toLowerCase()==='reservation');
+              var displayTitle=String(item.title||'');
+              if(isReservation){
+                var rawTitle=displayTitle;
+                var prefix='Reservation Schedule - ';
+                if(rawTitle.toLowerCase().indexOf(prefix.toLowerCase())===0){
+                  var rest=rawTitle.slice(prefix.length);
+                  var parts=rest.split(' - ');
+                  displayTitle=(parts[0]||'').trim();
+                }
+                if(displayTitle==='') displayTitle='Amenity';
+                var amenityName=displayTitle;
+                if(amenityName.toLowerCase()==='pool') amenityName='Community Pool';
+                displayTitle='Reservation – '+amenityName;
+              }
+              var detailsText=String(item.details||'');
+              var reasonText='';
+              var scheduleText=detailsText;
+              if(isReservation && detailsText.indexOf('Reason:')!==-1){
+                reasonText=detailsText.slice(detailsText.indexOf('Reason:')).trim();
+                scheduleText=detailsText.slice(0, detailsText.indexOf('Reason:')).trim();
+              }
+              var createdText='';
+              try{ createdText = item.date ? (new Date(item.date)).toLocaleString('en-US',{hour12:false}).replace(/\//g,'.') : ''; }catch(e){}
+              li=document.createElement('div');
+              li.className='list-item';
+              li.setAttribute('data-ref-code',code);
+              li.setAttribute('data-status', item.status || 'cancelled');
+              li.setAttribute('data-type', item.type || 'reservation');
+              if(item.payment_status!==undefined){ li.setAttribute('data-payment-status', item.payment_status || ''); }
+              li.setAttribute('data-schedule', scheduleText);
+              li.setAttribute('data-reason', reasonText);
+              if(item.attempts!==undefined){ li.setAttribute('data-attempts', String(item.attempts || 0)); }
+              li.innerHTML='<div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>'
+                +'<div class="item-content">'
+                +  '<div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">'
+                +    '<div class="item-left">'
+                +      '<span class="status-badge '+statusCls+'">'+statusText+'</span>'
+                +      (isReservation?('<span class="item-amenity">'+esc(displayTitle)+'</span>'):('<span class="item-title">'+esc(displayTitle)+'</span>'))
+                +      (isReservation?('<span class="item-details" style="display:none;"></span>'):('<span class="item-details">- '+esc(String(item.details||''))+'</span>'))
+                +    '</div>'
+                +    '<div class="item-created">'+esc(createdText)+'</div>'
+                +  '</div>'
+                +  '<div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref"><span>'+esc(code)+'</span></div>'
+                +  '<div class="item-extra" data-loaded="0"></div>'
+                +'</div>';
+              li.addEventListener('click',function(e){
+                if(e.target.closest('a') || e.target.closest('button')) return;
+                li.classList.toggle('expanded');
+                var extra=li.querySelector('.item-extra');
+                if(extra && extra.getAttribute('data-loaded')!=='1' && li.classList.contains('expanded')){
+                  buildExtraContent(li,extra);
+                  extra.setAttribute('data-loaded','1');
+                }
+              });
+            }
             li.setAttribute('data-status', item.status || 'cancelled');
             if(item.payment_status !== undefined){
               li.setAttribute('data-payment-status', item.payment_status || '');
@@ -1329,6 +1410,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
       // Success - Update UI without alert
       li.setAttribute('data-status','cancelled');
+      li.setAttribute('data-payment-status','cancelled');
       if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='cancelled';
 
       // Update Title immediately
@@ -1391,6 +1473,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
           navItems.forEach(function(n){ n.classList.remove('active'); });
           historyTab.classList.add('active');
           
+          var sections = document.querySelectorAll('.panel-section');
+          sections.forEach(function(s){ s.style.display = 'none'; });
+          document.getElementById('panel-history').style.display = 'block';
+        } else {
           var sections = document.querySelectorAll('.panel-section');
           sections.forEach(function(s){ s.style.display = 'none'; });
           document.getElementById('panel-history').style.display = 'block';
@@ -1772,11 +1858,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(refSpan){ summaryParts.push('Code: '+refSpan.textContent.trim()); }
     var summaryText=summaryParts.join(' • ');
 
-    var canCancel=(s.indexOf('pending')!==-1||s===''||s==='new');
+    var canCancel=(s.indexOf('pending')!==-1||s.indexOf('pending_update')!==-1||s===''||s==='new'||paymentStatus==='pending_update');
     var isHistoryPanel=!!li.closest('#panel-history');
     var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
-    var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
+    var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
@@ -1841,6 +1927,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     }
     if(ref){
         html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
+    }
+    if(canCancel && ref){
+        html+='<button type="button" class="item-extra-link item-extra-cancel">'+(type==='guest_form'?'Cancel Request':'Cancel Reservation')+'</button>';
     }
     html+='</div>';
     html+='</div></div></div>';

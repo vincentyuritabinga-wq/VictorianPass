@@ -73,9 +73,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtG->close();
             if ($resG && $resG->num_rows > 0) {
                 $row = $resG->fetch_assoc();
-                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
-                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
-                    exit;
+                $gfStatusLower = strtolower(trim($row['approval_status'] ?? 'pending'));
+                if ($gfStatusLower !== 'pending') {
+                    // Allow cancel if linked reservation is in pending_update
+                    $stmtChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtChk->bind_param('s', $code);
+                    $stmtChk->execute();
+                    $resChk = $stmtChk->get_result();
+                    $stmtChk->close();
+                    $allow = false;
+                    if ($resChk && $resChk->num_rows > 0) {
+                        $r = $resChk->fetch_assoc();
+                        $allow = (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
+                    }
+                    if (!$allow) {
+                        echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
+                        exit;
+                    }
                 }
                 // Notify admin
                 try {
@@ -98,30 +112,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
             // Try reservations by ref_code
-            $stmtR = $con->prepare("SELECT id, approval_status, user_id, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR = $con->prepare("SELECT id, approval_status, status, payment_status, user_id, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
             $stmtR->bind_param('s', $code);
             $stmtR->execute();
             $resR = $stmtR->get_result();
             $stmtR->close();
             if ($resR && $resR->num_rows > 0) {
                 $row = $resR->fetch_assoc();
-                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
-                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
+                $approvalLower = strtolower(trim($row['approval_status'] ?? 'pending'));
+                $statusLower = strtolower(trim($row['status'] ?? ''));
+                $payLower = strtolower(trim($row['payment_status'] ?? ''));
+                $canCancel = ($approvalLower === 'pending') || ($statusLower === 'pending_update') || ($payLower === 'pending_update');
+                if (!$canCancel) {
+                    echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
                     exit;
                 }
-                // Notify admin
                 try {
                     $uid = isset($row['user_id']) ? intval($row['user_id']) : null;
                     $eid = isset($row['entry_pass_id']) ? intval($row['entry_pass_id']) : null;
-                    $msg = "Reservation $code cancelled by user.";
-                    
-                    // User notification removed as per requirement
-                    // $stmtN = $con->prepare("INSERT INTO notifications (user_id, entry_pass_id, title, message, type, created_at) VALUES (?, ?, 'Request Cancelled', ?, 'warning', NOW())");
-                    // $stmtN->bind_param('iis', $uid, $eid, $msg);
-                    // $stmtN->execute();
-                    // $stmtN->close();
-
-                    // Admin notification
+                    $msg = "Reservation $code cancelled by " . (($eid && $eid > 0) ? "visitor" : "resident") . ".";
                     $stmtA = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, 'Request Cancelled', ?, 'warning', NOW())");
                     $stmtA->bind_param('s', $msg);
                     $stmtA->execute();
@@ -143,9 +152,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtRR->close();
             if ($resRR && $resRR->num_rows > 0) {
                 $row = $resRR->fetch_assoc();
-                if (strtolower(trim($row['approval_status'] ?? 'pending')) !== 'pending') {
-                    echo json_encode(['success' => false, 'message' => 'Only pending reservations can be cancelled.']);
-                    exit;
+                $resStatusLower = strtolower(trim($row['approval_status'] ?? 'pending'));
+                if ($resStatusLower !== 'pending') {
+                    // Check linked reservations payment_status
+                    $stmtChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtChk->bind_param('s', $code);
+                    $stmtChk->execute();
+                    $resChk = $stmtChk->get_result();
+                    $stmtChk->close();
+                    $allow = false;
+                    if ($resChk && $resChk->num_rows > 0) {
+                        $r = $resChk->fetch_assoc();
+                        $allow = (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
+                    }
+                    if (!$allow) {
+                        echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
+                        exit;
+                    }
                 }
                 // Notify admin
                 try {

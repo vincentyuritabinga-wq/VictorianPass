@@ -708,6 +708,18 @@ body.account-blocked { overflow: hidden; }
 .note-error{color:#b91c1c;font-weight:700;}
 .notif-error { color:#b91c1c; font-weight:700; }
 </style>
+<style>
+.item-extra-link.item-extra-cancel{background:#c0392b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
+.item-extra-link.item-extra-cancel:hover{filter:brightness(0.95)}
+.cancel-modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:nowrap}
+.cancel-modal-actions .cancel-modal-keep,.cancel-modal-actions .cancel-modal-confirm{padding:10px 16px;min-width:180px;border-radius:8px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:0}
+.cancel-modal-actions .cancel-modal-keep{background:#eef2f0;color:#23412e}
+.cancel-modal-actions .cancel-modal-confirm{background:#c0392b;color:#fff}
+.cancel-modal-content{width:520px;max-width:92vw}
+.cancel-modal-note{color:#b91c1c;font-weight:700}
+.item-extra-link.update-proof-btn{background:#f59e0b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
+.item-extra-link.update-proof-btn:hover{filter:brightness(0.95)}
+</style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
 <?php if ($flashNotice !== '') { ?>
@@ -839,7 +851,7 @@ body.account-blocked { overflow: hidden; }
     <header class="top-header">
       <div class="header-brand">
         <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
-        <img src="images/logo.svg" alt="Logo">
+        <a href="mainpage.php" aria-label="Go to Main Page"><img src="images/logo.svg" alt="Logo"></a>
         <div class="brand-text">
           <span class="brand-main">VictorianPass</span>
           <span class="brand-sub">Victorian Heights Subdivision</span>
@@ -900,7 +912,7 @@ body.account-blocked { overflow: hidden; }
                     if ($displayTitle === '') { $displayTitle = 'Amenity'; }
                     $amenityName = $displayTitle;
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
-                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                    $displayTitle = 'Reservation – ' . $amenityName;
                   }
                   $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
@@ -983,7 +995,7 @@ body.account-blocked { overflow: hidden; }
                     if ($displayTitle === '') { $displayTitle = 'Amenity'; }
                     $amenityName = $displayTitle;
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
-                    $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
+                    $displayTitle = 'Reservation – ' . $amenityName;
                   }
                   $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
@@ -1555,6 +1567,7 @@ body.account-blocked { overflow: hidden; }
         return;
       }
       li.setAttribute('data-status','cancelled');
+      li.setAttribute('data-payment-status','cancelled');
       prevStatuses[ref]='cancelled';
 
       // Move to History Panel
@@ -1596,6 +1609,10 @@ body.account-blocked { overflow: hidden; }
             navItems.forEach(function(n){ n.classList.remove('active'); });
             historyNav.classList.add('active');
             
+            var sections = document.querySelectorAll('.right-panel .panel-section');
+            sections.forEach(function(s){ s.style.display = 'none'; });
+            historyPanel.style.display = 'block';
+          } else {
             var sections = document.querySelectorAll('.right-panel .panel-section');
             sections.forEach(function(s){ s.style.display = 'none'; });
             historyPanel.style.display = 'block';
@@ -1886,11 +1903,11 @@ body.account-blocked { overflow: hidden; }
     if(refSpan){ summaryParts.push('Code: '+refSpan.textContent.trim()); }
     if(reservedBy && type==='reservation'){ summaryParts.push('Reserved by: '+reservedBy); }
     var summaryText=summaryParts.join(' • ');
-    var canCancel=(type==='reservation'||type==='guest_form')&&(s.indexOf('pending')!==-1||s===''||s==='new');
+    var canCancel=(type==='reservation'||type==='guest_form')&&((s.indexOf('pending')!==-1||s.indexOf('pending_update')!==-1||s===''||s==='new')||paymentStatus==='pending_update');
     var isHistoryPanel=!!li.closest('#panel-history');
     var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
-    var canUpdateProof=(type==='reservation' && paymentStatus==='rejected');
+    var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
@@ -1954,6 +1971,9 @@ body.account-blocked { overflow: hidden; }
       }
       if(ref){
         html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
+      }
+      if(canCancel && ref){
+        html+='<button type="button" class="item-extra-link item-extra-cancel">'+(type==='guest_form'?'Cancel Request':'Cancel Reservation')+'</button>';
       }
       html+='</div>';
       html+='</div></div></div>';
@@ -2791,6 +2811,9 @@ body.account-blocked { overflow: hidden; }
             });
         }
         
+        function esc(t){
+          return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
         function moveHistoryItems(items){
           var activePanel = document.getElementById('panel-requests');
           var historyPanel = document.getElementById('panel-history');
@@ -2807,7 +2830,54 @@ body.account-blocked { overflow: hidden; }
             var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
             if(existing) return;
             var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
-            if(!li) return;
+            if(!li){
+              var s=(String(item.status||'').toLowerCase());
+              var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
+              var statusCls=statusClassFor(s||'cancelled');
+              var isReservation=(String(item.type||'').toLowerCase()==='reservation');
+              var displayTitle=String(item.title||'');
+              if(isReservation){
+                var prefix='Reservation Schedule - ';
+                if(displayTitle.toLowerCase().indexOf(prefix.toLowerCase())===0){
+                  var rest=displayTitle.slice(prefix.length);
+                  var parts=rest.split(' - ');
+                  displayTitle=parts[0]?parts[0].trim():'Amenity';
+                }
+                var amenityName=displayTitle||'Amenity';
+                if(amenityName.toLowerCase()==='pool') amenityName='Community Pool';
+                displayTitle='Reservation – '+amenityName;
+              }
+              var createdText=String(item.date||'');
+              li=document.createElement('div');
+              li.className='list-item';
+              li.setAttribute('data-ref-code',code);
+              li.setAttribute('data-status',item.status||'cancelled');
+              li.setAttribute('data-type',item.type||'reservation');
+              if(item.payment_status!==undefined){ li.setAttribute('data-payment-status', item.payment_status||''); }
+              var reservedBy=item.reserved_by||'';
+              if(reservedBy){ li.setAttribute('data-reserved-by', reservedBy); }
+              li.innerHTML='<div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>'
+                +'<div class="item-content">'
+                +  '<div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">'
+                +    '<div class="item-left">'
+                +      '<span class="status-badge '+statusCls+'">'+statusText+'</span>'
+                +      (isReservation?('<span class="item-amenity">'+esc(displayTitle)+'</span>'):('<span class="item-title">'+esc(displayTitle)+'</span>'))
+                +    '</div>'
+                +    '<div class="item-created">'+esc(createdText)+'</div>'
+                +  '</div>'
+                +  (isReservation && reservedBy ? ('<div style="font-size:0.8rem; color:#6b7280; margin-left: 48px;" class="item-reserved-by">Reserved by: '+esc(reservedBy)+'</div>') : '')
+                +  '<div class="item-extra" data-loaded="0"></div>'
+                +'</div>';
+              li.addEventListener('click',function(e){
+                if(e.target.closest('a') || e.target.closest('button')) return;
+                li.classList.toggle('expanded');
+                var extra=li.querySelector('.item-extra');
+                if(extra && extra.getAttribute('data-loaded')!=='1' && li.classList.contains('expanded')){
+                  buildExtraContent(li,extra);
+                  extra.setAttribute('data-loaded','1');
+                }
+              });
+            }
             li.setAttribute('data-status', item.status || 'cancelled');
             var reservedBy = item.reserved_by || '';
             li.setAttribute('data-reserved-by', reservedBy);
@@ -2822,6 +2892,10 @@ body.account-blocked { overflow: hidden; }
                 reservedEl.style.cssText = 'font-size:0.8rem; color:#6b7280; margin-left: 48px;';
                 var refWrap = li.querySelector('.item-ref');
                 if(refWrap && refWrap.parentNode) refWrap.parentNode.insertBefore(reservedEl, refWrap.nextSibling);
+                else {
+                  var contentEl = li.querySelector('.item-content');
+                  if(contentEl) contentEl.appendChild(reservedEl);
+                }
               }
               reservedEl.textContent = 'Reserved by: ' + reservedBy;
               reservedEl.style.display = '';
