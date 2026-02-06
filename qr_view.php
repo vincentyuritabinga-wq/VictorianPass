@@ -153,9 +153,9 @@ if (empty($error)) {
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
-                $timeRange = date('h:i A', strtotime($startTime)) . ' - ' . date('h:i A', strtotime($endTime));
+                $timeRange = date('g:i A', strtotime($startTime)) . ' - ' . date('g:i A', strtotime($endTime));
             } elseif (!empty($startTime)) {
-                $timeRange = date('h:i A', strtotime($startTime));
+                $timeRange = date('g:i A', strtotime($startTime));
             }
 
             $data = [
@@ -228,9 +228,9 @@ if (empty($error)) {
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
-                $timeRange = date('h:i A', strtotime($startTime)) . ' - ' . date('h:i A', strtotime($endTime));
+                $timeRange = date('g:i A', strtotime($startTime)) . ' - ' . date('g:i A', strtotime($endTime));
             } elseif (!empty($startTime)) {
-                $timeRange = date('h:i A', strtotime($startTime));
+                $timeRange = date('g:i A', strtotime($startTime));
             }
 
             $data = [

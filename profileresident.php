@@ -257,7 +257,7 @@ if ($stmt) {
         $start = $row['start_date'];
         $sTime = strtotime($row['start_time'] ?? '');
         $eTime = strtotime($row['end_time'] ?? '');
-        $timeStr = ($sTime ? date('h:i A', $sTime) : '') . ' - ' . ($eTime ? date('h:i A', $eTime) : '');
+        $timeStr = ($sTime ? date('g:i A', $sTime) : '') . ' - ' . ($eTime ? date('g:i A', $eTime) : '');
         $statusVal = $row['approval_status'] ?? '';
         if ($statusVal === '' || $statusVal === null) {
             $statusVal = $row['status'] ?? 'pending';
@@ -349,7 +349,7 @@ if ($stmt) {
         $eTime = strtotime($row['end_time'] ?? '');
         $timeStr = '';
         if ($sTime || $eTime) {
-            $timeStr = trim(($sTime ? date('h:i A', $sTime) : '') . ($eTime ? ' - ' . date('h:i A', $eTime) : ''));
+            $timeStr = trim(($sTime ? date('g:i A', $sTime) : '') . ($eTime ? ' - ' . date('g:i A', $eTime) : ''));
         }
         $details = trim($dateText . ($timeStr ? ' ' . $timeStr : ''));
         $statusVal = $row['approval_status'] ?? 'pending';
@@ -902,7 +902,7 @@ body.account-blocked { overflow: hidden; }
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
                     $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
                   }
-                  $createdText = date('m.d.y h:i A', strtotime($act['date']));
+                  $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -985,7 +985,7 @@ body.account-blocked { overflow: hidden; }
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
                     $displayTitle = 'Reservation Amenity Request - ' . $amenityName;
                   }
-                  $createdText = date('m.d.y h:i A', strtotime($act['date']));
+                  $createdText = date('m.d.y H:i', strtotime($act['date']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -2074,6 +2074,42 @@ body.account-blocked { overflow: hidden; }
     if(before) return before+' <span class="notif-reason">'+reason+'</span>';
     return '<span class="notif-reason">'+reason+'</span>';
   }
+  function extractNotifCode(message){
+    var m=String(message||'').match(/Code:\s*([A-Z0-9\-]+)/i);
+    return m && m[1] ? m[1].toUpperCase() : '';
+  }
+  function notifDedupeKey(n){
+    var title=String(n.title||'').trim().toLowerCase();
+    var type=String(n.type||'').trim().toLowerCase();
+    var code=extractNotifCode(n.message||'');
+    var key=title+'|'+type+'|'+code;
+    if(key==='||'){ key=title+'|'+type+'|'+String(n.message||'').slice(0,64).toLowerCase(); }
+    return key;
+  }
+  function notifTimeValue(it){
+    var v=it.created_at||it.time||'';
+    var d=new Date(v);
+    if(isNaN(d.getTime())) return 0;
+    return d.getTime();
+  }
+  function dedupeNotifications(list){
+    var map={};
+    for(var i=0;i<list.length;i++){
+      var n=list[i]||{};
+      var k=notifDedupeKey(n);
+      if(!k) continue;
+      if(!map[k]){ map[k]=n; }
+      else{
+        var a=notifTimeValue(map[k]);
+        var b=notifTimeValue(n);
+        if(b>a){ map[k]=n; }
+      }
+    }
+    var out=[];
+    Object.keys(map).forEach(function(k){ out.push(map[k]); });
+    out.sort(function(a,b){ return notifTimeValue(b)-notifTimeValue(a); });
+    return out;
+  }
   function renderNotifPanel(){
     if(!notifPanel) return;
     var header='<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">&times;</button></div>';
@@ -2851,10 +2887,10 @@ body.account-blocked { overflow: hidden; }
             if(idStr) notifKnownIds[idStr]=true;
           });
           notifBootstrapped=true;
-          notifItems = incoming;
+          notifItems = dedupeNotifications(incoming);
           renderNotifPanel();
           if(newOnes.length){
-            renderNotifPopup(newOnes.slice(0,3));
+            renderNotifPopup(dedupeNotifications(newOnes).slice(0,3));
           }
         }
         if(notifCountEl){

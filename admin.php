@@ -807,7 +807,7 @@ function renderVerifyReceiptsCard($con){
         </thead>
         <tbody>
           <?php
-            $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id, r.receipt_attempts,
+            $resList = $con->query("SELECT r.id, r.ref_code, r.amenity, r.start_date, r.end_date, r.payment_status, r.receipt_path, r.entry_pass_id, r.receipt_attempts, r.denial_reason,
                                            r.price, r.downpayment, r.created_at, r.receipt_uploaded_at,
                                            ep.full_name, ep.middle_name, ep.last_name,
                                            u.first_name AS res_first_name, u.last_name AS res_last_name, u.user_type,
@@ -883,14 +883,30 @@ function renderVerifyReceiptsCard($con){
                     echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
                     echo "<input type='hidden' name='reservation_id' value='" . intval($row['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_request'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                    $existingReason = trim((string)($row['denial_reason'] ?? ''));
+                    $readonlyAttr = ($ps === 'pending_update') ? " readonly" : "";
+                    $valueAttr = ($ps === 'pending_update' ? " value='" . htmlspecialchars($existingReason, ENT_QUOTES) . "'" : "");
+                    echo "<span class='reason-input-wrap'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                    if ($ps === 'pending_update') {
+                      echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                    }
+                    echo "</span>";
                     echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                     echo "</form>";
                   } else {
                     echo '<form method="post" onsubmit="return openDenyModal(this)">';
                     echo '<input type="hidden" name="reservation_id" value="' . intval($row['id']) . '">';
                     echo '<input type="hidden" name="action" value="reject_receipt">';
-                    echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255">';
+                    $existingReason = trim((string)($row['denial_reason'] ?? ''));
+                    $readonlyAttr = ($ps === 'pending_update') ? " readonly" : "";
+                    $valueAttr = ($ps === 'pending_update' ? " value=\'' . htmlspecialchars($existingReason, ENT_QUOTES) . '\'" : "");
+                    echo '<span class="reason-input-wrap">';
+                    echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255"' . $readonlyAttr . $valueAttr . '>';
+                    if ($ps === 'pending_update') {
+                      echo '<button type="button" class="edit-reason-btn" onclick="window.toggleReasonEdit(this)"><i class="fa-solid fa-pencil"></i></button>';
+                    }
+                    echo '</span>';
                     echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))"><i class="fa-solid fa-xmark"></i> Reject</button>';
                     echo '</form>';
                   }
@@ -3679,10 +3695,10 @@ body.modal-open { overflow: hidden; }
 
                   $payStatus = null; $resIdMatch = null; $receiptPath = null; $isAmenity = !empty($req['amenity']);
                   if (!empty($req['ref_code'])) {
-                    $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path, receipt_attempts FROM reservations WHERE ref_code = ? LIMIT 1");
+                    $stmtPay2 = $con->prepare("SELECT id, payment_status, receipt_path, receipt_attempts, denial_reason FROM reservations WHERE ref_code = ? LIMIT 1");
                     $stmtPay2->bind_param('s', $req['ref_code']);
                     $stmtPay2->execute(); $rp2 = $stmtPay2->get_result();
-                    if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; $receiptAttempts = intval($pr2['receipt_attempts'] ?? 0); }
+                    if($rp2 && ($pr2=$rp2->fetch_assoc())){ $payStatus = $pr2['payment_status'] ?? null; $resIdMatch = intval($pr2['id'] ?? 0); $receiptPath = $pr2['receipt_path'] ?? null; $receiptAttempts = intval($pr2['receipt_attempts'] ?? 0); $denialReasonVal = trim((string)($pr2['denial_reason'] ?? '')); }
                     $stmtPay2->close();
                   }
                   echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\"><i class='fa-solid fa-eye'></i> View More Details</button>";
@@ -3704,7 +3720,14 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                         echo "<input type='hidden' name='action' value='deny_request'>";
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                        $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                        $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
+                        echo "<span class='reason-input-wrap'>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                        if ($payStatusLower === 'pending_update') {
+                          echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                        }
+                        echo "</span>";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                         echo "</form>";
                       } else {
@@ -3712,7 +3735,14 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                         echo "<input type='hidden' name='action' value='reject_receipt'>";
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                        $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                        $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
+                        echo "<span class='reason-input-wrap'>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                        if ($payStatusLower === 'pending_update') {
+                          echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                        }
+                        echo "</span>";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                         echo "</form>";
                       }
@@ -4127,6 +4157,12 @@ function openPriceDetails(totalStr, downStr){
 function closePriceDetailsModal(){ var m=document.getElementById('priceDetailsModal'); if(m){ m.style.display='none'; } }
 window.addEventListener('click', function(e){ var m=document.getElementById('priceDetailsModal'); if(e.target===m){ m.style.display='none'; } });
 </script>
+<style>
+.reason-input-wrap{position:relative;display:block;vertical-align:middle;margin:6px 0}
+.reason-input-wrap .denial-reason{display:block;width:100%;box-sizing:border-box;padding:12px 44px 12px 14px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.95rem}
+.reason-input-wrap .edit-reason-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#23412e;cursor:pointer;padding:4px;width:32px;height:32px;border-radius:6px}
+.reason-input-wrap .edit-reason-btn:hover{background:#f0f3f1}
+</style>
 
 <!-- Receipt Image Modal -->
 <div id="receiptModal" class="modal">
@@ -4286,6 +4322,19 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     openModal(form, !!reasonInput);
     return false;
   };
+  window.toggleReasonEdit = function(btn){
+    var input = btn && btn.previousElementSibling;
+    if(!input) return;
+    var isReadonly = input.hasAttribute('readonly');
+    if(isReadonly){
+      input.removeAttribute('readonly');
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> Save';
+      input.focus();
+    }else{
+      input.setAttribute('readonly','readonly');
+      btn.innerHTML = '<i class="fa-solid fa-pencil"></i> Edit';
+    }
+  };
 })();
 </script>
 
@@ -4377,7 +4426,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
-                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                  $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                  $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                  echo "<span class='reason-input-wrap'>";
+                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                  if ($payStatusLower === 'pending_update') {
+                    echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                  }
+                  echo "</span>";
                   echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                   echo "</form>";
                 } else if ($payStatusLower !== 'rejected') {
@@ -4397,7 +4453,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                      $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                      echo "<span class='reason-input-wrap'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      if ($payStatusLower === 'pending_update') {
+                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                      }
+                      echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                       echo "</form>";
                     } else {
@@ -4405,7 +4468,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                      $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                      echo "<span class='reason-input-wrap'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      if ($payStatusLower === 'pending_update') {
+                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                      }
+                      echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
                     }
@@ -4589,7 +4659,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_request'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                    $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                    $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                    echo "<span class='reason-input-wrap'>";
+                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                    if ($payStatusLower === 'pending_update') {
+                      echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                    }
+                    echo "</span>";
                     echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                     echo "</form>";
                   }
@@ -4612,7 +4689,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                      $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                      echo "<span class='reason-input-wrap'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      if ($payStatusLower === 'pending_update') {
+                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                      }
+                      echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                       echo "</form>";
                     } else {
@@ -4620,7 +4704,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
+                      $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
+                      echo "<span class='reason-input-wrap'>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      if ($payStatusLower === 'pending_update') {
+                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                      }
+                      echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
                     }
@@ -4851,7 +4942,9 @@ function showVisitorDetails(id, source) {
         if (modalTitleEl) modalTitleEl.textContent = isResident ? 'Resident Request Details' : 'Visitor Request Details';
 
         const residentName = [details.res_first_name || '', details.res_middle_name || '', details.res_last_name || ''].join(' ').replace(/\s+/g, ' ').trim();
-        function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+        function fmtTime(t){ if(!t) return ''; const p=String(t).split(':'), hh=parseInt(p[0]||'0',10), m=(p[1]||'00'); const ap=hh>=12?'PM':'AM'; let h=hh%12; if(h===0) h=12; return `${h}:${String(m).padStart(2,'0')} ${ap}`; }
+        function fmtDateTime(dt){ try{ const d=new Date(dt); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const m=String(d.getMinutes()).padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}.${dd}.${yy} ${h}:${m} ${ap}`; }catch(e){ return String(dt); } }
+        function fmtDateTimeSec(dt){ try{ const d=new Date(dt); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const m=String(d.getMinutes()).padStart(2,'0'); const s=String(d.getSeconds()).padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}.${dd}.${yy} ${h}:${m}:${s} ${ap}`; }catch(e){ return String(dt); } }
         const ps = ((details.payment_status || 'pending') + '').toLowerCase();
         const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
         const isGuestEntry = !details.amenity || String(details.amenity).trim() === 'Guest Entry';
@@ -4931,9 +5024,9 @@ function showVisitorDetails(id, source) {
               <div class="section-title">Request Status</div>
               <div class="info-grid">
                 <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
-                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
+                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${fmtDateTime(details.entry_created)}</span></div>` : ''}
                 ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>` : ''}
-                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
+                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${fmtDateTimeSec(details.approval_date)}</span></div>` : ''}
               </div>
             </div>
           </div>
@@ -4969,9 +5062,9 @@ function showVisitorDetails(id, source) {
               <div class="section-title">Request Status</div>
               <div class="info-grid">
                 <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
-                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${new Date(details.entry_created).toLocaleString()}</span></div>` : ''}
+                ${details.entry_created ? `<div class="info-row"><span class="info-label">Request Date</span><span class="info-value">${fmtDateTime(details.entry_created)}</span></div>` : ''}
                 ${details.approved_by ? `<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>` : ''}
-                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(details.approval_date).toLocaleString()}</span></div>` : ''}
+                ${details.approval_date ? `<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${fmtDateTimeSec(details.approval_date)}</span></div>` : ''}
               </div>
             </div>
           </div>
@@ -5088,9 +5181,9 @@ function showReservationDetails(reservationId, expectedType){
           <div class="section-title">Request Status</div>
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
-            ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
+            ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${fmtDateTime(d.created_at)}</span></div>`:''}
             ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>`:''}
-            ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
+              ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${fmtDateTimeSec(d.approval_date)}</span></div>`:''}
           </div>
         </div>`;
       document.getElementById('reservationDetailsContent').innerHTML = content;
@@ -5122,7 +5215,9 @@ window.addEventListener('click', function(event){
 </div>
 
 <script>
-function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'), h=(p[0]||'00'), m=(p[1]||'00'); return (String(h).padStart(2,'0')+":"+String(m).padStart(2,'0')); }
+function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'), hh=parseInt(p[0]||'0',10), m=(p[1]||'00'); var ap=hh>=12?'PM':'AM'; var h=hh%12; if(h===0) h=12; return (String(h)+":"+String(m).padStart(2,'0')+" "+ap); }
+function fmtDateTime(dt){ try{ var d=new Date(dt); var mm=String(d.getMonth()+1).padStart(2,'0'); var dd=String(d.getDate()).padStart(2,'0'); var yy=String(d.getFullYear()).slice(-2); var hh=d.getHours(); var m=String(d.getMinutes()).padStart(2,'0'); var ap=hh>=12?'PM':'AM'; var h=hh%12; if(h===0) h=12; return (mm+"."+dd+"."+yy+" "+h+":"+m+" "+ap); }catch(e){ return String(dt); } }
+function fmtDateTimeSec(dt){ try{ var d=new Date(dt); var mm=String(d.getMonth()+1).padStart(2,'0'); var dd=String(d.getDate()).padStart(2,'0'); var yy=String(d.getFullYear()).slice(-2); var hh=d.getHours(); var m=String(d.getMinutes()).padStart(2,'0'); var s=String(d.getSeconds()).padStart(2,'0'); var ap=hh>=12?'PM':'AM'; var h=hh%12; if(h===0) h=12; return (mm+"."+dd+"."+yy+" "+h+":"+m+":"+s+" "+ap); }catch(e){ return String(dt); } }
 function showResidentReservationDetails(rrId){
   document.getElementById('residentReservationDetailsContent').innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
   document.getElementById('residentReservationModal').style.display = 'flex';
@@ -5213,9 +5308,9 @@ function showResidentReservationDetails(rrId){
             <div class="section-title">Request Status</div>
             <div class="info-grid">
               <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
-              ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${new Date(d.created_at).toLocaleString()}</span></div>`:''}
+              ${d.created_at?`<div class="info-row"><span class="info-label">Requested</span><span class="info-value">${fmtDateTime(d.created_at)}</span></div>`:''}
               ${d.approved_by?`<div class="info-row"><span class="info-label">Approved By</span><span class="info-value">Admin</span></div>`:''}
-              ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${new Date(d.approval_date).toLocaleString()}</span></div>`:''}
+              ${d.approval_date?`<div class="info-row"><span class="info-label">Approval Date</span><span class="info-value">${fmtDateTimeSec(d.approval_date)}</span></div>`:''}
             </div>
           </div>`;
       document.getElementById('residentReservationDetailsContent').innerHTML = content;

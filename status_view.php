@@ -255,9 +255,11 @@
     function fmtTime(t){
       if(!t) return '';
       const parts = String(t).split(':');
-      let h = parseInt(parts[0],10); const m = parts[1]||'00';
-      const ampm = h>=12?'PM':'AM'; h = h%12; if(h===0) h=12;
-      return `${h}:${m} ${ampm}`;
+      let h = parseInt(parts[0],10);
+      const m = String(parts[1]||'00').padStart(2,'0');
+      const ap = h>=12 ? 'PM' : 'AM';
+      h = h%12; if(h===0) h=12;
+      return `${h}:${m} ${ap}`;
     }
     let statusData = {};
     

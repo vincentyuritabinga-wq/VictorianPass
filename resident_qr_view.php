@@ -176,7 +176,7 @@ if ($isGuest && $guest) {
         <div class="row"><div class="label">Host Resident</div><div class="value"><?php echo htmlspecialchars(trim(($guest['host_fname']??'').' '.($guest['host_lname']??''))); ?></div></div>
         <div class="row"><div class="label">Destination</div><div class="value"><?php echo htmlspecialchars(($guest['host_block']??'').' '.$guest['host_address']); ?></div></div>
         <div class="row"><div class="label">Valid Date</div><div class="value"><?php echo date('M d, Y', strtotime($guest['visit_date'])); ?></div></div>
-        <div class="row"><div class="label">Time</div><div class="value"><?php echo date('h:i A', strtotime($guest['visit_time'])); ?></div></div>
+        <div class="row"><div class="label">Time</div><div class="value"><?php echo date('H:i', strtotime($guest['visit_time'])); ?></div></div>
         <?php else: ?>
         <div class="row"><div class="label">Block</div><div class="value"><?php echo htmlspecialchars($user['house_number'] ?? '-'); ?></div></div>
         <div class="row"><div class="label">Unit / Address</div><div class="value"><?php echo htmlspecialchars($user['address'] ?? '-'); ?></div></div>
