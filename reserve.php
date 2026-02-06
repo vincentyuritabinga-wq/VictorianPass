@@ -1326,15 +1326,29 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       }
       return;
     }
-    const single = document.getElementById('singleDayToggle')?.checked;
+    const singleToggle = document.getElementById('singleDayToggle');
+    let singleActive = singleToggle?.checked;
     const isSameAsStart = selectedStart && dateString === selectedStart;
     const isSameAsEnd = selectedEnd && dateString === selectedEnd;
-    if(single){
+    var forceStart = false;
+    if(singleActive){
       if(isSameAsStart && isSameAsEnd){
         document.querySelectorAll('.calendar td').forEach(td=>td.classList.remove('active'));
         clearStartDate();
         await updatePoolRemainingNote();
         return;
+      }
+      if(!isSameAsStart && !isSameAsEnd){
+        if(singleToggle){
+          singleToggle.checked = false;
+          singleToggle.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        singleActive = false;
+        selectedEnd = null;
+        document.getElementById('endDate').textContent='--';
+        document.getElementById('endDateInput').value='';
+        showDateError('');
+        forceStart = true;
       }
     } else {
       if(isSameAsStart && !selectedEnd){
@@ -1390,9 +1404,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       showDateError('');
       return true;
     }
-    if(single){
+    if(singleActive){
       setStart(dateString) && setEnd(dateString);
     } else {
+      if(forceStart){ selectedStart = null; }
       if(!selectedStart){
         setStart(dateString);
       } else if(!selectedEnd){

@@ -248,7 +248,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.receipt_attempts, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -264,8 +264,7 @@ if ($stmt) {
         }
         $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
         if ($paymentStatusLower === 'rejected') {
-            $atts = intval($row['receipt_attempts'] ?? 0);
-            $statusVal = ($atts >= 3) ? 'denied' : 'rejected';
+            $statusVal = 'rejected';
         } elseif ($paymentStatusLower === 'pending_update') {
             $statusVal = 'pending_update';
         }
@@ -315,7 +314,7 @@ if ($stmt) {
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
             'payment_status' => $row['payment_status'] ?? null,
-            'attempts' => intval($row['receipt_attempts'] ?? 0)
+            'attempts' => 0
         ];
     }
     $stmt->close();
