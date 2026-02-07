@@ -188,6 +188,10 @@ if ($con instanceof mysqli) {
     if ($check && $check->num_rows === 0) {
         $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
     }
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_attempts'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN receipt_attempts INT NULL DEFAULT 0");
+    }
 }
 $stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, receipt_attempts, created_at, ref_code FROM reservations WHERE user_id = ? AND status NOT IN ('deleted','moved_to_history') AND approval_status NOT IN ('deleted','moved_to_history') ORDER BY created_at DESC");
 if ($stmt) {

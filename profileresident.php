@@ -385,6 +385,16 @@ if ($stmt) {
 }
 
 // 2. Incident Reports
+$colsToEnsure = [
+    'subject' => "VARCHAR(150) NULL",
+    'report_date' => "DATE NULL"
+];
+foreach ($colsToEnsure as $col => $def) {
+    $check = $con->query("SHOW COLUMNS FROM incident_reports LIKE '$col'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE incident_reports ADD COLUMN $col $def");
+    }
+}
 $stmt = $con->prepare("SELECT 'report' as type, subject, address, nature, other_concern, report_date, status, created_at, id FROM incident_reports WHERE user_id = ? ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
