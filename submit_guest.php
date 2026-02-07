@@ -191,7 +191,7 @@ $stmtGF = $con->prepare("INSERT INTO guest_forms (
   visitor_first_name, visitor_middle_name, visitor_last_name,
   visitor_sex, visitor_birthdate, visitor_contact, visitor_email, visitor_address,
   valid_id_path, visit_date, visit_time, purpose, persons, wants_amenity, ref_code, approval_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
 $types = 'i' . str_repeat('s', 14) . 'ii' . 's';
 $stmtGF->bind_param(

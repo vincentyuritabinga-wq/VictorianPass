@@ -223,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $ds = $d->format('Y-m-d');
               if ($pool_booking_type === 'whole_pool') {
                 $total = 0;
-                $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date");
+                $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date");
                 $s1->bind_param('ss', $amenity, $ds);
                 $s1->execute();
                 $r1 = $s1->get_result();
@@ -248,10 +248,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
                   $s3->close();
                 }
-                if ($total > 0) { $cnt = 1; break; }
+                $remaining = $cap - $total;
+                if ($remaining < $cap) { $errorMsg = 'Whole pool booking requires all 20 slots to be available. Only '.$remaining.' slots are left for the selected date.'; break; }
               } else {
                 $total = 0;
-                $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date");
+                $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date");
                 $s1->bind_param('ss', $amenity, $ds);
                 $s1->execute();
                 $r1 = $s1->get_result();
@@ -280,13 +281,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               }
             }
           } else if ($singleDay) {
-            $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
+              $check1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
             $check1->bind_param("ssss", $amenity, $start, $startTime, $endTime);
             $check1->execute(); $r1 = $check1->get_result(); $cnt += ($r1 && ($rw=$r1->fetch_assoc())) ? intval($rw['c']) : 0; $check1->close();
             $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
             $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
             if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
-              $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
+              $check2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
               $check2->bind_param("ssss", $amenity, $start, $startTime, $endTime);
             } else {
               $check2 = $con->prepare("SELECT 0 AS c");
@@ -320,7 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $marked = [];
 
               // reservations with time overlap on this date
-              $q1 = $con->prepare("SELECT start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date");
+              $q1 = $con->prepare("SELECT start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date");
               $q1->bind_param('ss', $amenity, $ds);
               $q1->execute();
               $res1 = $q1->get_result();
@@ -470,7 +471,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_dates') {
   };
   try {
     if (!($con instanceof mysqli)) { throw new Exception('DB unavailable'); }
-    $stmt1 = $con->prepare("SELECT start_date, end_date FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted'))");
+    $stmt1 = $con->prepare("SELECT start_date, end_date FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history'))");
     $stmt1->bind_param("s", $amenity); $stmt1->execute(); $collect($stmt1->get_result()); $stmt1->close();
     $stmt2 = $con->prepare("SELECT start_date, end_date FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved')");
     $stmt2->bind_param("s", $amenity); $stmt2->execute(); $collect($stmt2->get_result()); $stmt2->close();
@@ -552,7 +553,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
         foreach ($poolSlots as $ps) { $slotBookings[$ps['key']] = 0; }
         $getPoolTotal = function($ds) use ($con, $amenity) {
           $total = 0;
-          $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date");
+          $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date");
           $s1->bind_param('ss', $amenity, $ds);
           $s1->execute();
           $r1 = $s1->get_result();
@@ -612,7 +613,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           $personsTotal = array_key_exists($targetDate, $personsByDate) ? $personsByDate[$targetDate] : $getPoolTotal($targetDate);
           // Compute slot-specific bookings for the target date (only rows with time columns contribute)
           // reservations table
-          $stmtR = $con->prepare("SELECT persons, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted')) AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
+          $stmtR = $con->prepare("SELECT persons, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
           if ($stmtR) {
             $stmtR->bind_param('ss', $amenity, $targetDate);
             $stmtR->execute();
@@ -675,7 +676,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           }
         }
       } else {
-        $stmt1 = $con->prepare("SELECT start_date, end_date, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted'))");
+        $stmt1 = $con->prepare("SELECT start_date, end_date, start_time, end_time FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history'))");
         $stmt1->bind_param("s", $amenity);
         $stmt1->execute();
         $res1 = $stmt1->get_result();
@@ -1030,13 +1031,15 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                           <option value="whole_pool">Whole pool (exclusive)</option>
                         </select>
                       </div>
+                    <div id="personsMaxNote" class="label-help"></div>
+                      <?php if (!$isResident): ?>
                       <div class="res-label"><small>Total Participants</small></div>
                       <div class="counter">
                         <button type="button" onclick="changePersons(-1)">-</button>
                         <input type="number" id="personCount" value="1" min="0" step="1" style="width:70px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-weight:600;">
                         <button type="button" onclick="changePersons(1)">+</button>
                       </div>
-                      <div id="personsMaxNote" class="label-help"></div>
+                      <?php endif; ?>
                       <input type="hidden" name="persons" id="personsInput" value="1">
                       
                       <?php if ($isResident): ?>
@@ -2022,7 +2025,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateDownpaymentSuggestion();
     renderTimeSlotButtons();
     const st=document.getElementById('startTimeInput').value;
-    if(st){ computeEndTimeFromHours(); const sh=parseInt(st.split(':')[0],10); const eh=sh+parseInt(hoursInput.value||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr && hoursInput.value){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn && hoursInput.value){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } }
+    if(st){ computeEndTimeFromHours(); const sh=parseInt(st.split(':')[0],10); const eh=sh+parseInt(hoursInput.value||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr && hoursInput.value){ tr.textContent=`Selected Time 🕒: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn && hoursInput.value){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } }
     const dc=document.getElementById('durationContainer'); if(dc){ Array.from(dc.children).forEach(b=>b.classList.remove('selected')); const sel=Array.from(dc.children).find(b=>b.dataset.hours===String(hoursInput.value)); if(sel){ sel.classList.add('selected'); } }
     updateActionStates();
     const hc=document.getElementById('hoursChosen'); if(hc){ hc.value='1'; }
@@ -2037,7 +2040,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const data=await fetchBookedTimesFor(ds);
     const capacity=parseInt(data.capacity||max,10);
     const total=parseInt(data.persons_total||'0',10);
-    return {remaining:Math.max(0, capacity-total), capacity};
+    const remaining=Math.max(0, capacity-total);
+    window.__poolRemainingSlots = remaining;
+    return {remaining, capacity};
   }
   async function updatePoolRemainingNote(){
     const amen=document.getElementById('amenityField').value;
@@ -2049,15 +2054,27 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     try{
       const poolInfo=await getPoolRemainingSlots();
       const remaining=poolInfo.remaining;
+      const capacity=parseInt(poolInfo.capacity||getAmenityMaxPersons('Pool'),10);
       note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:'';
+      const wholePoolLow = (getPoolBookingTypeValue()==='whole_pool' && Number.isFinite(remaining) && remaining < capacity);
+      window.__wholePoolLowSlots = wholePoolLow;
+      window.__poolRemainingSlots = remaining;
+      if(wholePoolLow){
+        setFieldWarning('personsInput',`Whole pool booking requires ${capacity} available slots. Only ${remaining} left.`);
+        updateActionStates();
+        return;
+      }
       const current=parseInt((personsInput?.value||countEl?.value||countEl?.textContent||'0'),10);
       if(Number.isFinite(remaining) && current>remaining){
         setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`);
       } else {
         setFieldWarning('personsInput','');
       }
+      updateActionStates();
     }catch(_){
       note.textContent='';
+      window.__wholePoolLowSlots = false;
+      window.__poolRemainingSlots = null;
     }
   }
 
@@ -2245,6 +2262,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       if(amen==='Pool'){
         renderTimeSlotButtons();
         evaluateCalendarAvailability();
+        updatePoolRemainingNote();
       }
     }catch(_){}
   }
@@ -2395,7 +2413,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(!st || !et){ el.style.display='none'; el.textContent=''; if(tn){ tn.style.display='none'; } return; }
     const sh=parseInt(st.split(':')[0],10); const sm=parseInt(st.split(':')[1]||'0',10);
     const eh=parseInt(et.split(':')[0],10); const em=parseInt(et.split(':')[1]||'0',10);
-    el.textContent=`Selected: ${formatTimeHM(sh,sm)} - ${formatTimeHM(eh,em)}`;
+    el.textContent=`Selected Time 🕒: ${formatTimeHM(sh,sm)} - ${formatTimeHM(eh,em)}`;
     el.style.display='block';
     if(tn){ tn.style.display = document.getElementById('amenityField').value==='Pool' ? 'block' : 'none'; }
   }
@@ -3053,10 +3071,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const pInput=document.getElementById('personsInput'); if(pInput){ pInput.value=String(total); }
       const pText=document.getElementById('personCount'); if(pText){ if('value' in pText){ pText.value=String(total); } else { pText.textContent=String(total); } }
       const max=getAmenityMaxPersons(amen);
+      let hasPersonsError=false;
       if(total < 1){
         setFieldWarning('personsInput','At least 1 participant is required.');
-      } else if(max!==Infinity && total>max){
+        hasPersonsError=true;
+      } else if(amen!=='Pool' && max!==Infinity && total>max){
         setFieldWarning('personsInput',`Maximum is ${max} persons.`);
+        hasPersonsError=true;
       } else {
         setFieldWarning('personsInput','');
       }
@@ -3064,6 +3085,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       updateDownpaymentSuggestion();
       updateBookingSummary();
       if(typeof persistForm === 'function') persistForm();
+      if(amen==='Pool' && !hasPersonsError){
+        updatePoolRemainingNote();
+      }
     }
     function applyModeTo(sel, m){
       const rGroup=sel.querySelector('.resident-group');
@@ -3204,6 +3228,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(persons<1) allowed=false;
     if(max!==Infinity && persons>max) allowed=false;
     if(amenVal==='Pool' && getPoolBookingTypeValue()==='whole_pool' && persons!==max) allowed=false;
+    if(amenVal==='Pool' && getPoolBookingTypeValue()==='whole_pool' && window.__wholePoolLowSlots===true) allowed=false;
+    const remainingPool=window.__poolRemainingSlots;
+    if(amenVal==='Pool' && getPoolBookingTypeValue()!=='whole_pool' && Number.isFinite(remainingPool) && persons>remainingPool) allowed=false;
     
     if(submitBtn){ if(allowed){ submitBtn.classList.remove('disabled'); submitBtn.removeAttribute('disabled'); } else { submitBtn.classList.add('disabled'); submitBtn.setAttribute('disabled','disabled'); } }
     const sw=document.getElementById('submitWrap'); if(sw){ sw.style.display = 'flex'; }
@@ -3272,10 +3299,31 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       const card=document.querySelector(`.amenity-card[data-key="${key}"]`); if(card){ card.classList.add('selected'); }
       refreshPricingForBookingFor();
       updateParticipantVisibility();
+      selectedAmenity = document.getElementById('amenityField').value || '';
+      refreshAvailabilityFromServer();
     }catch(_){}
   }
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
+  async function refreshAvailabilityFromServer(){
+    selectedAmenity = document.getElementById('amenityField').value || '';
+    await loadBookedDates();
+    await evaluateCalendarAvailability();
+    computeAvailability();
+    renderTimeSlotButtons();
+    if(selectedAmenity === 'Pool'){ updatePoolRemainingNote(); }
+    if(document.getElementById('startDateInput').value){ checkTimeAvailability(); }
+  }
   document.addEventListener('DOMContentLoaded',function(){ restoreFormFromSession(); updateActionStates(); updateDisplayedPrice(); updateDownpaymentSuggestion(); updateBookingSummary(); initSingleDayToggle(); updateHoursSelectEnabled(); try{ document.getElementById('reservationCard').style.display='none'; document.getElementById('reservationTitle').textContent='Reserve an Amenity'; document.getElementById('reservationHint').textContent='Select an amenity to continue'; }catch(_){} });
+  window.addEventListener('pageshow',function(){ refreshAvailabilityFromServer(); });
+  window.addEventListener('focus',function(){ refreshAvailabilityFromServer(); });
+  window.addEventListener('storage',function(e){
+    try{
+      if(!e || !e.key) return;
+      if(String(e.key).indexOf('cancelled:')===0){
+        refreshAvailabilityFromServer();
+      }
+    }catch(_){}
+  });
   document.addEventListener('DOMContentLoaded',function(){ const s=document.getElementById('startTimeInput'); const e=document.getElementById('endTimeInput'); if(s){ s.value=''; } if(e){ e.value=''; } });
   document.addEventListener('DOMContentLoaded',function(){
      const hs=document.getElementById('hoursSelect');
@@ -3374,6 +3422,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const hours=parseInt(document.getElementById('hoursInput').value||'0',10);
     const hoursChosenEl=document.getElementById('hoursChosen');
     const hasChosenHours=hoursChosenEl && hoursChosenEl.value==='1';
+    if(!date){
+      container.style.display='none';
+      if(tLbl) tLbl.style.display='none';
+      return;
+    }
     container.style.display='grid';
     try{
       const w = window.innerWidth || document.documentElement.clientWidth || 1366;
@@ -3403,8 +3456,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     window.__slotRenderTokenCounter=(window.__slotRenderTokenCounter||0)+1; const __token=window.__slotRenderTokenCounter; window.__activeSlotRenderToken=__token; if(!date){ container.innerHTML=''; if(notice){ notice.style.display='none'; notice.textContent=''; } return; } fetchBookedTimesFor(date).then(data=>{ if(window.__activeSlotRenderToken!==__token) return; const booked=data.times||[]; window.__bookedTimesForDate=booked||[]; let anyEnabled=false; let disabledCount=0; slots.forEach(slot=>{ const startHour=parseInt(slot.value.split(':')[0],10); const maxPossible=computeMaxDuration(amen,startHour,booked); const valid=(maxPossible>=hours); const btn=document.createElement('button'); btn.type='button'; btn.className='slot-btn airbnb'; btn.textContent=slot.label; btn.dataset.slot=slot.value; if(!valid){ disabledCount++; btn.classList.add('unavailable'); btn.setAttribute('aria-disabled','true'); btn.onclick=function(){ showToast('This start time cannot fit your selected duration. Try a different start time or duration.','warning'); }; } else { anyEnabled=true; btn.classList.add('available'); btn.onclick=function(){ selectTimeSlot(slot.value); }; } container.appendChild(btn); }); let hasBookedHours=false; (booked||[]).forEach(function(t){ if(isHourBasedAmenity(amen) && (t.has_time===false || t.has_time===0)) return; const bS=parseInt(String(t.start).split(':')[0],10); const bE=parseInt(String(t.end).split(':')[0],10); if(bE>bS){ hasBookedHours=true; } }); if(notice){ if(!anyEnabled){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Fully Booked — no time slots available for this date.' : ''; } else if(disabledCount>0){ notice.style.display='block'; notice.textContent = hasBookedHours ? 'Partially Booked — some time slots are unavailable.' : ''; } else { notice.style.display='none'; notice.textContent=''; } } if(!anyEnabled){ showTimeError('No start times fit the selected hours. Try a different duration.'); } else { showTimeError(''); } const st=document.getElementById('startTimeInput').value; if(st){ const selBtn=Array.from(container.children).find(b=>b.tagName==='BUTTON' && b.dataset.slot===st); if(selBtn) selBtn.classList.add('selected'); } updateActionStates(); }); }
 
-  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } const cont=document.getElementById('timeSlotContainer'); if(cont){ Array.from(cont.querySelectorAll('.slot-btn')).forEach(function(b){ b.classList.remove('selected'); }); const sel=Array.from(cont.querySelectorAll('.slot-btn')).find(function(b){ return b.dataset.slot===start; }); if(sel){ sel.classList.add('selected'); } } showTimeError(''); updateActionStates(); }
-  function selectPoolSlot(start,end){ document.getElementById('startTimeInput').value=start; document.getElementById('endTimeInput').value=end; const sh=parseInt(start.split(':')[0],10); const sm=parseInt(start.split(':')[1]||'0',10); const eh=parseInt(end.split(':')[0],10); const em=parseInt(end.split(':')[1]||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected: ${formatTimeHM(sh,sm)} - ${formatTimeHM(eh,em)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display='block'; } showTimeError(''); updateActionStates(); updateBookingSummary(); }
+  function selectTimeSlot(start){ const hInput=document.getElementById('hoursInput'); const hrs=parseInt(hInput?.value||'0',10); if(!hrs || hrs<1){ showTimeError('Please select number of hours before choosing a start time.'); return; } const amen=document.getElementById('amenityField').value; const booked=window.__bookedTimesForDate||[]; const startHour=parseInt(start.split(':')[0],10); if(computeMaxDuration(amen,startHour,booked) < Math.max(1,hrs)){ showTimeError('This start time cannot fit your selected duration. Try a different start time or duration.'); showToast(`⚠️ Not enough free hours starting from this time to complete ${hrs} hour${hrs>1?'s':''}.`,'warning'); return; } document.getElementById('startTimeInput').value=start; computeEndTimeFromHours(); const sh=startHour, eh=sh+hrs; const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected Time 🕒: ${formatTimeSlot(sh)} - ${formatTimeSlot(eh)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display = amen==='Pool' ? 'block' : 'none'; } const cont=document.getElementById('timeSlotContainer'); if(cont){ Array.from(cont.querySelectorAll('.slot-btn')).forEach(function(b){ b.classList.remove('selected'); }); const sel=Array.from(cont.querySelectorAll('.slot-btn')).find(function(b){ return b.dataset.slot===start; }); if(sel){ sel.classList.add('selected'); } } showTimeError(''); updateActionStates(); }
+  function selectPoolSlot(start,end){ document.getElementById('startTimeInput').value=start; document.getElementById('endTimeInput').value=end; const sh=parseInt(start.split(':')[0],10); const sm=parseInt(start.split(':')[1]||'0',10); const eh=parseInt(end.split(':')[0],10); const em=parseInt(end.split(':')[1]||'0',10); const tr=document.getElementById('selectedTimeRange'); if(tr){ tr.textContent=`Selected Time 🕒: ${formatTimeHM(sh,sm)} - ${formatTimeHM(eh,em)}`; tr.style.display='block'; } const tn=document.getElementById('selectedTimeNote'); if(tn){ tn.style.display='block'; } showTimeError(''); updateActionStates(); updateBookingSummary(); }
   function renderHoursDropdownForAmenity(){
     const amen=document.getElementById('amenityField').value;
     const sel=document.getElementById('hoursSelect');

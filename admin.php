@@ -331,11 +331,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     $ready = getAmenityReadyForApprovalCount($con);
     $incidents = getOpenIncidentCount($con);
     $newreqs = getNewRequestsCount($con);
+    $system = getUnreadSystemNotificationsCount($con);
     $requests = [];
     $receipts = [];
-    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
+    $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (status IS NULL OR status NOT IN ('cancelled', 'deleted', 'moved_to_history')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted', 'moved_to_history')) ORDER BY created_at DESC LIMIT 8");
     if($res){ while($row=$res->fetch_assoc()){ $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-    $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted')) ORDER BY created_at DESC LIMIT 8");
+    $res2 = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at, verification_date, payment_status FROM reservations WHERE receipt_path IS NOT NULL AND payment_status = 'submitted' AND (status IS NULL OR status NOT IN ('cancelled', 'deleted', 'moved_to_history')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled', 'deleted', 'moved_to_history')) ORDER BY created_at DESC LIMIT 8");
     if($res2){ while($row=$res2->fetch_assoc()){ $title = (!empty($row['verification_date'])) ? 'Receipt re-submitted' : 'Payment receipt submitted'; $receipts[] = ['type'=>'payment','label'=>'Payment','source'=>'verify','title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
     $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE approval_status='pending' ORDER BY created_at DESC LIMIT 8");
     if($gf){ while($row=$gf->fetch_assoc()){ $requests[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
@@ -404,7 +405,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
         'ready' => $ready,
         'incidents' => $incidents,
         'new_requests' => $newreqs,
-        'total' => (count($requests) + count($receipts)),
+        'system' => $system,
+        'total' => ($payments + $awaiting + $ready + $incidents + $newreqs + $system),
         'requests' => $requests,
         'receipts' => $receipts,
         'items' => array_slice($items,0,12)
@@ -649,7 +651,7 @@ function getPaymentReceiptsCount($con) {
 }
 
 function getPendingPaymentCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q);
   if($r){ $row = $r->fetch_assoc(); if($row){ return intval($row['c']); } }
   return 0;
@@ -660,8 +662,8 @@ function getAmenityAwaitingPaymentCount($con){
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
           AND (r.payment_status IS NULL OR r.payment_status <> 'verified')
-          AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
-          AND (r.status IS NULL OR r.status != 'cancelled')";
+          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history'))
+          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getAmenityReadyForApprovalCount($con){
@@ -670,8 +672,8 @@ function getAmenityReadyForApprovalCount($con){
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
           AND r.payment_status = 'verified'
-          AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled')
-          AND (r.status IS NULL OR r.status != 'cancelled')";
+          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history'))
+          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getOpenIncidentCount($con){
@@ -679,15 +681,15 @@ function getOpenIncidentCount($con){
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingResidentAmenityCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' AND (status IS NULL OR status != 'cancelled')";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingGuestFormCount($con){
-  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled')";
+  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingVisitorLegacyCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled')";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getNewRequestsCount($con){
@@ -699,20 +701,20 @@ function getUnreadSystemNotificationsCount($con){
 }
 function getRecentNotifications($con){
   $items = [];
-  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status != 'cancelled') AND (status IS NULL OR status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
+  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status != 'cancelled') ORDER BY created_at DESC LIMIT 5");
+  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) ORDER BY created_at DESC LIMIT 5");
   if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY gf.created_at DESC LIMIT 5");
+  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY gf.created_at DESC LIMIT 5");
   if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
+  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY r.created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ 
       $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
       $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
       $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
       $items[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
   } }
-  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) AND (r.approval_status IS NULL OR r.approval_status != 'cancelled') AND (r.status IS NULL OR r.status != 'cancelled') ORDER BY r.created_at DESC LIMIT 5");
+  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
@@ -1657,7 +1659,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
                         $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
                         if ($hasRt && $hasRt->num_rows>0 && $hasRe && $hasRe->num_rows>0) {
-                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
+                            $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND (TIME(?) < end_time AND TIME(?) > start_time)");
                             $stmt2->bind_param('ssss',$amenity,$start,$st,$et);
                         } else {
                             $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE 0=1");
@@ -1673,9 +1675,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         }
                         $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
                     } else {
-                        $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND start_date <= ? AND end_date >= ?");
+                        $stmt1=$con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND start_date <= ? AND end_date >= ?");
                         $stmt1->bind_param('sss',$amenity,$end,$start); $stmt1->execute(); $r1=$stmt1->get_result(); $cnt+=($r1 && ($rw=$r1->fetch_assoc()))?intval($rw['c']):0; $stmt1->close();
-                        $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND start_date <= ? AND end_date >= ?");
+                        $stmt2=$con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND start_date <= ? AND end_date >= ?");
                         $stmt2->bind_param('sss',$amenity,$end,$start); $stmt2->execute(); $r2=$stmt2->get_result(); $cnt+=($r2 && ($rw=$r2->fetch_assoc()))?intval($rw['c']):0; $stmt2->close();
                         $stmt3=$con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND start_date <= ? AND end_date >= ? AND (approval_status IN ('pending','approved'))");
                         $stmt3->bind_param('sss',$amenity,$end,$start); $stmt3->execute(); $r3=$stmt3->get_result(); $cnt+=($r3 && ($rw=$r3->fetch_assoc()))?intval($rw['c']):0; $stmt3->close();
@@ -3397,7 +3399,8 @@ body.modal-open { overflow: hidden; }
             var itemsRaw = Array.isArray(data.items)?data.items:[];
             var items = [];
             for(var i=0;i<itemsRaw.length;i++){ var k=keyFor(itemsRaw[i]); if(!dismissed.has(k)) items.push(itemsRaw[i]); }
-            var total = items.length;
+            var total = parseInt(data.total||0,10);
+            if(!total && items.length){ total = items.length; }
             if(t){
               if(total>0){ if(!badge){ badge=document.createElement('span'); badge.className='notif-badge'; t.appendChild(badge);} badge.textContent = (total>99 ? '99+' : String(total)); if(lastTotal!==null && total>lastTotal){ badge.classList.add('pulse'); setTimeout(function(){ badge.classList.remove('pulse'); }, 1200); } }
               else { if(badge){ badge.remove(); } }
@@ -3453,7 +3456,7 @@ body.modal-open { overflow: hidden; }
           (function(){ var tabs = document.querySelectorAll('.tab-btn'); var tabReq = document.getElementById('tabReq'); var tabRec = document.getElementById('tabRec'); tabs.forEach(function(btn){ btn.addEventListener('click', function(){ tabs.forEach(function(b){ b.classList.remove('active'); }); btn.classList.add('active'); var t = btn.getAttribute('data-tab'); if(t==='req'){ if(tabReq) tabReq.style.display='block'; if(tabRec) tabRec.style.display='none'; } else { if(tabReq) tabReq.style.display='none'; if(tabRec) tabRec.style.display='block'; } }); }); })();
           function showToast(it){ var c=document.getElementById('toastContainer'); if(!c||!it) return; var el=document.createElement('div'); el.className='toast'; var safeTitle=String(it.title||'').replace(/[<>]/g,''); var safeAmen=it.amenity?String(it.amenity).replace(/[<>]/g,''):''; var safeRef=it.ref?String(it.ref).replace(/[<>]/g,''):''; var href=linkFor(it);
             el.innerHTML = "<div><h4>New "+(String(it.type||'').toUpperCase())+"</h4><p>"+safeTitle+(safeAmen?" — "+safeAmen:'')+(safeRef?" (Status Code: "+safeRef+")":"")+"</p><div class='actions'><a href='"+href+"' class='btn btn-view'><i class='fa-solid fa-eye'></i> Open</a><button class='btn btn-remove'><i class='fa-solid fa-xmark'></i> Dismiss</button></div></div>";
-            var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); renderNotif({ items: [] }); }); }
+            var dismissBtn = el.querySelector('.btn-remove'); if(dismissBtn){ dismissBtn.addEventListener('click', function(){ var k = keyFor(it); dismissed.add(k); el.remove(); }); }
             c.appendChild(el); setTimeout(function(){ if(el&&el.parentNode){ el.remove(); } }, 8000);
           }
           var initialized = false;
@@ -3473,7 +3476,7 @@ body.modal-open { overflow: hidden; }
           poll();
           var pollMs = 2000; var timer = setInterval(poll, pollMs);
           document.addEventListener('visibilitychange', function(){ if(document.hidden){ clearInterval(timer); timer = setInterval(poll, 5000); } else { clearInterval(timer); timer = setInterval(poll, pollMs); poll(); } });
-          function dismissItem(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); var nid=item.getAttribute('data-id'); if(nid){ fetch('admin.php?action=dismiss_notification&id='+nid).catch(function(){}); } dismissed.add(k); item.remove(); var b=t&&t.querySelector('.notif-badge'); if(b){ var reqList=document.getElementById('notifRequestsList'); var recList=document.getElementById('notifReceiptsList'); var total=((reqList?reqList.querySelectorAll('.notif-item').length:0)+(recList?recList.querySelectorAll('.notif-item').length:0)); if(total>0){ b.textContent = (total>99 ? '99+' : String(total)); } else { b.remove(); } } }
+          function dismissItem(e){ var btn=e.target.closest('.notif-dismiss'); if(!btn) return; var item=btn.closest('.notif-item'); if(!item) return; var k=[item.getAttribute('data-type')||'', item.getAttribute('data-ref')||'', item.getAttribute('data-time')||''].join('|'); var nid=item.getAttribute('data-id'); if(nid){ fetch('admin.php?action=dismiss_notification&id='+nid).catch(function(){}); } dismissed.add(k); item.remove(); }
           if(p){ p.addEventListener('click', dismissItem); }
           if(m){ m.addEventListener('click', dismissItem); }
         })();
@@ -4872,7 +4875,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           $hasArchived = false;
           
           // 1. Archived Guest Forms
-          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed') ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history') ORDER BY gf.updated_at DESC, gf.created_at DESC");
           if ($gf) {
             while ($row = $gf->fetch_assoc()) {
                $hasArchived = true;
@@ -4912,7 +4915,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             $hasReservationUpdatedAt = $chkUpdated && $chkUpdated->num_rows > 0;
           }
           $orderClause = $hasReservationUpdatedAt ? "r.updated_at DESC, r.created_at DESC" : "r.created_at DESC";
-          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired') OR r.approval_status IN ('cancelled', 'completed', 'expired')) ORDER BY $orderClause");
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired', 'moved_to_history') OR r.approval_status IN ('cancelled', 'completed', 'expired', 'moved_to_history')) ORDER BY $orderClause");
           if ($res) {
             while ($row = $res->fetch_assoc()) {
                $hasArchived = true;
@@ -4921,6 +4924,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                $as = strtolower($row['approval_status']??'');
                if ($s === 'completed' || $as === 'completed') { $status = 'completed'; }
                elseif ($s === 'expired' || $as === 'expired') { $status = 'expired'; }
+               elseif ($s === 'moved_to_history' || $as === 'moved_to_history') { $status = 'cancelled'; }
                
                $badgeClass = ($status === 'completed') ? 'badge-success' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
                $statusLabel = ucfirst($status);
@@ -5246,6 +5250,9 @@ function showReservationDetails(reservationId, expectedType){
       const payStatus = (d.payment_status||'').toString().toLowerCase();
       const isPdf = /\.pdf$/i.test(receiptPath);
       const redirectPage = isResidentGuest ? 'resident_guest_forms' : (userType === 'visitor' ? 'visitor_requests' : 'requests');
+      const denialReason = (d.denial_reason||'').toString().trim();
+      const showDenial = denialReason && (payStatus === 'rejected' || payStatus === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
+      const waitNote = payStatus === 'rejected' ? 'Wait for the updated proof.' : '';
       const receiptButton = (receiptPath && payStatus==='verified') ? (
         `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, '${redirectPage}')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
       ) : '';
@@ -5255,6 +5262,12 @@ function showReservationDetails(reservationId, expectedType){
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
           <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
           ${receiptButton}
+        </div>`
+      ) : '';
+      const denialHtml = showDenial ? (
+        `<div style="margin-top:12px;padding:12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;">
+          <div>Reason: ${denialReason}</div>
+          ${waitNote ? `<div style="margin-top:6px;color:#7f1d1d;font-weight:500;">${waitNote}</div>` : ''}
         </div>`
       ) : '';
       const content = `
@@ -5287,6 +5300,7 @@ function showReservationDetails(reservationId, expectedType){
             ${priceBlock}
           </div>
           ${receiptHtml}
+          ${denialHtml}
           <div class="section-title">Request Status</div>
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
@@ -5386,6 +5400,9 @@ function showResidentReservationDetails(rrId){
       })() : '';
       const receiptPath = (d.receipt_path||'').toString().trim();
       const isPdf = /\.pdf$/i.test(receiptPath);
+      const denialReason = (d.denial_reason||'').toString().trim();
+      const showDenial = denialReason && (ps === 'rejected' || ps === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
+      const waitNote = ps === 'rejected' ? 'Wait for the updated proof.' : '';
       const receiptButton = (receiptPath && ps==='verified') ? (
         `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, 'resident_guest_forms')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
       ) : '';
@@ -5395,6 +5412,12 @@ function showResidentReservationDetails(rrId){
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
           <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
           ${receiptButton}
+        </div>`
+      ) : '';
+      const denialHtml = showDenial ? (
+        `<div style="margin-top:12px;padding:12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;">
+          <div>Reason: ${denialReason}</div>
+          ${waitNote ? `<div style="margin-top:6px;color:#7f1d1d;font-weight:500;">${waitNote}</div>` : ''}
         </div>`
       ) : '';
       const content = `
@@ -5428,6 +5451,7 @@ function showResidentReservationDetails(rrId){
               <div class="info-row"><span class="info-label">Downpayment</span><span class="info-value"><span class="badge ${psClass}">${ps.charAt(0).toUpperCase()+ps.slice(1)}</span></span></div>
             </div>
             ${receiptHtml}
+            ${denialHtml}
             <div class="section-title">Request Status</div>
             <div class="info-grid">
               <div class="info-row"><span class="info-label">Status</span><span class="info-value">${stLabel}</span></div>
@@ -5631,5 +5655,32 @@ window.addEventListener('click', function(event){
   });
 </script>
 <script src="js/logout-modal.js"></script>
+<script>
+  (function(){
+    var refreshMs = 15000;
+    function hasVisibleModal(){
+      var modals = document.querySelectorAll('.modal,#adminConfirmModal,#denyReasonModal');
+      for(var i=0;i<modals.length;i++){
+        var m = modals[i];
+        if(!m) continue;
+        var ds = m.style && m.style.display ? m.style.display : '';
+        if(ds && ds !== 'none') return true;
+      }
+      return false;
+    }
+    function hasActiveInput(){
+      var el = document.activeElement;
+      if(!el) return false;
+      if(el.isContentEditable) return true;
+      var tag = (el.tagName||'').toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select';
+    }
+    setInterval(function(){
+      if (hasVisibleModal()) return;
+      if (hasActiveInput()) return;
+      location.reload();
+    }, refreshMs);
+  })();
+</script>
 </body>
  </html>

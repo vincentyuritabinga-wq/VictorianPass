@@ -33,7 +33,7 @@ if (!$user) {
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 
 $showReportWait = false;
-$reportWaitMessage = 'Please wait for confirmation. The admin and guard will check the report incident.';
+$reportWaitMessage = 'The report incident will be reviewed by the admin and guard.';
 if (!empty($_SESSION['report_wait_popup'])) {
   $showReportWait = true;
   if (!empty($_SESSION['report_wait_message'])) {
@@ -248,7 +248,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status != 'deleted' AND r.approval_status != 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status NOT IN ('deleted','moved_to_history') AND r.approval_status NOT IN ('deleted','moved_to_history') ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -328,7 +328,7 @@ if ($con instanceof mysqli) {
     $chk = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
     $hasGuestEndTime = $chk && $chk->num_rows > 0;
 }
-$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
+$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status NOT IN ('deleted','moved_to_history') AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
 $stmt = $con->prepare($guestAmenitySelect);
 if ($stmt) {
     $stmt->bind_param("i", $userId);
@@ -385,7 +385,7 @@ if ($stmt) {
 }
 
 // 2. Incident Reports
-$stmt = $con->prepare("SELECT 'report' as type, nature, address, status, created_at, id FROM incident_reports WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'report' as type, subject, address, nature, other_concern, report_date, status, created_at, id FROM incident_reports WHERE user_id = ? ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -394,25 +394,35 @@ if ($stmt) {
         $activities[] = [
             'type' => 'report',
             'title' => 'Report - ' . ($row['nature'] ?? 'Incident'),
-            'details' => 'Address: ' . ($row['address'] ?? ''),
+            'details' => '',
+            'report_id' => $row['id'] ?? null,
+            'subject' => $row['subject'] ?? '',
+            'address' => $row['address'] ?? '',
+            'nature' => $row['nature'] ?? '',
+            'other_concern' => $row['other_concern'] ?? '',
+            'report_date' => $row['report_date'] ?? '',
             'status' => $row['status'] ?? 'new',
             'date' => $row['created_at'],
             'event_timestamp' => strtotime($row['created_at']),
-            'ref_code' => 'REP-' . $row['id']
+            'ref_code' => 'RIVH-' . str_pad((string)(abs(crc32((string)$row['id'])) % 1000000), 6, '0', STR_PAD_LEFT)
         ];
     }
     $stmt->close();
 }
 
 // 3. Guest Forms
-$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status != 'deleted' AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status NOT IN ('deleted','moved_to_history') AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
-        $vName = ($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? '');
-        $title = 'Guest Request - ' . $vName;
+        $guestNameParts = [];
+        if (!empty($row['visitor_first_name'])) { $guestNameParts[] = $row['visitor_first_name']; }
+        if (!empty($row['visitor_middle_name'])) { $guestNameParts[] = $row['visitor_middle_name']; }
+        if (!empty($row['visitor_last_name'])) { $guestNameParts[] = $row['visitor_last_name']; }
+        $guestName = trim(implode(' ', $guestNameParts));
+        $title = 'Guest Request' . ($guestName !== '' ? ' - ' . $guestName : '');
         if (stripos($row['approval_status'] ?? '', 'cancel') !== false) {
             $title .= ' - Cancelled';
         }
@@ -427,6 +437,7 @@ if ($stmt) {
             'type' => 'guest_form',
             'title' => $title,
             'details' => $details,
+            'guest_name' => $guestName,
             'status' => $row['approval_status'] ?? 'pending',
             'date' => $row['created_at'],
             'event_timestamp' => $visitTs,
@@ -916,7 +927,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -939,7 +950,7 @@ body.account-blocked { overflow: hidden; }
                      </div>
                      <div class="item-created"><?php echo htmlspecialchars($createdText); ?></div>
                    </div>
-                  <?php if (!$isReservation && (($act['type'] ?? '') !== 'guest_form')): ?>
+                  <?php if (!$isReservation && (($act['type'] ?? '') !== 'guest_form') && (($act['type'] ?? '') !== 'report')): ?>
                    <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                      <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
                    </div>
@@ -999,7 +1010,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -1022,7 +1033,7 @@ body.account-blocked { overflow: hidden; }
                      </div>
                      <div class="item-created"><?php echo htmlspecialchars($createdText); ?></div>
                    </div>
-                  <?php if ((($act['type'] ?? '') !== 'guest_form')): ?>
+                 <?php if ((($act['type'] ?? '') !== 'guest_form') && (($act['type'] ?? '') !== 'report')): ?>
                   <div style="font-size:0.8rem; color:#999; margin-left: 48px;" class="item-ref">
                     <span><?php echo htmlspecialchars($act['ref_code']); ?></span>
                   </div>
@@ -1118,7 +1129,6 @@ body.account-blocked { overflow: hidden; }
               </div>
               <div class="input-wrap">
                 <input type="text" id="visitor_address" name="visitor_address" placeholder="Guest Address (e.g., Blk 00 Lot 00)*" required>
-                <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: Blk 00 Lot 00</span>
               </div>
 
               <label class="upload-box">
@@ -1508,7 +1518,13 @@ body.account-blocked { overflow: hidden; }
     var pNote = cancelModal.querySelector('.cancel-modal-note');
     var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
     
-    if(type === 'guest_form'){
+    if(type === 'report'){
+      modalAction = 'cancel_report';
+      if(h3) h3.textContent = 'Cancel Report';
+      if(pBody) pBody.textContent = 'Are you sure you want to cancel this report?';
+      if(pNote) pNote.style.display = 'none';
+      if(btnKeep) btnKeep.textContent = 'Keep Report';
+    } else if(type === 'guest_form'){
       if(h3) h3.textContent = 'Cancel Request';
       if(pBody) pBody.textContent = 'Are you sure you want to cancel this request?';
       if(pNote) pNote.style.display = 'none';
@@ -1573,6 +1589,7 @@ body.account-blocked { overflow: hidden; }
         alert(data && data.message ? data.message : 'Unable to cancel reservation.');
         return;
       }
+      try { localStorage.setItem('cancelled:'+ref, String(Date.now())); } catch(_){}
       li.setAttribute('data-status','cancelled');
       li.setAttribute('data-payment-status','cancelled');
       prevStatuses[ref]='cancelled';
@@ -1631,6 +1648,93 @@ body.account-blocked { overflow: hidden; }
       var titleEl = li.querySelector('.item-title');
       if (titleEl && titleEl.textContent.indexOf('Cancelled') === -1) {
           titleEl.textContent += ' - Cancelled';
+      }
+      var badge=li.querySelector('.status-badge');
+      if(badge){
+        badge.textContent=fmtLabel('cancelled');
+        badge.classList.remove('status-pending','status-ongoing','status-denied','status-cancelled','status-completed');
+        badge.classList.add(statusClassFor('cancelled'));
+      }
+      var extraEl=li.querySelector('.item-extra');
+      if(extraEl){
+        extraEl.setAttribute('data-loaded','0');
+        extraEl.innerHTML='';
+        if(li.classList.contains('expanded')){
+          buildExtraContent(li,extraEl);
+          extraEl.setAttribute('data-loaded','1');
+        }
+      }
+      closeCancelModalResident();
+    })["catch"](function(){
+      // alert('Network error. Please try again.');
+    });
+  }
+  function performCancelReport(){
+    var ref=cancelModalRef;
+    var li=cancelModalLi;
+    if(!ref||!li){
+      closeCancelModalResident();
+      return;
+    }
+    var reportId=parseInt(li.getAttribute('data-report-id')||'0',10);
+    if(!reportId){
+      closeCancelModalResident();
+      return;
+    }
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Cancel';
+
+    fetch('submit_report.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'cancel',report_id:String(reportId)})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to cancel report.');
+        return;
+      }
+      try { localStorage.setItem('cancelled:'+ref, String(Date.now())); } catch(_){}
+      li.setAttribute('data-status','cancelled');
+      prevStatuses[ref]='cancelled';
+
+      var activePanel = document.getElementById('panel-requests');
+      var historyPanel = document.getElementById('panel-history');
+      if(activePanel && historyPanel){
+        var activeList = activePanel.querySelector('.item-list');
+        var historyList = historyPanel.querySelector('.item-list');
+        if(activeList && historyList){
+          var remainingActiveItems = activeList.querySelectorAll('.list-item');
+          li.remove();
+          if(remainingActiveItems.length === 1){
+            var emptyDiv = document.createElement('div');
+            emptyDiv.style.cssText = 'padding:20px; text-align:center; color:#777;';
+            emptyDiv.textContent = 'No active requests.';
+            activeList.appendChild(emptyDiv);
+          }
+          var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
+          if(noHistoryMsg) noHistoryMsg.remove();
+          historyList.insertBefore(li, historyList.firstChild);
+          li.style.display = '';
+          li.classList.remove('expanded');
+          var historyNav = document.querySelector('.nav-menu .nav-item[data-section="panel-history"]');
+          if(historyNav){
+            var navItems = document.querySelectorAll('.nav-menu .nav-item[data-section]');
+            navItems.forEach(function(n){ n.classList.remove('active'); });
+            historyNav.classList.add('active');
+            var sections = document.querySelectorAll('.right-panel .panel-section');
+            sections.forEach(function(s){ s.style.display = 'none'; });
+            historyPanel.style.display = 'block';
+          } else {
+            var sections = document.querySelectorAll('.right-panel .panel-section');
+            sections.forEach(function(s){ s.style.display = 'none'; });
+            historyPanel.style.display = 'block';
+          }
+        }
+      }
+
+      var titleEl = li.querySelector('.item-title');
+      if (titleEl && titleEl.textContent.indexOf('Cancelled') === -1) {
+        titleEl.textContent += ' - Cancelled';
       }
       var badge=li.querySelector('.status-badge');
       if(badge){
@@ -1742,6 +1846,8 @@ body.account-blocked { overflow: hidden; }
     cancelModalConfirm.addEventListener('click',function(){
       if(modalAction === 'delete'){
         performDeleteResident();
+      } else if(modalAction === 'cancel_report'){
+        performCancelReport();
       } else {
         performCancelResident();
       }
@@ -1919,6 +2025,7 @@ body.account-blocked { overflow: hidden; }
     var summaryText=summaryParts.join(' • ');
     var canCancel=(type==='reservation'||type==='guest_form')&&((s.indexOf('pending')!==-1||s.indexOf('pending_update')!==-1||s===''||s==='new')||paymentStatus==='pending_update');
     var isHistoryPanel=!!li.closest('#panel-history');
+    var canCancelReport=(type==='report') && !isHistoryPanel && s.indexOf('cancel')===-1 && s.indexOf('reject')===-1 && s.indexOf('resolved')===-1;
     var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
     var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
@@ -1964,17 +2071,27 @@ body.account-blocked { overflow: hidden; }
       if(reasonText){
         html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
       }
+      if(type==='guest_form'){
+        var guestName=li.getAttribute('data-guest-name')||'';
+        var guestRows='';
+        if(guestName){
+          guestRows+='<div class="schedule-row"><div class="schedule-key">Guest:</div><div class="schedule-val">'+esc(guestName)+'</div></div>';
+        }
+        if(guestRows){
+          html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Guest Details</div>'+guestRows+'</div>';
+        }
+      }
       if(type==='reservation' && scheduleText){
         var parts=scheduleParts(scheduleText);
         var rows='';
         if(parts.date){
-          rows+='<div class="schedule-row"><div class="schedule-key">Date</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
+          rows+='<div class="schedule-row"><div class="schedule-key">Date:</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
         }
         if(parts.time){
-          rows+='<div class="schedule-row"><div class="schedule-key">Time</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
+          rows+='<div class="schedule-row"><div class="schedule-key">Time:</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
         }
         if(!rows){
-          rows='<div class="schedule-row"><div class="schedule-key">Schedule</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
+          rows='<div class="schedule-row"><div class="schedule-key">Schedule:</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
         }
         html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
       }
@@ -2002,8 +2119,39 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-info-only">';
       html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
-      if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
-      html+='</div></div></div>';
+      html+='</div>';
+      var reportSubject = li.getAttribute('data-report-subject') || '';
+      var reportAddress = li.getAttribute('data-report-address') || '';
+      var reportDate = li.getAttribute('data-report-date') || '';
+      var reportNature = li.getAttribute('data-report-nature') || '';
+      var reportOther = li.getAttribute('data-report-other') || '';
+      var reportRows = '';
+      if(reportSubject){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Subject:</div><div class="schedule-val">'+esc(reportSubject)+'</div></div>';
+      }
+      if(reportAddress){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Address:</div><div class="schedule-val">'+esc(reportAddress)+'</div></div>';
+      }
+      if(reportDate){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Date:</div><div class="schedule-val">'+esc(reportDate)+'</div></div>';
+      }
+      if(reportNature){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Nature:</div><div class="schedule-val">'+esc(reportNature)+'</div></div>';
+      }
+      if(reportOther){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Details:</div><div class="schedule-val">'+esc(reportOther)+'</div></div>';
+      }
+      if(ref){
+        reportRows+='<div class="schedule-row"><div class="schedule-key">Code:</div><div class="schedule-val">'+esc(ref)+'</div></div>';
+      }
+      if(reportRows){
+        html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Report Details</div>'+reportRows+'</div>';
+      }
+      if(canCancelReport && ref){
+        html+='<div class="item-actions"><button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> Cancel Request</button></div>';
+      }
+      html+='</div></div>';
+      html+='</div>';
     }else{
       html+='<div class="item-extra-section">';
       html+='<div class="item-extra-title">Request Details</div>';
@@ -2016,7 +2164,7 @@ body.account-blocked { overflow: hidden; }
     }
     extra.innerHTML=html;
     var cancelBtn=extra.querySelector('.item-extra-cancel');
-    if(cancelBtn && ref && canCancel){
+    if(cancelBtn && ref && (canCancel || canCancelReport)){
       cancelBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
         openCancelModal(li,ref);
@@ -2492,7 +2640,7 @@ body.account-blocked { overflow: hidden; }
 
   function validateGuestForm(){
     var valid=true;
-    var reqIds=['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','visitor_address','birthdate','visitor_contact'];
+    var reqIds=['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_address','birthdate','visitor_contact'];
     reqIds.forEach(function(id){
       var el=document.getElementById(id);
       if(!el) return;
@@ -2648,13 +2796,20 @@ body.account-blocked { overflow: hidden; }
     }
     var fd=new FormData(entryForm);
     fetch('submit_guest.php',{method:'POST',body:fd})
-      .then(function(res){return res.json();})
-      .then(function(data){
+      .then(function(res){ return res.text().then(function(text){ return { res: res, text: text }; }); })
+      .then(function(payload){
+        var res = payload.res;
+        var text = payload.text || '';
+        var data = null;
+        try { data = JSON.parse(text); } catch (e) { data = null; }
+        if (!res.ok || !data) {
+          setWarning('visitor_email', 'Server error. Please try again.');
+          return;
+        }
         if(data && data.success){
           openGuestRefModal();
         }else{
           var msg = data && data.message ? data.message : 'Failed to save guest.';
-          // Try to map error to field
           if(msg.indexOf('Resident phone')!==-1) setWarning('resident_contact', msg);
           else if(msg.indexOf('Guest phone')!==-1) setWarning('visitor_contact', msg);
           else if(msg.indexOf('Resident name')!==-1) setWarning('resident_full_name', msg);
@@ -2696,11 +2851,47 @@ body.account-blocked { overflow: hidden; }
     });
   }
 
+  var lastDataSig = '';
+  var pendingReload = false;
+  function buildSig(list){
+    if(!Array.isArray(list)) return '';
+    return list.slice().sort(function(a,b){
+      return String(a.ref_code||'').localeCompare(String(b.ref_code||''));
+    }).map(function(it){
+      return [it.ref_code||'', it.status||'', it.payment_status||'', it.attempts||''].join('|');
+    }).join('||');
+  }
+  function hasVisibleModal(){
+    var nodes = document.querySelectorAll('.modal,.update-proof-modal,.profile-modal,.account-blocked-modal,#qrWarningModal');
+    for(var i=0;i<nodes.length;i++){
+      var m = nodes[i];
+      if(!m) continue;
+      var ds = window.getComputedStyle ? window.getComputedStyle(m).display : (m.style && m.style.display);
+      if(ds && ds !== 'none') return true;
+    }
+    return false;
+  }
+  function hasActiveInput(){
+    var el = document.activeElement;
+    if(!el) return false;
+    if(el.isContentEditable) return true;
+    var tag = (el.tagName||'').toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select';
+  }
   function refreshStatuses(){
     fetch('profileresident.php?ajax=1',{credentials:'same-origin'})
       .then(function(r){return r.json();})
       .then(function(data){
         if(!data||!data.success) return;
+        var sig = buildSig(data.active) + '##' + buildSig(data.history) + '##' + String(data.account_status||'');
+        if(lastDataSig && sig !== lastDataSig){
+          pendingReload = true;
+        }
+        lastDataSig = sig;
+        if(pendingReload && !hasVisibleModal() && !hasActiveInput()){
+          location.reload();
+          return;
+        }
         var acct = String(data.account_status || '').toLowerCase();
         if (acct === 'denied' || acct === 'disabled') {
           if (typeof window.showAccountBlockedModal === 'function') {
@@ -2734,6 +2925,17 @@ body.account-blocked { overflow: hidden; }
                     li.setAttribute('data-reserved-by', reservedBy);
                     if(item.payment_status !== undefined){
                       li.setAttribute('data-payment-status', item.payment_status || '');
+                    }
+                    if(String(item.type||'').toLowerCase()==='report'){
+                      li.setAttribute('data-report-id', item.report_id || '');
+                      li.setAttribute('data-report-subject', item.subject || '');
+                      li.setAttribute('data-report-address', item.address || '');
+                      li.setAttribute('data-report-date', item.report_date || '');
+                      li.setAttribute('data-report-nature', item.nature || '');
+                      li.setAttribute('data-report-other', item.other_concern || '');
+                    }
+                    if(String(item.type||'').toLowerCase()==='guest_form'){
+                      li.setAttribute('data-guest-name', item.guest_name || '');
                     }
                     var reservedEl = li.querySelector('.item-reserved-by');
                     if(item.type === 'reservation' && reservedBy){
@@ -2874,6 +3076,17 @@ body.account-blocked { overflow: hidden; }
               if(item.payment_status!==undefined){ li.setAttribute('data-payment-status', item.payment_status||''); }
               var reservedBy=item.reserved_by||'';
               if(reservedBy){ li.setAttribute('data-reserved-by', reservedBy); }
+              if(String(item.type||'').toLowerCase()==='report'){
+                li.setAttribute('data-report-id', item.report_id || '');
+                li.setAttribute('data-report-subject', item.subject || '');
+                li.setAttribute('data-report-address', item.address || '');
+                li.setAttribute('data-report-date', item.report_date || '');
+                li.setAttribute('data-report-nature', item.nature || '');
+                li.setAttribute('data-report-other', item.other_concern || '');
+              }
+              if(String(item.type||'').toLowerCase()==='guest_form'){
+                li.setAttribute('data-guest-name', item.guest_name || '');
+              }
               li.innerHTML='<div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>'
                 +'<div class="item-content">'
                 +  '<div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">'

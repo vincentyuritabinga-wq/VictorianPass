@@ -597,7 +597,7 @@ if (!$data) {
     </div>
     <?php endif; ?>
 
-    <div class="section-title">Personal Information</div>
+    <div class="section-title"><?php echo !empty($data['is_resident_guest']) ? 'Guest Information' : 'Personal Information'; ?></div>
     <div class="info-grid">
         <div class="info-row">
             <span class="info-label"><?php echo !empty($data['is_resident_guest']) ? 'Guest Name' : 'Name'; ?></span>

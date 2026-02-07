@@ -73,6 +73,31 @@ $stmt = $con->prepare("UPDATE reservations SET receipt_path = ?, payment_status 
 $stmt->bind_param('sss', $filePath, $newStatus, $ref_code);
 
 if ($stmt->execute()) {
+    if ($newStatus === 'pending_update') {
+        try {
+            $con->query("CREATE TABLE IF NOT EXISTS notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NULL COMMENT 'For residents',
+                entry_pass_id INT NULL COMMENT 'For visitors',
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                is_read TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+                INDEX idx_user_id (user_id),
+                INDEX idx_is_read (is_read)
+            ) ENGINE=InnoDB");
+            $title = 'Payment proof updated';
+            $message = "User updated payment proof for reservation {$ref_code}.";
+            $type = 'warning';
+            $stmtN = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, ?, ?, ?, NOW())");
+            if ($stmtN) {
+                $stmtN->bind_param('sss', $title, $message, $type);
+                $stmtN->execute();
+                $stmtN->close();
+            }
+        } catch (Throwable $e) {}
+    }
     echo json_encode([
         'success' => true, 
         'message' => 'Receipt uploaded successfully',

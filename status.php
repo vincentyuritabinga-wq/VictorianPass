@@ -40,6 +40,21 @@ function ensureStatusEnums($con){
 }
 ensureStatusEnums($con);
 
+function resetPoolPersonsOnCancel($con, $code){
+    if (!($con instanceof mysqli)) return;
+    $code = trim((string)$code);
+    if ($code === '') return;
+    $hasRes = false;
+    $hasRR = false;
+    $hasGF = false;
+    $c1 = $con->query("SHOW COLUMNS FROM reservations LIKE 'persons'"); if ($c1 && $c1->num_rows > 0) { $hasRes = true; }
+    $c2 = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'persons'"); if ($c2 && $c2->num_rows > 0) { $hasRR = true; }
+    $c3 = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'persons'"); if ($c3 && $c3->num_rows > 0) { $hasGF = true; }
+    if ($hasRes) { $s = $con->prepare("UPDATE reservations SET persons = 0 WHERE ref_code = ? AND amenity = 'Pool'"); $s->bind_param('s', $code); $s->execute(); $s->close(); }
+    if ($hasRR) { $s = $con->prepare("UPDATE resident_reservations SET persons = 0 WHERE ref_code = ? AND amenity = 'Pool'"); $s->bind_param('s', $code); $s->execute(); $s->close(); }
+    if ($hasGF) { $s = $con->prepare("UPDATE guest_forms SET persons = 0 WHERE ref_code = ? AND amenity = 'Pool'"); $s->bind_param('s', $code); $s->execute(); $s->close(); }
+}
+
 // Ensure scan logging table exists (idempotent)
 if ($con instanceof mysqli) {
   $con->query("CREATE TABLE IF NOT EXISTS entry_scans (
@@ -66,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'cancel' && $code !== '' && ($con instanceof mysqli)) {
         try {
             // Prefer guest_forms if exists
-            $stmtG = $con->prepare("SELECT id, approval_status, resident_user_id FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG = $con->prepare("SELECT id, approval_status, resident_user_id, amenity FROM guest_forms WHERE ref_code = ? LIMIT 1");
             $stmtG->bind_param('s', $code);
             $stmtG->execute();
             $resG = $stmtG->get_result();
@@ -74,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resG && $resG->num_rows > 0) {
                 $row = $resG->fetch_assoc();
                 $gfStatusLower = strtolower(trim($row['approval_status'] ?? 'pending'));
+                $amenityName = trim((string)($row['amenity'] ?? ''));
                 if ($gfStatusLower !== 'pending') {
                     // Allow cancel if linked reservation is in pending_update
                     $stmtChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
@@ -81,10 +97,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmtChk->execute();
                     $resChk = $stmtChk->get_result();
                     $stmtChk->close();
-                    $allow = false;
+                    $allow = (strcasecmp($amenityName, 'Pool') === 0);
                     if ($resChk && $resChk->num_rows > 0) {
                         $r = $resChk->fetch_assoc();
-                        $allow = (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
+                        $allow = $allow || (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
                     }
                     if (!$allow) {
                         echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
@@ -108,11 +124,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtUR->bind_param('s', $code);
                 $stmtUR->execute();
                 $stmtUR->close();
+                $stmtURR = $con->prepare("UPDATE resident_reservations SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
+                $stmtURR->bind_param('s', $code);
+                $stmtURR->execute();
+                $stmtURR->close();
+                resetPoolPersonsOnCancel($con, $code);
                 echo json_encode(['success' => true]);
                 exit;
             }
             // Try reservations by ref_code
-            $stmtR = $con->prepare("SELECT id, approval_status, status, payment_status, user_id, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR = $con->prepare("SELECT id, approval_status, status, payment_status, user_id, entry_pass_id, amenity FROM reservations WHERE ref_code = ? LIMIT 1");
             $stmtR->bind_param('s', $code);
             $stmtR->execute();
             $resR = $stmtR->get_result();
@@ -122,7 +143,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $approvalLower = strtolower(trim($row['approval_status'] ?? 'pending'));
                 $statusLower = strtolower(trim($row['status'] ?? ''));
                 $payLower = strtolower(trim($row['payment_status'] ?? ''));
-                $canCancel = ($approvalLower === 'pending') || ($statusLower === 'pending_update') || ($payLower === 'pending_update');
+                $amenityName = trim((string)($row['amenity'] ?? ''));
+                $canCancel = ($approvalLower === 'pending') || ($statusLower === 'pending_update') || ($payLower === 'pending_update') || (strcasecmp($amenityName, 'Pool') === 0);
                 if (!$canCancel) {
                     echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
                     exit;
@@ -141,11 +163,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
                 $stmtU2->close();
+                $stmtURR = $con->prepare("UPDATE resident_reservations SET approval_status='cancelled', updated_at = NOW() WHERE ref_code = ?");
+                $stmtURR->bind_param('s', $code);
+                $stmtURR->execute();
+                $stmtURR->close();
+                resetPoolPersonsOnCancel($con, $code);
                 echo json_encode(['success' => true]);
                 exit;
             }
             // Fallback: resident_reservations
-            $stmtRR = $con->prepare("SELECT id, approval_status, user_id FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR = $con->prepare("SELECT id, approval_status, user_id, amenity FROM resident_reservations WHERE ref_code = ? LIMIT 1");
             $stmtRR->bind_param('s', $code);
             $stmtRR->execute();
             $resRR = $stmtRR->get_result();
@@ -153,6 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resRR && $resRR->num_rows > 0) {
                 $row = $resRR->fetch_assoc();
                 $resStatusLower = strtolower(trim($row['approval_status'] ?? 'pending'));
+                $amenityName = trim((string)($row['amenity'] ?? ''));
                 if ($resStatusLower !== 'pending') {
                     // Check linked reservations payment_status
                     $stmtChk = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
@@ -160,10 +188,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmtChk->execute();
                     $resChk = $stmtChk->get_result();
                     $stmtChk->close();
-                    $allow = false;
+                    $allow = (strcasecmp($amenityName, 'Pool') === 0);
                     if ($resChk && $resChk->num_rows > 0) {
                         $r = $resChk->fetch_assoc();
-                        $allow = (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
+                        $allow = $allow || (strtolower(trim($r['payment_status'] ?? '')) === 'pending_update');
                     }
                     if (!$allow) {
                         echo json_encode(['success' => false, 'message' => 'Only pending or pending update reservations can be cancelled.']);
@@ -196,6 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtUR2->bind_param('s', $code);
                 $stmtUR2->execute();
                 $stmtUR2->close();
+                resetPoolPersonsOnCancel($con, $code);
                 echo json_encode(['success' => true]);
                 exit;
             }

@@ -93,6 +93,7 @@ if (empty($error)) {
                 'name' => $fullName ?: 'Guest',
                 'resident_name' => $residentName,
                 'house' => $row['res_house_number'] ?? 'N/A',
+                'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt
             ];
@@ -167,7 +168,7 @@ if (empty($error)) {
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
                 'validity_label' => $validityLabel,
                 'time_range' => $timeRange,
-                'pax' => $row['number_of_persons'] ?? 1,
+                'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt
             ];
@@ -242,7 +243,7 @@ if (empty($error)) {
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
                 'validity_label' => $validityLabel,
                 'time_range' => $timeRange,
-                'pax' => 1, // Usually 1 for resident reservation? Or check column? Assuming 1.
+                'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt
             ];

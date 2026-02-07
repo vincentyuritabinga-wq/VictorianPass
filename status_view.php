@@ -572,7 +572,7 @@
           closeCancelModal();
           alert(isGuest ? 'Request cancelled.' : 'Reservation cancelled. Downpayment is non-refundable.');
           try {
-            try { sessionStorage.setItem('cancelled:'+code, '1'); } catch(_){}
+            try { localStorage.setItem('cancelled:'+code, String(Date.now())); } catch(_){}
             d.status = 'cancelled';
             window.statusData = d;
             const statusDiv = document.getElementById('statusResult');

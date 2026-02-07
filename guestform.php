@@ -191,7 +191,6 @@ if ($con instanceof mysqli) {
     </div>
     <div class="input-wrap">
       <input type="text" id="visitor_address" name="visitor_address" placeholder="Guest Address (e.g., Blk 00 Lot 00)*" required>
-      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: Blk 00 Lot 00</span>
     </div>
 
     <label class="upload-box">
@@ -589,12 +588,17 @@ async function performSubmit(){
   try {
     const fd = new FormData(entryForm);
     const res = await fetch('submit_guest.php', { method: 'POST', body: fd });
-    const data = await res.json();
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { data = null; }
+    if (!res.ok || !data) {
+      setWarning('visitor_email', 'Server error. Please try again.');
+      return;
+    }
     if (data && data.success) {
       openModal();
     } else {
       let msg = data && data.message ? data.message : 'Failed to save guest.';
-      // Try to map error to field
       if(msg.includes('Resident phone')) setWarning('resident_contact', msg);
       else if(msg.includes('Visitor phone')) setWarning('visitor_contact', msg);
       else if(msg.includes('Resident name')) setWarning('resident_full_name', msg);
@@ -602,7 +606,7 @@ async function performSubmit(){
       else if(msg.includes('valid ID')) setWarning('visitor_valid_id', msg);
       else if(msg.includes('Resident email')) setWarning('resident_email', msg);
       else if(msg.includes('Visitor email')) setWarning('visitor_email', msg);
-      else setWarning('visitor_email', msg); // Fallback
+      else setWarning('visitor_email', msg);
     }
   } catch (err) {
     setWarning('visitor_email', 'Error connecting to server.');

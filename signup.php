@@ -134,6 +134,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $checkEmail->close();
   }
 
+  if (empty($birthdate)) {
+    $serverErrors['birthdate'] = 'Birthdate is required.';
+  } else {
+    $dob = DateTime::createFromFormat('Y-m-d', $birthdate);
+    $dobErrors = DateTime::getLastErrors();
+    $hasDobErrors = is_array($dobErrors) && ($dobErrors['warning_count'] > 0 || $dobErrors['error_count'] > 0);
+    if (!$dob || $hasDobErrors) {
+      $serverErrors['birthdate'] = 'Birthdate is invalid.';
+    } else {
+      $today = new DateTime('today');
+      if ($dob > $today) {
+        $serverErrors['birthdate'] = 'Birthdate cannot be in the future.';
+      } else {
+        $age = $dob->diff($today)->y;
+        if ($age < 18) {
+          $serverErrors['birthdate'] = 'You must be at least 18 years old to register.';
+        }
+      }
+    }
+  }
+
   if (!$is_visitor) {
     if (empty($house_number)) {
       $serverErrors['houseHidden'] = 'Please verify your House Number before signing up.';
@@ -583,7 +604,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <!-- House verification section (Duplicate removed) -->
 
         <div class="input-wrap">
-          <input type="text" id="addressField" name="address" placeholder="Blk 00 Lot 00, Street, Subdivision*" required>
+          <input type="text" id="addressField" name="address" placeholder="Address (e.g., Blk 00 Lot 00, Street, Subdivision)*" required>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -595,7 +616,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <label>Sex*</label>
           </div>
           <div class="form-group">
-            <input type="date" name="birthdate" placeholder=" " required>
+            <input type="date" id="birthdate" name="birthdate" placeholder=" " required>
             <label>Birthdate*</label>
           </div>
         </div>
@@ -1000,6 +1021,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       const isVisitor = document.getElementById('isVisitor');
       const homeownerRow = document.querySelector('.homeowner');
       const addressField = document.getElementById('addressField');
+      const birthdate = document.getElementById('birthdate');
       const form = document.getElementById('signupForm');
 
       function blockInvalidNameChars(e) {
@@ -1414,6 +1436,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             }
           }
 
+          if (birthdate) {
+            const val = birthdate.value;
+            if (!val) {
+              setWarning('birthdate', 'Birthdate is required.');
+              valid = false;
+            } else {
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              const cutoff = new Date(today);
+              cutoff.setFullYear(cutoff.getFullYear() - 18);
+              const cutoffStr = cutoff.toISOString().split('T')[0];
+              if (val > cutoffStr) {
+                setWarning('birthdate', 'You must be at least 18 years old to register.');
+                valid = false;
+              } else {
+                setWarning('birthdate', '');
+              }
+            }
+          }
+
           // Terms: show inline warning and block submit until agreed
           if (terms && !terms.checked) {
             setWarning('terms', 'Please read and agree to the Terms & Conditions.');
@@ -1568,17 +1610,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       var form = document.getElementById('signupForm');
       var bd = document.querySelector('input[name="birthdate"]');
       if (bd) {
-        var d = new Date(); d.setDate(d.getDate()-1);
+        var d = new Date();
+        d.setHours(0,0,0,0);
+        d.setFullYear(d.getFullYear() - 18);
         bd.setAttribute('max', d.toISOString().split('T')[0]);
       }
       if (form) {
         form.addEventListener('submit', function(e){
-          if (bd && bd.value) {
-            var todayStr = new Date().toISOString().split('T')[0];
-            if (bd.value >= todayStr) {
+          if (bd) {
+            if (!bd.value) {
+              setWarning('birthdate', 'Birthdate is required.');
               e.preventDefault();
-              alert('Birthdate must be a past date.');
+              return;
             }
+            var cutoff = new Date();
+            cutoff.setHours(0,0,0,0);
+            cutoff.setFullYear(cutoff.getFullYear() - 18);
+            var cutoffStr = cutoff.toISOString().split('T')[0];
+            if (bd.value > cutoffStr) {
+              setWarning('birthdate', 'You must be at least 18 years old to register.');
+              e.preventDefault();
+              return;
+            }
+            setWarning('birthdate', '');
           }
         });
       }

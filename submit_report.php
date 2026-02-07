@@ -131,7 +131,7 @@ if (!empty($_FILES['proof']) && is_array($_FILES['proof']['name'])) {
 }
 
 // Generate reference code for user feedback
-$reference = 'IR-' . strtoupper(bin2hex(random_bytes(4)));
+$reference = 'RIVH-' . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
 echo json_encode(['success' => true, 'reference' => $reference, 'report_id' => $report_id]);
 exit;

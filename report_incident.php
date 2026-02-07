@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     }
                 }
                 $_SESSION['report_wait_popup'] = true;
-                $_SESSION['report_wait_message'] = 'Please wait for confirmation. The admin and guard will check the report incident.';
+                $_SESSION['report_wait_message'] = 'The report incident will be reviewed by the admin and guard.';
                 header('Location: profileresident.php');
                 exit;
             } else {

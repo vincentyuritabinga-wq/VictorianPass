@@ -189,7 +189,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, receipt_attempts, created_at, ref_code FROM reservations WHERE user_id = ? AND status != 'deleted' AND approval_status != 'deleted' ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, amenity, start_date, end_date, start_time, end_time, status, approval_status, payment_status, denial_reason, receipt_attempts, created_at, ref_code FROM reservations WHERE user_id = ? AND status NOT IN ('deleted','moved_to_history') AND approval_status NOT IN ('deleted','moved_to_history') ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -943,44 +943,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(notifPopup){ notifPopup.style.display='none'; }
     },5000);
   }
-  function addNotificationEntry(code,status,li){
-    if(!code) return;
-    var key=code+'|'+String(status||'');
-    for(var i=0;i<notifItems.length;i++){
-      var it=notifItems[i]||{};
-      if(it.key===key) return;
-      var k=notifDedupeKey(it);
-      if(k===String(status||'').toLowerCase()+'|'+(String(li.getAttribute('data-type')||'').toLowerCase())+'|'+code.toUpperCase()) return;
-    }
-    var type=(li.getAttribute('data-type')||'').toLowerCase();
-    var titleEl=li.querySelector('.item-title');
-    var title=titleEl?titleEl.textContent.trim():(type==='reservation'?'Reservation Schedule':'Request Update');
-    var reasonText='';
-    var detailsEl=li.querySelector('.item-details');
-    if(detailsEl){
-      var details=String(detailsEl.textContent||'');
-      var idx=details.toLowerCase().indexOf('reason:');
-      if(idx!==-1){
-        reasonText=details.slice(idx).replace(/^\s*-\s*/,'').trim();
-      }
-    }
-    var timeText='';
-    var now=new Date();
-    try{ timeText=formatNotifDateTime(now); }catch(e){ timeText=''; }
-    var message='Code: '+code+' • '+fmtLabel(status);
-    if(reasonText) message+=' • '+reasonText;
-    notifItems.push({
-      key:key,
-      code:code,
-      status:fmtLabel(status),
-      title:title,
-      type:type,
-      time:timeText,
-      created_at: now.toISOString(),
-      message:message
-    });
-  }
-  
   function renderNotifPanel(){
     if(!notifPanel) return;
     var header='<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">&times;</button></div>';
@@ -1018,11 +980,47 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   }
   
   var prevStatuses={};
+  var lastDataSig='';
+  var pendingReload=false;
+  function buildSig(list){
+    if(!Array.isArray(list)) return '';
+    return list.slice().sort(function(a,b){
+      return String(a.ref_code||'').localeCompare(String(b.ref_code||''));
+    }).map(function(it){
+      return [it.ref_code||'', it.status||'', it.payment_status||'', it.attempts||''].join('|');
+    }).join('||');
+  }
+  function hasVisibleModal(){
+    var nodes = document.querySelectorAll('.modal,.update-proof-modal,.profile-modal,.account-blocked-modal');
+    for(var i=0;i<nodes.length;i++){
+      var m = nodes[i];
+      if(!m) continue;
+      var ds = window.getComputedStyle ? window.getComputedStyle(m).display : (m.style && m.style.display);
+      if(ds && ds !== 'none') return true;
+    }
+    return false;
+  }
+  function hasActiveInput(){
+    var el = document.activeElement;
+    if(!el) return false;
+    if(el.isContentEditable) return true;
+    var tag = (el.tagName||'').toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select';
+  }
   function refreshStatuses(){
     fetch('dashboardvisitor.php?ajax=1')
       .then(function(r){return r.json();})
       .then(function(data){
         if(!data||!data.active||!data.history) return;
+        var sig = buildSig(data.active) + '##' + buildSig(data.history);
+        if(lastDataSig && sig !== lastDataSig){
+          pendingReload = true;
+        }
+        lastDataSig = sig;
+        if(pendingReload && !hasVisibleModal() && !hasActiveInput()){
+          location.reload();
+          return;
+        }
         
         function fmtLabel(s){
           s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
@@ -1106,16 +1104,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               if(oldStatus && panelId === 'panel-requests'){
                 var isApproved=newStatusLower.indexOf('approv')!==-1;
                 var isDenied=newStatusLower.indexOf('denied')!==-1 || newStatusLower.indexOf('reject')!==-1;
-                
                 if(isApproved || isDenied){
                   li.classList.add('status-updated');
-                  addNotificationEntry(code,newStatus,li);
-                  renderNotifPopup(notifItems.slice(-1));
-                  if(notifCountEl){
-                    var c=parseInt(notifCountEl.textContent||'0')+1;
-                    notifCountEl.textContent=c;
-                    notifCountEl.style.display='inline-block';
-                  }
                 }
               }
               
@@ -1418,6 +1408,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         alert(data && data.message ? data.message : 'Unable to cancel reservation.');
         return;
       }
+      try { localStorage.setItem('cancelled:'+ref, String(Date.now())); } catch(_){}
       // Success - Update UI without alert
       li.setAttribute('data-status','cancelled');
       li.setAttribute('data-payment-status','cancelled');
@@ -1925,13 +1916,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       var parts=scheduleParts(scheduleText);
       var rows='';
       if(parts.date){
-        rows+='<div class="schedule-row"><div class="schedule-key">Date</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
+        rows+='<div class="schedule-row"><div class="schedule-key">Date:</div><div class="schedule-val">'+esc(parts.date)+'</div></div>';
       }
       if(parts.time){
-        rows+='<div class="schedule-row"><div class="schedule-key">Time</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
+        rows+='<div class="schedule-row"><div class="schedule-key">Time:</div><div class="schedule-val">'+esc(parts.time)+'</div></div>';
       }
       if(!rows){
-        rows='<div class="schedule-row"><div class="schedule-key">Schedule</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
+        rows='<div class="schedule-row"><div class="schedule-key">Schedule:</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
       }
       html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
     }
