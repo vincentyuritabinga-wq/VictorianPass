@@ -909,7 +909,8 @@ body.account-blocked { overflow: hidden; }
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
-                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
+                  elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
@@ -992,7 +993,8 @@ body.account-blocked { overflow: hidden; }
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
-                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
+                  elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
@@ -1426,7 +1428,8 @@ body.account-blocked { overflow: hidden; }
   function statusClassFor(s){
     s=(s||'').toLowerCase();
     if(s.indexOf('approv')!==-1) return 'status-approved';
-    if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
+    if(s.indexOf('resolved')!==-1) return 'status-completed';
+    if(s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     return 'status-pending';
@@ -2126,6 +2129,7 @@ body.account-blocked { overflow: hidden; }
       var reportDate = li.getAttribute('data-report-date') || '';
       var reportNature = li.getAttribute('data-report-nature') || '';
       var reportOther = li.getAttribute('data-report-other') || '';
+      var reportId = li.getAttribute('data-report-id') || '';
       var reportRows = '';
       if(reportSubject){
         reportRows+='<div class="schedule-row"><div class="schedule-key">Subject:</div><div class="schedule-val">'+esc(reportSubject)+'</div></div>';
@@ -2146,11 +2150,16 @@ body.account-blocked { overflow: hidden; }
         reportRows+='<div class="schedule-row"><div class="schedule-key">Code:</div><div class="schedule-val">'+esc(ref)+'</div></div>';
       }
       if(reportRows){
-        html+='<div class="item-extra-schedule report-details '+statusClassFor(status)+'"><div class="schedule-title">Report Details</div>'+reportRows+'</div>';
+        html+='<div class="item-extra-schedule report-details"><div class="schedule-title">Report Details</div>'+reportRows+'</div>';
+      }
+      html+='<div class="item-actions">';
+      if(reportId){
+        html+='<button type="button" class="view-details-btn view-report-btn" data-report-id="'+esc(reportId)+'">View details</button>';
       }
       if(canCancelReport && ref){
-        html+='<div class="item-actions"><button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> Cancel Request</button></div>';
+        html+='<button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> Cancel Request</button>';
       }
+      html+='</div>';
       html+='</div></div>';
       html+='</div>';
     }else{
@@ -2193,6 +2202,14 @@ body.account-blocked { overflow: hidden; }
         if(code) openActivityModal(code);
       });
     });
+    var viewReportBtn = extra.querySelector('.view-report-btn');
+    if(viewReportBtn){
+      viewReportBtn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var rid = viewReportBtn.getAttribute('data-report-id') || '';
+        if(rid){ openReportDetailsModal(rid); }
+      });
+    }
     var downloadBtn=extra.querySelector('.download-qr-btn');
     if(downloadBtn){
       downloadBtn.addEventListener('click',function(ev){
@@ -2357,6 +2374,20 @@ body.account-blocked { overflow: hidden; }
       .catch(e => {
         activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>';
       });
+  }
+
+  window.openReportDetailsModal = function(reportId) {
+    if (!activityModal || !activityModalBody) {
+      activityModal = document.getElementById('activityModal');
+      activityModalBody = document.getElementById('activityModalBody');
+      if (!activityModal || !activityModalBody) return;
+    }
+    activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;">Loading...</div>';
+    activityModal.style.display = 'block';
+    fetch('get_report_details.php?id=' + encodeURIComponent(reportId))
+      .then(r => r.text())
+      .then(html => { activityModalBody.innerHTML = html; })
+      .catch(e => { activityModalBody.innerHTML = '<div style="padding:20px;text-align:center;color:red;">Error loading details.</div>'; });
   }
 
   if (activityModalClose) {

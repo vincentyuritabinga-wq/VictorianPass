@@ -2079,6 +2079,210 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 // Get current page from URL parameter or default to dashboard
+if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && isset($_GET['month']) && isset($_GET['format'])) {
+  $m = preg_replace('/[^0-9\-]/', '', $_GET['month']);
+  if (!preg_match('/^\d{4}\-\d{2}$/', $m)) { $m = date('Y-m'); }
+  $start = $m . '-01 00:00:00';
+  $end = date('Y-m-t 23:59:59', strtotime($start));
+  $rows = [];
+  $approved = 0; $denied = 0; $pending = 0; $verifiedPay = 0; $pendingPay = 0; $total = 0;
+  $amenityCounts = [];
+  if ($con instanceof mysqli) {
+    $stmt = $con->prepare("SELECT r.ref_code, r.amenity, r.start_date, r.end_date, r.created_at, COALESCE(r.approval_status,'pending') AS approval_status, COALESCE(r.payment_status,'pending') AS payment_status, COALESCE(u.user_type,'resident') AS user_type, COALESCE(r.booked_by_role,'') AS booked_by_role, COALESCE(r.booked_by_name,'') AS booked_by_name FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.created_at BETWEEN ? AND ? ORDER BY r.created_at ASC");
+    $stmt->bind_param('ss', $start, $end);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($res && ($row = $res->fetch_assoc())) { $rows[] = ['source' => 'reservation'] + $row; }
+    $stmt->close();
+    $stmt2 = $con->prepare("SELECT gf.ref_code, gf.amenity, gf.start_date, gf.end_date, gf.created_at, COALESCE(gf.approval_status,'pending') AS approval_status FROM guest_forms gf WHERE gf.created_at BETWEEN ? AND ? ORDER BY gf.created_at ASC");
+    $stmt2->bind_param('ss', $start, $end);
+    $stmt2->execute();
+    $res2 = $stmt2->get_result();
+    while ($res2 && ($row2 = $res2->fetch_assoc())) { $rows[] = ['source' => 'guest_form', 'payment_status' => '', 'user_type' => 'visitor', 'booked_by_role' => '', 'booked_by_name' => ''] + $row2; }
+    $stmt2->close();
+  }
+  foreach ($rows as $r) {
+    $total++;
+    $st = strtolower($r['approval_status'] ?? 'pending');
+    if ($st === 'approved') $approved++; elseif ($st === 'denied' || $st === 'cancelled') $denied++; else $pending++;
+    $ps = strtolower($r['payment_status'] ?? '');
+    if ($ps === 'verified') $verifiedPay++; elseif ($ps === 'pending' || $ps === 'submitted' || $ps === 'pending_update') $pendingPay++;
+    $amen = trim((string)($r['amenity'] ?? ''));
+    if ($amen !== '') { $amenityCounts[$amen] = ($amenityCounts[$amen] ?? 0) + 1; }
+  }
+  $monthLabel = date('F Y', strtotime($start));
+  $fmt = strtolower($_GET['format']);
+  if ($fmt === 'xlsx') {
+    if (!class_exists('ZipArchive')) {
+      $mkRow = function($cells) {
+        $out = '<Row>';
+        foreach ($cells as $c) {
+          $safe = htmlspecialchars((string)$c, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+          $out .= '<Cell><Data ss:Type="String">'.$safe.'</Data></Cell>';
+        }
+        $out .= '</Row>';
+        return $out;
+      };
+      $xml = '<?xml version="1.0"?>' .
+             '<?mso-application progid="Excel.Sheet"?>' .
+             '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' .
+             'xmlns:o="urn:schemas-microsoft-com:office:office" ' .
+             'xmlns:x="urn:schemas-microsoft-com:office:excel" ' .
+             'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' .
+             '<Worksheet ss:Name="Summary"><Table>';
+      $xml .= $mkRow(["Monthly Summary Report - $monthLabel"]);
+      $xml .= $mkRow([""]);
+      $xml .= $mkRow(["Totals"]);
+      $xml .= $mkRow(["Total Reservations", $total]);
+      $xml .= $mkRow(["Approved", $approved]);
+      $xml .= $mkRow(["Denied/Cancelled", $denied]);
+      $xml .= $mkRow(["Pending", $pending]);
+      $xml .= $mkRow(["Verified Payments", $verifiedPay]);
+      $xml .= $mkRow(["Pending Payments", $pendingPay]);
+      foreach ($amenityCounts as $k=>$v) { $xml .= $mkRow(["Amenity: $k", $v]); }
+      $xml .= $mkRow([""]);
+      $xml .= $mkRow(["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"]);
+      foreach ($rows as $r) {
+        $xml .= $mkRow([
+          $r['ref_code'] ?? '',
+          $r['source'] ?? '',
+          $r['amenity'] ?? '',
+          $r['booked_by_name'] ?? '',
+          $r['booked_by_role'] ?? '',
+          $r['user_type'] ?? '',
+          $r['approval_status'] ?? '',
+          $r['payment_status'] ?? '',
+          $r['start_date'] ?? '',
+          $r['end_date'] ?? '',
+          $r['created_at'] ?? ''
+        ]);
+      }
+      $xml .= '</Table></Worksheet></Workbook>';
+      $fname = 'Monthly_Summary_'.$m.'.xls';
+      header('Content-Type: application/vnd.ms-excel');
+      header('Content-Disposition: attachment; filename="'.$fname.'"');
+      echo $xml;
+      exit;
+    }
+    $colName = function($i){ $s=''; $i=intval($i); while($i>=0){ $s=chr(($i%26)+65).$s; $i=intval($i/26)-1; } return $s; };
+    $xmlRows = [];
+    $makeRow = function($cells, $rowIndex) use ($colName){
+      $i = 0; $xml = '<row r="'.$rowIndex.'">';
+      foreach ($cells as $c) {
+        $ref = $colName($i) . $rowIndex;
+        $safe = htmlspecialchars((string)$c, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $xml .= '<c r="'.$ref.'" t="inlineStr"><is><t>'.$safe.'</t></is></c>';
+        $i++;
+      }
+      $xml .= '</row>';
+      return $xml;
+    };
+    $idx = 1;
+    $xmlRows[] = $makeRow(["Monthly Summary Report - $monthLabel"], $idx++); 
+    $xmlRows[] = $makeRow([""], $idx++);
+    $xmlRows[] = $makeRow(["Totals"], $idx++);
+    $xmlRows[] = $makeRow(["Total Reservations", $total], $idx++);
+    $xmlRows[] = $makeRow(["Approved", $approved], $idx++);
+    $xmlRows[] = $makeRow(["Denied/Cancelled", $denied], $idx++);
+    $xmlRows[] = $makeRow(["Pending", $pending], $idx++);
+    $xmlRows[] = $makeRow(["Verified Payments", $verifiedPay], $idx++);
+    $xmlRows[] = $makeRow(["Pending Payments", $pendingPay], $idx++);
+    foreach ($amenityCounts as $k=>$v) { $xmlRows[] = $makeRow(["Amenity: $k", $v], $idx++); }
+    $xmlRows[] = $makeRow([""], $idx++);
+    $xmlRows[] = $makeRow(["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"], $idx++);
+    foreach ($rows as $r) {
+      $xmlRows[] = $makeRow([
+        $r['ref_code'] ?? '',
+        $r['source'] ?? '',
+        $r['amenity'] ?? '',
+        $r['booked_by_name'] ?? '',
+        $r['booked_by_role'] ?? '',
+        $r['user_type'] ?? '',
+        $r['approval_status'] ?? '',
+        $r['payment_status'] ?? '',
+        $r['start_date'] ?? '',
+        $r['end_date'] ?? '',
+        $r['created_at'] ?? ''
+      ], $idx++);
+    }
+    $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.implode('', $xmlRows).'</sheetData></worksheet>';
+    $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="Summary" sheetId="1" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>';
+    $relsRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    $workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
+    $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>';
+    $zip = new ZipArchive();
+    $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+    $zip->open($tmp, ZipArchive::OVERWRITE);
+    $zip->addFromString('[Content_Types].xml', $contentTypes);
+    $zip->addFromString('_rels/.rels', $relsRels);
+    $zip->addFromString('xl/workbook.xml', $workbookXml);
+    $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
+    $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+    $zip->close();
+    $fname = 'Monthly_Summary_'.$m.'.xlsx';
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="'.$fname.'"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp);
+    @unlink($tmp);
+    exit;
+  } else {
+    $pdf = "%PDF-1.4\n";
+    $objs = [];
+    $objs[] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
+    $objs[] = "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n";
+    $content = "BT /F1 12 Tf 50 800 Td (Monthly Summary Report - ".str_replace(['(',')'],['[',' ]'],$monthLabel).") Tj ET\n";
+    $y = 780;
+    $lines = [
+      "Total Reservations: $total",
+      "Approved: $approved",
+      "Denied/Cancelled: $denied",
+      "Pending: $pending",
+      "Verified Payments: $verifiedPay",
+      "Pending Payments: $pendingPay"
+    ];
+    foreach ($amenityCounts as $k=>$v) { $lines[] = "Amenity $k: $v"; }
+    foreach ($lines as $ln) { $content .= "BT /F1 11 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'],$ln).") Tj ET\n"; $y -= 16; }
+    $y -= 8;
+    $hdr = ["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"];
+    $content .= "BT /F1 11 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'], implode(' | ', $hdr)).") Tj ET\n";
+    $y -= 16;
+    foreach ($rows as $r) {
+      if ($y < 50) { $content .= "BT /F1 11 Tf 50 800 Td (Continued...) Tj ET\n"; $y = 780; }
+      $line = [
+        $r['ref_code'] ?? '',
+        $r['source'] ?? '',
+        $r['amenity'] ?? '',
+        $r['booked_by_name'] ?? '',
+        $r['booked_by_role'] ?? '',
+        $r['user_type'] ?? '',
+        $r['approval_status'] ?? '',
+        $r['payment_status'] ?? '',
+        $r['start_date'] ?? '',
+        $r['end_date'] ?? '',
+        $r['created_at'] ?? ''
+      ];
+      $content .= "BT /F1 10 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'], implode(' | ', $line)).") Tj ET\n";
+      $y -= 14;
+    }
+    $stream = "5 0 obj << /Length ".strlen($content)." >> stream\n".$content."endstream endobj\n";
+    $objs[] = "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n";
+    $objs[] = "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n";
+    $offsets = [strlen($pdf)];
+    foreach ($objs as $o) { $pdf .= $o; $offsets[] = strlen($pdf); }
+    $pdf .= $stream;
+    $offsets[] = strlen($pdf);
+    $xrefPos = strlen($pdf);
+    $pdf .= "xref\n0 6\n0000000000 65535 f \n";
+    $pos = 0; for ($i=1;$i<=5;$i++){ $pos += strlen($objs[$i-1]); $pdf .= sprintf("%010d 00000 n \n", ($i==5)? ($offsets[$i]) : ($offsets[$i-1])); }
+    $pdf .= "trailer << /Size 6 /Root 1 0 R >>\nstartxref\n".$xrefPos."\n%%EOF";
+    $fname = 'Monthly_Summary_'.$m.'.pdf';
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="'.$fname.'"');
+    echo $pdf;
+    exit;
+  }
+}
 $currentPage = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 if ($currentPage === 'verify') {
   $currentPage = 'requests';
@@ -3555,6 +3759,17 @@ body.modal-open { overflow: hidden; }
 <?php if ($currentPage == 'summary'): ?>
 <section class="panel" id="summary-panel">
   <h3>Summary Report</h3>
+  <form method="GET" action="admin.php" style="display:flex; gap:10px; align-items:center; margin:10px 0 18px;">
+    <input type="hidden" name="action" value="export_monthly_report">
+    <label for="monthSel">Month</label>
+    <input id="monthSel" type="month" name="month" value="<?php echo htmlspecialchars(date('Y-m')); ?>" required style="padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px;">
+    <label for="fmtSel">Format</label>
+    <select id="fmtSel" name="format" style="padding:8px 10px; border:1px solid #e0e0e0; border-radius:8px;">
+      <option value="xlsx">Excel (.xlsx)</option>
+      <option value="pdf">PDF</option>
+    </select>
+    <button type="submit" class="btn btn-view"><i class="fa-solid fa-download"></i> Export</button>
+  </form>
   <?php
     $totals = [
       'Residents' => getResidentCount($con),

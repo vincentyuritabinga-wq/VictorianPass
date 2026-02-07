@@ -176,6 +176,52 @@ if (isset($_POST['action']) && $_POST['action'] === 'handle' && isset($_POST['re
   exit;
 }
 
+// API: resolve incident (mark as resolved and notify resident)
+if (isset($_POST['action']) && $_POST['action'] === 'resolve' && isset($_POST['report_id'])) {
+  header('Content-Type: application/json');
+  $rid = intval($_POST['report_id']);
+  $gid = intval($staffId);
+  if ($rid > 0 && $gid > 0) {
+    $stmt = $con->prepare("UPDATE incident_reports SET status = 'resolved', updated_at = NOW() WHERE id = ?");
+    $stmt->bind_param('i', $rid);
+    $ok = $stmt->execute();
+    $stmt->close();
+    // Notify resident if report is linked to a user
+    if ($ok && ($con instanceof mysqli)) {
+      $uid = 0;
+      $q = $con->prepare("SELECT user_id FROM incident_reports WHERE id = ? LIMIT 1");
+      $q->bind_param('i', $rid);
+      $q->execute();
+      $q->bind_result($uid);
+      $q->fetch();
+      $q->close();
+      if ($uid && $uid > 0) {
+        // Ensure notifications table exists
+        $con->query("CREATE TABLE IF NOT EXISTS notifications (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          entry_pass_id INT NULL,
+          title VARCHAR(255) NOT NULL,
+          message TEXT NOT NULL,
+          is_read TINYINT(1) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+          INDEX idx_user_id (user_id),
+          INDEX idx_is_read (is_read)
+        ) ENGINE=InnoDB");
+        $title = 'Incident Resolved';
+        $message = 'Your incident report (ID: ' . $rid . ') has been resolved.';
+        $type = 'success';
+        $n = $con->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
+        if ($n) { $n->bind_param('isss', $uid, $title, $message, $type); $n->execute(); $n->close(); }
+      }
+    }
+    echo json_encode(['success' => $ok]);
+  } else {
+    echo json_encode(['success' => false]);
+  }
+  exit;
+}
 // API: list today's entry scans
 if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
   header('Content-Type: application/json');
@@ -893,6 +939,7 @@ function renderIncidents(rows){
         <button class="btn btn-view details-btn" data-id="${r.id}">View Details</button>
         <button class="btn handle-btn" data-id="${r.id}" style="background:#23412e;color:#fff">Handle Locally</button>
         <button class="btn btn-approve escalate-btn" data-id="${r.id}">Escalate to Admin</button>
+        <button class="btn btn-approve resolve-btn" data-id="${r.id}" style="background:#22c55e;color:#000">Resolve</button>
       </td>`;
     tbody.appendChild(tr);
     if(isNew){ showToast('New resident incident reported'); }
@@ -918,6 +965,18 @@ function renderIncidents(rows){
         .then(r=>r.json()).then(data=>{
           if(data&&data.success){ showToast('Incident escalated to admin'); loadIncidents(); }
           else { showToast('Failed to escalate','error'); }
+        }).catch(_=>{ showToast('Network error','error'); });
+    });
+  });
+  // Attach resolve handlers
+  Array.from(tbody.querySelectorAll('button.resolve-btn')).forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = parseInt(this.getAttribute('data-id')||'0');
+      if(!id) return;
+      fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=resolve&report_id=${encodeURIComponent(id)}` })
+        .then(r=>r.json()).then(data=>{
+          if(data&&data.success){ showToast('Incident marked resolved'); loadIncidents(); }
+          else { showToast('Failed to resolve','error'); }
         }).catch(_=>{ showToast('Network error','error'); });
     });
   });

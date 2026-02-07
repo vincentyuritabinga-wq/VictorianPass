@@ -309,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   .my-reports-list .list-item { cursor: default; }
   .my-reports-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.86rem; color: #6b7280; margin-top: 6px; }
   .my-reports-empty { padding: 16px; text-align: center; color: #777; background: #f8fafc; border: 1px dashed #d1d5db; border-radius: 10px; }
-  .status-approved-guard { background-color: #e0f2fe; color: #0369a1; }
+  .status-approved-guard { background-color: #e8f5e9; color: #2e7d32; }
   .status-approved-admin { background-color: #dcfce7; color: #166534; }
   .report-steps {
       background: #ffffff;

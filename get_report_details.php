@@ -1,0 +1,121 @@
+<?php
+session_start();
+require_once 'connect.php';
+
+$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+if ($id <= 0) {
+  echo '<div style="color:red;padding:20px;">Error: Report ID is required.</div>';
+  exit;
+}
+
+$row = null;
+$proofs = [];
+if ($con instanceof mysqli) {
+  $stmt = $con->prepare("SELECT ir.id, ir.complainant, ir.subject, ir.address, ir.nature, ir.other_concern, ir.user_id, ir.report_date, ir.status, ir.created_at, ir.updated_at, ir.escalated_to_admin, ir.escalated_at, ir.handled_by_guard_id, ir.handled_at, u.first_name, u.middle_name, u.last_name FROM incident_reports ir LEFT JOIN users u ON ir.user_id = u.id WHERE ir.id = ? LIMIT 1");
+  $stmt->bind_param('i', $id);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  if ($res && $res->num_rows > 0) {
+    $row = $res->fetch_assoc();
+  }
+  $stmt->close();
+  $stmtP = $con->prepare("SELECT file_path FROM incident_proofs WHERE report_id = ? ORDER BY uploaded_at ASC");
+  $stmtP->bind_param('i', $id);
+  $stmtP->execute();
+  $resP = $stmtP->get_result();
+  while ($resP && ($p = $resP->fetch_assoc())) { $proofs[] = $p['file_path']; }
+  $stmtP->close();
+}
+
+if (!$row) {
+  echo '<div style="color:red;padding:20px;">Report not found.</div>';
+  exit;
+}
+
+function fmt_dt($d){
+  if (!$d) return '';
+  $ts = strtotime($d);
+  if (!$ts) return htmlspecialchars($d);
+  return date('m/d/y g:i A', $ts);
+}
+?>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .details-header { display:flex; align-items:center; gap:10px; padding:10px 0 0 0; }
+    .details-header img { width:24px; height:24px; }
+    .title { font-weight:700; color:#23412e; font-size:1.1rem; }
+    .section-title { font-weight:700; color:#23412e; margin:18px 0 10px; }
+    .info-grid { display:flex; flex-direction:column; gap:8px; }
+    .info-row { display:flex; justify-content:space-between; gap:12px; font-size:0.95rem; }
+    .info-label { color:#6b7280; font-weight:600; }
+    .info-value { color:#111827; }
+    .timeline { position:relative; margin:10px 0; padding-left:18px; }
+    .timeline-item { position:relative; padding:8px 0 8px 14px; }
+    .timeline-item::before { content:''; position:absolute; left:0; top:10px; width:8px; height:8px; border-radius:50%; background:#23412e; }
+    .timeline-time { color:#6b7280; font-size:0.85rem; margin-top:2px; }
+    .proofs { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .proofs img { max-width:160px; height:auto; border:1px solid #eee; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div class="details-header">
+    <img src="images/logo.svg" alt="Logo">
+    <div class="title">Incident Report Details</div>
+  </div>
+
+  <div class="section-title">Action Log</div>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div>Report submitted</div>
+      <div class="timeline-time"><?php echo fmt_dt($row['created_at']); ?></div>
+    </div>
+    <?php if (!empty($row['handled_at'])): ?>
+    <div class="timeline-item">
+      <div>Guard acknowledged</div>
+      <div class="timeline-time"><?php echo fmt_dt($row['handled_at']); ?></div>
+    </div>
+    <div class="timeline-item">
+      <div>Guard handling on-site</div>
+      <div class="timeline-time"><?php echo fmt_dt($row['handled_at']); ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if (strtolower((string)$row['status']) === 'resolved'): ?>
+    <div class="timeline-item">
+      <div>Resolved</div>
+      <div class="timeline-time"><?php echo fmt_dt($row['updated_at']); ?></div>
+    </div>
+    <div class="timeline-item">
+      <div>Resident notified</div>
+      <div class="timeline-time"><?php echo fmt_dt($row['updated_at']); ?></div>
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <div class="section-title">Report Information</div>
+  <div class="info-grid">
+    <?php $resident = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? '')); ?>
+    <div class="info-row"><span class="info-label">Resident</span><span class="info-value"><?php echo htmlspecialchars($resident ?: ($row['complainant'] ?? 'Resident')); ?></span></div>
+    <?php if (!empty($row['address'])): ?><div class="info-row"><span class="info-label">Address</span><span class="info-value"><?php echo htmlspecialchars($row['address']); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['report_date'])): ?><div class="info-row"><span class="info-label">Report Date</span><span class="info-value"><?php echo htmlspecialchars(date('m/d/y', strtotime($row['report_date']))); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['nature'])): ?><div class="info-row"><span class="info-label">Nature</span><span class="info-value"><?php echo htmlspecialchars($row['nature']); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['other_concern'])): ?><div class="info-row"><span class="info-label">Details</span><span class="info-value"><?php echo htmlspecialchars($row['other_concern']); ?></span></div><?php endif; ?>
+    <div class="info-row"><span class="info-label">Current Status</span><span class="info-value"><?php echo htmlspecialchars(ucwords(str_replace('_',' ', $row['status']))); ?></span></div>
+  </div>
+
+  <?php if (!empty($proofs)): ?>
+  <div class="section-title">Submitted Proof</div>
+  <div class="proofs">
+    <?php foreach ($proofs as $p): ?>
+      <?php if (preg_match('/\.(png|jpg|jpeg)$/i', $p)): ?>
+        <img src="<?php echo htmlspecialchars($p); ?>" alt="Proof">
+      <?php else: ?>
+        <a href="<?php echo htmlspecialchars($p); ?>" target="_blank" style="color:#23412e;text-decoration:underline;"><?php echo htmlspecialchars(basename($p)); ?></a>
+      <?php endif; ?>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</body>
+</html>

@@ -483,6 +483,16 @@ body {
     font-size: 0.85rem;
     border: 1px solid transparent;
 }
+/* Report details should be plain white with black text */
+.item-extra-schedule.report-details {
+    background-color: #ffffff;
+    color: #111827;
+    border-color: #e5e7eb;
+}
+.item-extra-schedule.report-details .schedule-key {
+    color: #111827;
+    opacity: 1;
+}
 
 .item-extra-schedule .schedule-title {
     font-weight: 600;
@@ -503,7 +513,8 @@ body {
     opacity: 0.85;
 }
 .item-extra-schedule.report-details .schedule-key {
-    color: #eab308;
+    color: #111827;
+    opacity: 1;
 }
 
 .item-extra-schedule .schedule-val {
