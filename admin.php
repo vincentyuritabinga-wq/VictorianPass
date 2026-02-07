@@ -3789,15 +3789,17 @@ body.modal-open { overflow: hidden; }
                   echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($req['id']) . ", '" . htmlspecialchars($srcAttr, ENT_QUOTES) . "')\"><i class='fa-solid fa-eye'></i> View More Details</button>";
                   if ($isAmenity) {
                     $payStatusLower = strtolower($payStatus ?? '');
-                    if (!empty($receiptPath)) {
-                      $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
-                      if ($isPdf) {
-                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($resIdMatch) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                    if ($payStatusLower !== 'verified') {
+                      if (!empty($receiptPath)) {
+                        $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                        if ($isPdf) {
+                          echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($resIdMatch) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                        } else {
+                          echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($resIdMatch) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                        }
                       } else {
-                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($resIdMatch) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                        echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                       }
-                    } else {
-                      echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                     }
                     if ($resIdMatch && !empty($receiptPath) && $payStatusLower !== 'verified') {
                       if (($receiptAttempts ?? 0) >= 3) {
@@ -3950,15 +3952,17 @@ body.modal-open { overflow: hidden; }
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
                   if ($payStatusLower === 'rejected') { echo "</td>"; echo "</tr>"; continue; }
                   $receiptPath = $gar['receipt_path'] ?? null;
+                  if ($payStatusLower !== 'verified') {
                     if (!empty($receiptPath)) {
-                    $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
-                    if ($isPdf) {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($gar['id']) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                      $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                      if ($isPdf) {
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($gar['id']) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                      } else {
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($gar['id']) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      }
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($gar['id']) : 0) . ", 'resident_guest_forms')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                     }
-                  } else {
-                    echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
                   }
                   if (!empty($gar['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
                     echo "<form method='post' style='display:inline;'>";
@@ -4522,15 +4526,17 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                   echo "</form>";
                 } else if ($payStatusLower !== 'rejected') {
-                  if (!empty($receiptPath)) {
-                    $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
-                    if ($isPdf) {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'requests')\"><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                  if ($payStatusLower !== 'verified') {
+                    if (!empty($receiptPath)) {
+                      $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
+                      if ($isPdf) {
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'requests')\"><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                      } else {
+                        echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'requests')\"><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      }
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'requests')\"><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      echo "<div class='muted'>No receipt</div>";
                     }
-                  } else {
-                    echo "<div class='muted'>No receipt</div>";
                   }
                   if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
                     if ($attempts >= 3) {
@@ -4757,15 +4763,17 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   }
                   if ($payStatusLower !== 'rejected') {
                   $receiptPath = $rr['receipt_path'] ?? null;
+                  if ($payStatusLower !== 'verified') {
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . ($payStatusLower !== 'verified' ? intval($rr['id']) : 0) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                     }
                   } else {
                     echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                  }
                   }
                   if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
                     $attempts = intval($rr['receipt_attempts'] ?? 0);
@@ -5237,11 +5245,16 @@ function showReservationDetails(reservationId, expectedType){
       const receiptPath = (d.receipt_path||'').toString().trim();
       const payStatus = (d.payment_status||'').toString().toLowerCase();
       const isPdf = /\.pdf$/i.test(receiptPath);
+      const redirectPage = isResidentGuest ? 'resident_guest_forms' : (userType === 'visitor' ? 'visitor_requests' : 'requests');
+      const receiptButton = (receiptPath && payStatus==='verified') ? (
+        `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, '${redirectPage}')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
+      ) : '';
       const receiptHtml = (receiptPath && payStatus==='verified') ? (
         `<div class="details-section" style="animation: fadeIn 0.5s ease;">
           <h4>Proof of Payment</h4>
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
           <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
+          ${receiptButton}
         </div>`
       ) : '';
       const content = `
@@ -5373,11 +5386,15 @@ function showResidentReservationDetails(rrId){
       })() : '';
       const receiptPath = (d.receipt_path||'').toString().trim();
       const isPdf = /\.pdf$/i.test(receiptPath);
+      const receiptButton = (receiptPath && ps==='verified') ? (
+        `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, 'resident_guest_forms')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
+      ) : '';
       const receiptHtml = (receiptPath && ps==='verified') ? (
         `<div class="details-section" style="animation: fadeIn 0.5s ease;">
           <h4>Proof of Payment</h4>
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
           <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
+          ${receiptButton}
         </div>`
       ) : '';
       const content = `
@@ -5442,13 +5459,6 @@ function showReservationDetailsByRef(ref){
     .catch(function(){});
 }
 
-window.addEventListener('DOMContentLoaded', function(){
-  try {
-    var u = new URL(window.location.href);
-    var ref = u.searchParams.get('ref');
-    if(ref){ showReservationDetailsByRef(ref); }
-  } catch(e) {}
-});
 function closeResidentReservationModal(){
   var m = document.getElementById('residentReservationModal');
   if(m){ m.style.display = 'none'; }

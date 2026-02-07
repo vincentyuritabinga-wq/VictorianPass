@@ -125,8 +125,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         $ext=strtolower(pathinfo($origName,PATHINFO_EXTENSION));
         if(!in_array($ext,$allowedExt,true)){
           $msg='Unsupported receipt file type. Please upload a JPG, PNG, or PDF.';
-        } else if(($_FILES['receipt']['size']??0) > 10*1024*1024){
-          $msg='Receipt file is too large (max 10MB).';
+        } else if(($_FILES['receipt']['size']??0) > 5*1024*1024){
+          $msg='Receipt file is too large (max 5MB).';
         } else {
           $uploadsDir=__DIR__.DIRECTORY_SEPARATOR.'uploads'.DIRECTORY_SEPARATOR.'receipts'; if(!is_dir($uploadsDir)) { @mkdir($uploadsDir,0775,true); }
           $base=preg_replace('/[^a-zA-Z0-9_-]/','_', $ref_code);
@@ -313,7 +313,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .upload-area .label{color:#111827;font-weight:600;font-size:.95rem}
     #receiptInput{padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#111827;font-size:.95rem;font-family:'Poppins',sans-serif}
     #receiptInput:focus{border-color:#23412e;box-shadow:0 0 0 3px rgba(35,65,46,0.1);outline:none}
-    #confirmBtn{padding:12px 20px;font-size:1rem;margin-top:4px;align-self:flex-end}
+    .field-label{color:#111827;font-weight:600;font-size:.95rem;display:block;margin-top:6px}
+    .field-input{width:100%;padding:.75rem;border:1px solid #ccc;border-radius:8px;font-size:.95rem;background:#fff;color:#111827;font-family:'Poppins',sans-serif;box-sizing:border-box;margin-top:6px}
+    .field-input:focus{border-color:#23412e;box-shadow:0 0 0 3px rgba(35,65,46,0.1);outline:none}
+    #confirmBtn{padding:12px 20px;font-size:1rem;margin-top:8px;align-self:flex-end}
     .upload-preview{display:flex;flex-direction:column;gap:8px;align-items:flex-start;justify-content:flex-start;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px}
     .upload-preview img{max-width:100%;height:auto;border-radius:8px}
     .upload-preview .file-name{color:#111827;font-weight:600;font-size:.9rem}
@@ -330,9 +333,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     .navbar{display:flex;justify-content:space-between;align-items:center;padding:14px 6%;background:rgba(43,38,35,0.95);backdrop-filter:blur(10px);position:fixed;top:0;left:0;right:0;z-index:1000;border-bottom:1px solid rgba(255,255,255,0.1);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
     .logo{display:flex;align-items:center;gap:12px}
     .back-row{max-width:720px;margin:14px auto 0;padding:0 16px}
-    .back-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:#fff;color:#111;border:1px solid #f2c24f;border-radius:999px;font-weight:700;text-decoration:none;font-size:1.1rem;box-shadow:0 4px 10px rgba(15,23,42,0.08);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease,filter .2s ease}
-    .back-btn i{color:#f2c24f;}
-    .back-btn:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,0.12);filter:brightness(0.95)}
+    .back-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:#d4a017;color:#fff;border:none;border-radius:999px;font-weight:700;text-decoration:none;font-size:1.1rem;box-shadow:0 6px 14px rgba(212, 160, 23, 0.35);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+    .back-btn i{color:#ffffff;}
+    .back-btn:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 8px 16px rgba(212, 160, 23, 0.4);background:#b68912}
     .logo img{width:42px;height:42px}
     .brand-text h1{margin:0;font-size:1.3rem;font-weight:700;color:#f4f4f4}
     .brand-text p{margin:0;font-size:.85rem;color:#aaa}
@@ -414,13 +417,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         <input type="hidden" name="continue" value="<?php echo htmlspecialchars($continue); ?>">
         <input type="hidden" name="entry_pass_id" value="<?php echo intval($entry_pass_id); ?>">
         <div class="upload-area">
-          <label for="receiptInput" class="label">Upload GCash Receipt (JPG, PNG, PDF)</label>
+          <label for="receiptInput" class="label">Upload GCash Receipt (JPG, PNG, PDF • Max 5MB)</label>
           <input type="file" name="receipt" id="receiptInput" accept="image/jpeg,image/png,.pdf" required>
           <div class="upload-preview" id="uploadPreview" style="display:none"></div>
           <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
         </div>
-        <label for="gcashReferenceNumber" class="label">GCash Reference Number (from receipt)</label>
-        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d{12}" minlength="12" maxlength="12">
+        <label for="gcashReferenceNumber" class="field-label">GCash Reference Number (from receipt)</label>
+        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" class="field-input" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d{12}" minlength="12" maxlength="12">
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
       </form>
     </div>

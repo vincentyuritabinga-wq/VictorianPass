@@ -116,7 +116,7 @@ if (!empty($_FILES['proof']) && is_array($_FILES['proof']['name'])) {
   for ($i = 0; $i < count($names); $i++) {
     if ($errs[$i] !== UPLOAD_ERR_OK) { continue; }
     if (!in_array($types[$i], $allowedTypes)) { continue; }
-    if ($sizes[$i] > 10 * 1024 * 1024) { continue; } // 10MB per file
+    if ($sizes[$i] > 5 * 1024 * 1024) { continue; }
 
     $ext = pathinfo($names[$i], PATHINFO_EXTENSION);
     $basename = 'proof_' . $report_id . '_' . time() . '_' . bin2hex(random_bytes(3)) . '.' . $ext;

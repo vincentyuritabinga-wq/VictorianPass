@@ -980,6 +980,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                   <div class="amenity-preview-title" id="amenityPreviewTitle">Amenity</div>
                 </div>
                 <div class="amenity-preview-meta" id="amenityPreviewDays"></div>
+                <div class="amenity-preview-meta" id="amenityPreviewHours"></div>
                 <div class="amenity-preview-meta" id="amenityPreviewPrice"></div>
                 <button type="button" id="amenityReturnBtn" class="btn-secondary amenity-return" style="display:none;">
                   <img src="images/change.png" alt="" class="amenity-change-icon"> Change Amenity
@@ -1212,7 +1213,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts[1]}-${parts[2]}-${parts[0]}`;
+    return `${parts[1]}/${parts[2]}/${String(parts[0]).slice(-2)}`;
   }
 
   async function loadBookedDates(){
@@ -1593,6 +1594,24 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     if(pDays){
       if(info.days){ pDays.textContent=info.days; pDays.style.display='block'; }
       else { pDays.textContent=''; pDays.style.display='none'; }
+    }
+    const pHours=document.getElementById('amenityPreviewHours');
+    if(pHours){
+      try{
+        const hrs=getAmenityHours(info.value);
+        if(hrs){
+          const minH=parseInt(hrs.min.split(':')[0],10);
+          const maxH=parseInt(hrs.max.split(':')[0],10);
+          pHours.textContent=`Hours: ${formatTimeSlot(minH)} – ${formatTimeSlot(maxH)}`;
+          pHours.style.display='block';
+        }else{
+          pHours.textContent='';
+          pHours.style.display='none';
+        }
+      }catch(_){
+        pHours.textContent='';
+        pHours.style.display='none';
+      }
     }
     const pPrice=document.getElementById('amenityPreviewPrice');
     if(pPrice){

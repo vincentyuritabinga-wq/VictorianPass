@@ -251,7 +251,7 @@
     function formatMDY(d){
       if(!d) return '';
       var p=String(d).split('-'); if(p.length!==3) return d;
-      return [p[1].padStart(2,'0'), p[2].padStart(2,'0'), String(p[0]).slice(-2)].join('.');
+      return [p[1].padStart(2,'0'), p[2].padStart(2,'0'), String(p[0]).slice(-2)].join('/');
     }
     function fmtTime(t){
       if(!t) return '';

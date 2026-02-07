@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($errs[$i] !== UPLOAD_ERR_OK) { continue; }
             $ext = strtolower(pathinfo($names[$i], PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed_exts, true)) { $upload_errors[] = 'File type is not allowed: ' . $names[$i]; continue; }
-            if ($sizes[$i] > 10 * 1024 * 1024) { $upload_errors[] = 'File size exceeds 10 MB: ' . $names[$i]; continue; }
+            if ($sizes[$i] > 5 * 1024 * 1024) { $upload_errors[] = 'File size exceeds 5 MB: ' . $names[$i]; continue; }
             $safeName = preg_replace('/[^A-Za-z0-9_\-.]/', '_', $names[$i]);
             $newName = 'report_' . time() . '_' . $safeName;
             $dest = $uploadDir . $newName;
@@ -501,7 +501,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   <input type="file" name="proof[]" multiple accept=".jpg,.jpeg,.png,.pdf,.docx" style="display:none;" onchange="updateFileList(this)">
                   <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
                   <div class="upload-text">Click to upload files</div>
-                  <div class="upload-hint">Max 10MB per file (JPG, PNG, PDF, DOCX)</div>
+                  <div class="upload-hint">Max 5MB per file (JPG, PNG, PDF, DOCX)</div>
                   <div id="fileList" style="margin-top:10px; font-size:0.85rem; color:#23412e;"></div>
               </label>
           </div>
@@ -550,7 +550,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                   $approvalLabel = 'Guard Approved';
                   $badgeClass = 'status-badge status-approved-guard';
                 }
-                $rDate = !empty($r['report_date']) ? date('M d, Y', strtotime($r['report_date'])) : date('M d, Y', strtotime($r['created_at']));
+                $rDate = !empty($r['report_date']) ? date('m/d/y', strtotime($r['report_date'])) : date('m/d/y', strtotime($r['created_at']));
                 $natureLabel = $r['nature'] ?: ($r['other_concern'] ?: '-');
                 $subjectLabel = $r['subject'] ?: 'Untitled Report';
               ?>

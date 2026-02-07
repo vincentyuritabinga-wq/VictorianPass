@@ -39,4 +39,4 @@ so that the title displays only: “Reservation – Community Pool” (using the
 Ensure the navigation is consistent with existing admin routing and behavior.
 
 @ Update the downpayment back button to match the exact design, styling, and behavior of the reserve page back button.
-Keep the existing layout and CSS structure unchanged.
+Keep the existing layout and CSS structure unchanged.make sure to make the photo smaller so it doesnt take up the whole screen like this and i cant click close out of the pop up modal also just make the edit button and submit visible once the photo is uploaded 

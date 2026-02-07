@@ -29,7 +29,7 @@ if ($con) {
 $firstName = $user_data['first_name'] ?? 'Visitor';
 $fullName = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 $birthdate = $user_data['birthdate'] ?? '';
-$birthdateDisplay = $birthdate ? date('M d, Y', strtotime($birthdate)) : '';
+$birthdateDisplay = $birthdate ? date('m/d/y', strtotime($birthdate)) : '';
 $userStatus = $user_data['status'] ?? 'pending';
 $normalizedUserStatus = strtolower(trim($userStatus));
 $isAccountBlocked = in_array($normalizedUserStatus, ['denied', 'disabled'], true);
@@ -202,9 +202,9 @@ if ($stmt) {
         
         $dateStr = '';
         if (!empty($start) && !empty($end)) {
-            $dateStr = date('m.d.y', strtotime($start)) . ' - ' . date('m.d.y', strtotime($end));
+            $dateStr = date('m/d/y', strtotime($start)) . ' - ' . date('m/d/y', strtotime($end));
         } elseif (!empty($start)) {
-            $dateStr = date('m.d.y', strtotime($start));
+            $dateStr = date('m/d/y', strtotime($start));
         } else {
             $dateStr = 'Date not set';
         }
@@ -371,16 +371,16 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 </style>
 <style>.note-error{color:#b91c1c;font-weight:700;}</style>
 <style>
-.item-extra-link.item-extra-cancel{background:#c0392b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
-.item-extra-link.item-extra-cancel:hover{filter:brightness(0.95)}
-.cancel-modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:nowrap}
-.cancel-modal-actions .cancel-modal-keep,.cancel-modal-actions .cancel-modal-confirm{padding:10px 16px;min-width:180px;border-radius:8px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:0}
-.cancel-modal-actions .cancel-modal-keep{background:#eef2f0;color:#23412e}
+.item-extra-link.item-extra-cancel{background:#ef4444;color:#ffffff;border:1px solid #ef4444;padding:8px 16px;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-weight:500;text-decoration:none}
+.item-extra-link.item-extra-cancel:hover{background:#dc2626;color:#ffffff;transform:translateY(-2px);box-shadow:0 4px 6px rgba(239, 68, 68, 0.2);text-decoration:none}
+.cancel-modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:nowrap;padding:6px 0 0 0}
+.cancel-modal-actions .cancel-modal-keep,.cancel-modal-actions .cancel-modal-confirm{padding:10px 20px;border-radius:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:0}
+.cancel-modal-actions .cancel-modal-keep{background:#e5e7eb;color:#111827}
 .cancel-modal-actions .cancel-modal-confirm{background:#c0392b;color:#fff}
-.cancel-modal-content{width:520px;max-width:92vw}
-.cancel-modal-note{color:#b91c1c;font-weight:700}
-.item-extra-link.update-proof-btn{background:#f59e0b !important;color:#fff !important;border:0;padding:10px 14px;border-radius:8px;display:inline-flex !important;align-items:center;justify-content:center;white-space:nowrap;min-width:180px !important;font-weight:600}
-.item-extra-link.update-proof-btn:hover{filter:brightness(0.95)}
+.cancel-modal-content{width:90%;max-width:450px;padding:30px;border-radius:18px}
+.cancel-modal-note{color:#c0392b;font-weight:600;font-size:0.85rem}
+.item-extra-link.update-proof-btn{background:#7c3aed;color:#ffffff;border:1px solid #7c3aed;padding:8px 16px;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-weight:500;text-decoration:none}
+.item-extra-link.update-proof-btn:hover{background:#6d28d9;color:#ffffff;transform:translateY(-2px);box-shadow:0 4px 6px rgba(124, 58, 237, 0.25);text-decoration:none}
 </style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
@@ -496,7 +496,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
                     $displayTitle = 'Reservation – ' . $amenityName;
                   }
-                  $createdText = date('m.d.y H:i', strtotime($act['date']));
+                  $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -575,7 +575,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     if (strcasecmp($amenityName, 'Pool') === 0) { $amenityName = 'Community Pool'; }
                     $displayTitle = 'Reservation – ' . $amenityName;
                   }
-                  $createdText = date('m.d.y H:i', strtotime($act['date']));
+                  $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
               <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>">
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
@@ -653,6 +653,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <button type="button" class="update-proof-close" aria-label="Close">&times;</button>
     <h3>Upload the Updated Proof Here</h3>
     <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
+    <div class="update-proof-hint">Max 5MB (JPG, PNG, PDF)</div>
     <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
     <div id="updateProofPreview" class="update-proof-preview" style="display:none; margin-top:10px;"></div>
     <div class="update-proof-actions">
@@ -685,6 +686,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         </label>
         <input type="file" id="profileUpload" accept="image/*" style="display:none">
       </div>
+      <div class="profile-upload-note">Max 5MB</div>
       <div class="profile-title">
         <h3><?php echo htmlspecialchars($fullName); ?></h3>
         <span class="profile-role">Visitor</span>
@@ -871,7 +873,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var mi=String(d.getMinutes()).padStart(2,'0');
     var ampm=h>=12?'PM':'AM';
     h=h%12; if(h===0) h=12;
-    return mm+'.'+dd+'.'+yy+' '+h+':'+mi+' '+ampm;
+    return mm+'/'+dd+'/'+yy+' '+h+':'+mi+' '+ampm;
   }
   function formatNotifMessage(message){
     var safe=String(message||'').replace(/[<>]/g,'');
@@ -1184,7 +1186,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 scheduleText=detailsText.slice(0, detailsText.indexOf('Reason:')).trim();
               }
               var createdText='';
-              try{ createdText = item.date ? (new Date(item.date)).toLocaleString('en-US',{hour12:false}).replace(/\//g,'.') : ''; }catch(e){}
+              try{ createdText = item.date ? formatNotifDateTime(item.date) : ''; }catch(e){}
               li=document.createElement('div');
               li.className='list-item';
               li.setAttribute('data-ref-code',code);
@@ -1313,6 +1315,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   var updateProofEditBtn=document.getElementById('updateProofEditBtn');
   var updateProofRemoveBtn=document.getElementById('updateProofRemoveBtn');
   var updateProofSubmitBtn=document.getElementById('updateProofSubmitBtn');
+  var updateProofPreview=document.getElementById('updateProofPreview');
+  var updateProofActions=updateProofModal?updateProofModal.querySelector('.update-proof-actions'):null;
   var updateProofRef=null;
   var updateProofLi=null;
 
@@ -1321,6 +1325,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(updateProofFileName) updateProofFileName.textContent='No file selected';
     if(updateProofRemoveBtn) updateProofRemoveBtn.disabled=true;
     if(updateProofSubmitBtn) updateProofSubmitBtn.disabled=true;
+    if(updateProofPreview){ updateProofPreview.innerHTML=''; updateProofPreview.style.display='none'; }
+    if(updateProofActions) updateProofActions.classList.remove('is-visible');
   }
 
   function openUpdateProofModal(li, ref){
@@ -1329,11 +1335,15 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     updateProofRef=ref;
     resetUpdateProofForm();
     updateProofModal.style.display='flex';
+    requestAnimationFrame(function(){ updateProofModal.classList.add('is-open'); });
   }
 
   function closeUpdateProofModal(){
     if(!updateProofModal) return;
-    updateProofModal.style.display='none';
+    updateProofModal.classList.remove('is-open');
+    setTimeout(function(){
+      if(updateProofModal) updateProofModal.style.display='none';
+    }, 250);
     updateProofLi=null;
     updateProofRef=null;
     resetUpdateProofForm();
@@ -1602,24 +1612,30 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(updateProofFileName) updateProofFileName.textContent = file ? file.name : 'No file selected';
       if(updateProofRemoveBtn) updateProofRemoveBtn.disabled = !file;
       if(updateProofSubmitBtn) updateProofSubmitBtn.disabled = !file;
-      var preview=document.getElementById('updateProofPreview');
-      if(preview){
-        preview.innerHTML='';
-        preview.style.display='none';
+      if(updateProofPreview){
+        updateProofPreview.innerHTML='';
+        updateProofPreview.style.display='none';
         if(file){
           var type=(file.type||'').toLowerCase();
           if(type.indexOf('image/')===0){
             var reader=new FileReader();
             reader.onload=function(e){
-              preview.innerHTML='<img src="'+e.target.result+'" alt="Preview" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;">';
-              preview.style.display='block';
+              updateProofPreview.innerHTML='<img src="'+e.target.result+'" alt="Preview" style="border:1px solid #e5e7eb;border-radius:8px;">';
+              updateProofPreview.style.display='block';
             };
             reader.readAsDataURL(file);
           } else if(type.indexOf('pdf')!==-1){
             var url=URL.createObjectURL(file);
-            preview.innerHTML='<a href="'+url+'" target="_blank" style="color:#23412e;text-decoration:underline;font-weight:600;">Open selected PDF</a>';
-            preview.style.display='block';
+            updateProofPreview.innerHTML='<a href="'+url+'" target="_blank" style="color:#23412e;text-decoration:underline;font-weight:600;">Open selected PDF</a>';
+            updateProofPreview.style.display='block';
           }
+        }
+      }
+      if(updateProofActions){
+        if(file){
+          updateProofActions.classList.add('is-visible');
+        } else {
+          updateProofActions.classList.remove('is-visible');
         }
       }
     });
@@ -1922,14 +1938,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
     html+='<div class="item-actions">';
+    if(qrSrcForDownload){
+        html+='<button type="button" class="item-extra-link download-qr-btn" data-qr="'+esc(qrSrcForDownload)+'" data-type="'+esc(type)+'"><i class="fa-solid fa-qrcode"></i> Download QR</button>';
+    }
     if(canUpdateProof && ref){
-        html+='<button type="button" class="item-extra-link update-proof-btn view-details-btn" data-ref="'+esc(ref)+'">Update Proof</button>';
+        html+='<button type="button" class="item-extra-link update-proof-btn" data-ref="'+esc(ref)+'"><i class="fa-solid fa-upload"></i> Update Proof</button>';
     }
     if(ref){
         html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
     }
     if(canCancel && ref){
-        html+='<button type="button" class="item-extra-link item-extra-cancel">'+(type==='guest_form'?'Cancel Request':'Cancel Reservation')+'</button>';
+        html+='<button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> '+(type==='guest_form'?'Cancel Request':'Cancel Reservation')+'</button>';
     }
     html+='</div>';
     html+='</div></div></div>';

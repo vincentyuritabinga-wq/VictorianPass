@@ -197,7 +197,7 @@ if ($con instanceof mysqli) {
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
       <img src="images/mainpage/upload.svg" alt="Upload">
-      <p>Upload Guest’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
+      <p>Upload Guest’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small><br><small>Max 5MB</small></p>
     </label>
     <div class="privacy-note" style="background:#f9fafb;border:1px solid #e5e7eb;color:#374151;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
       Data Privacy Notice: The visitor’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
@@ -243,7 +243,7 @@ if ($con instanceof mysqli) {
                 $contact = $g['visitor_contact'] ?? '';
                 $emailG = $g['visitor_email'] ?? '';
                 $created = $g['created_at'] ?? '';
-                $createdLabel = $created ? date('M d, Y', strtotime($created)) : '';
+                $createdLabel = $created ? date('m/d/y', strtotime($created)) : '';
               ?>
               <tr>
                 <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;font-weight:600;"><?php echo htmlspecialchars($guestName); ?></td>

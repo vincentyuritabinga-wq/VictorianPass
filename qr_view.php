@@ -145,11 +145,11 @@ if (empty($error)) {
 
             $validityLabel = '';
             if (!empty($startDate) && !empty($endDate)) {
-                $validityLabel = (date('m.d.y', strtotime($startDate)) !== date('m.d.y', strtotime($endDate)))
-                    ? (date('m.d.y', strtotime($startDate)) . ' - ' . date('m.d.y', strtotime($endDate)))
-                    : date('m.d.y', strtotime($startDate));
+                $validityLabel = (date('m/d/y', strtotime($startDate)) !== date('m/d/y', strtotime($endDate)))
+                    ? (date('m/d/y', strtotime($startDate)) . ' - ' . date('m/d/y', strtotime($endDate)))
+                    : date('m/d/y', strtotime($startDate));
             } elseif (!empty($startDate)) {
-                $validityLabel = date('m.d.y', strtotime($startDate));
+                $validityLabel = date('m/d/y', strtotime($startDate));
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
@@ -220,11 +220,11 @@ if (empty($error)) {
 
             $validityLabel = '';
             if (!empty($startDate) && !empty($endDate)) {
-                $validityLabel = (date('m.d.y', strtotime($startDate)) !== date('m.d.y', strtotime($endDate)))
-                    ? (date('m.d.y', strtotime($startDate)) . ' - ' . date('m.d.y', strtotime($endDate)))
-                    : date('m.d.y', strtotime($startDate));
+                $validityLabel = (date('m/d/y', strtotime($startDate)) !== date('m/d/y', strtotime($endDate)))
+                    ? (date('m/d/y', strtotime($startDate)) . ' - ' . date('m/d/y', strtotime($endDate)))
+                    : date('m/d/y', strtotime($startDate));
             } elseif (!empty($startDate)) {
-                $validityLabel = date('m.d.y', strtotime($startDate));
+                $validityLabel = date('m/d/y', strtotime($startDate));
             }
             $timeRange = '';
             if (!empty($startTime) && !empty($endTime)) {
