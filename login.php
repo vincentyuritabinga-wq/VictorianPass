@@ -162,6 +162,13 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+.page-fade-out {
+  animation: fadeOut 0.35s ease-in forwards;
+}
     * {
       margin: 0;
       padding: 0;
@@ -547,7 +554,7 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
           </div>
 
           <div class="forgot">
-            <a href="forgot_password.php">Forgot Password?</a>
+            <a href="forgot_password.php" id="forgotLink">Forgot Password?</a>
           </div>
 
           <button type="submit" class="btn-login" id="btnLogin">Login</button>
@@ -654,6 +661,19 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
         };
         tick();
         const timer = setInterval(tick, 1000);
+      }
+      const forgotLink = document.getElementById('forgotLink');
+      if (forgotLink) {
+        forgotLink.addEventListener('click', function(e){
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+            return;
+          }
+          e.preventDefault();
+          document.body.classList.add('page-fade-out');
+          setTimeout(function(){
+            window.location.href = forgotLink.href;
+          }, 320);
+        });
       }
     });
   </script>

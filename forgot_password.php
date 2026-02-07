@@ -84,11 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <title>Forgot Password</title>
   <link rel="icon" type="image/png" href="images/logo.svg">
   <?php if (!empty($ok)) { echo '<meta http-equiv="refresh" content="10;url=login.php">'; } ?>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *{font-family:'Poppins',sans-serif}
     *,*:before,*:after{box-sizing:border-box}
-    body{margin:0;background:#fafbfc;color:#111827;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    body{margin:0;background:#fafbfc;color:#111827;min-height:100vh;display:flex;align-items:center;justify-content:center;animation:fadeIn .6s ease-in-out}
     .wrap{max-width:520px;margin:0 auto;padding:0 16px}
     .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:24px;box-shadow:0 4px 16px rgba(15,23,42,0.08)}
     .title{font-weight:700;font-size:1.5rem;margin:0 0 6px;color:#111827}
@@ -99,10 +100,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .btn{background:#23412e;color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease;font-size:.95rem}
     .btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(35,65,46,0.4);opacity:.95}
     .btn[disabled]{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+    .back-arrow{width:42px;height:42px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:#d4a017;box-shadow:0 6px 14px rgba(212,160,23,0.35);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease;margin-bottom:10px}
+    .back-arrow i{font-size:18px;color:#ffffff}
+    .back-arrow:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(212,160,23,0.45);opacity:.95}
     .notice{padding:12px 14px;border-radius:8px;margin-bottom:10px}
     .ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
     .err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
     .field-msg{color:#991b1b;font-size:.85rem;margin-top:8px}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
     @media (max-width:480px){
       .card{padding:18px;border-radius:12px}
       .title{font-size:1.35rem}
@@ -114,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
   <div class="wrap">
     <div class="card">
+      <a href="login.php" class="back-arrow" aria-label="Back to login"><i class="fa-solid fa-arrow-left"></i></a>
       <h1 class="title">Forgot Password</h1>
       <?php if ($msg !== '') { ?>
         <div class="notice <?php echo $ok ? 'ok' : 'err'; ?>"><?php echo htmlspecialchars($msg); ?></div>

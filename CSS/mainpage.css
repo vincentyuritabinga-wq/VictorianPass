@@ -688,6 +688,8 @@ html { scroll-behavior: smooth; }
 .btn-change:focus{outline:2px solid #e5b84a;outline-offset:2px}
 .btn-change.btn-start{background:#f2c24f;color:#23412e;box-shadow:0 4px 15px rgba(242, 194, 79, 0.4)}
 .btn-change.btn-start:hover{box-shadow:0 6px 18px rgba(242, 194, 79, 0.5)}
+.btn-change.btn-reserve{background:#f2c24f;color:#23412e;box-shadow:0 4px 15px rgba(242, 194, 79, 0.4)}
+.btn-change.btn-reserve:hover{box-shadow:0 6px 18px rgba(242, 194, 79, 0.5)}
 
 /* User Type Dropdown */
 .user-type-dropdown{position:relative;display:inline-block;width:100%;max-width:320px}
