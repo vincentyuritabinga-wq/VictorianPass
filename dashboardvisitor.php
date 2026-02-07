@@ -692,7 +692,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       </div>
       <div class="profile-title">
         <h3><?php echo htmlspecialchars($fullName); ?></h3>
-        <span class="profile-role">Visitor</span>
+        <span class="profile-role"><?php echo htmlspecialchars((isset($_SESSION['user_type']) && strtolower($_SESSION['user_type']) === 'resident') ? 'Resident' : 'Visitor'); ?></span>
       </div>
     </div>
     <div class="profile-details">

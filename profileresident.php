@@ -3272,7 +3272,7 @@ document.addEventListener('DOMContentLoaded',function(){
       </div>
       <div class="profile-title">
         <h3><?php echo htmlspecialchars($fullName); ?></h3>
-        <span class="profile-role">Resident</span>
+        <span class="profile-role"><?php echo htmlspecialchars((isset($_SESSION['user_type']) && strtolower($_SESSION['user_type']) === 'visitor') ? 'Visitor' : 'Resident'); ?></span>
       </div>
     </div>
     <div class="profile-details">

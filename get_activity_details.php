@@ -147,7 +147,7 @@ if ($resGF && $resGF->num_rows > 0) {
 
 // 2. Try Reservations (with Entry Pass or User)
 if (!$data) {
-    $stmt = $con->prepare("SELECT r.*, e.full_name AS ep_full_name, e.middle_name AS ep_middle_name, e.last_name AS ep_last_name, e.sex AS ep_sex, e.birthdate AS ep_birthdate, e.contact AS ep_contact, e.email AS ep_email, e.address AS ep_address, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.address AS user_address, u.sex AS user_sex, u.birthdate AS user_birthdate, gf.id AS gf_id FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.ref_code = ?");
+    $stmt = $con->prepare("SELECT r.*, e.full_name AS ep_full_name, e.middle_name AS ep_middle_name, e.last_name AS ep_last_name, e.sex AS ep_sex, e.birthdate AS ep_birthdate, e.contact AS ep_contact, e.email AS ep_email, e.address AS ep_address, u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.address AS user_address, u.sex AS user_sex, u.birthdate AS user_birthdate, u.user_type AS u_user_type, gf.id AS gf_id FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.ref_code = ?");
     $stmt->bind_param('s', $code);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -162,10 +162,10 @@ if (!$data) {
         else if ($payStatLower === 'rejected') { $statusVal = 'rejected'; }
 
         $hasEntryPass = !empty($row['entry_pass_id']);
-        $uType = isset($row['user_type']) ? strtolower($row['user_type']) : '';
-        
-        $isVisitor = $hasEntryPass || $uType === 'visitor';
-        $isResident = !empty($row['user_id']) && $uType !== 'visitor';
+        $acctType = isset($row['account_type']) ? strtolower(trim($row['account_type'])) : '';
+        $uType = isset($row['u_user_type']) ? strtolower(trim($row['u_user_type'])) : '';
+        $isVisitor = $hasEntryPass || $acctType === 'visitor' || $uType === 'visitor';
+        $isResident = (!empty($row['user_id'])) && ($acctType === 'resident' || $uType === 'resident');
         $hasReservation = !empty($row['amenity']);
         
         $bookedRole = strtolower(trim($row['booked_by_role'] ?? ''));
