@@ -3953,7 +3953,7 @@ body.modal-open { overflow: hidden; }
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
-                  if ($payStatusLower === 'rejected') { echo "</td>"; echo "</tr>"; continue; }
+                  if ($payStatusLower === 'rejected') { echo "<div class='muted' style='margin-top:6px;'>Wait for the updated proof.</div>"; echo "</td>"; echo "</tr>"; continue; }
                   $receiptPath = $gar['receipt_path'] ?? null;
                   if ($payStatusLower !== 'verified') {
                     if (!empty($receiptPath)) {
@@ -4068,7 +4068,7 @@ body.modal-open { overflow: hidden; }
                   echo "<td class='actions'>";
                   echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $psTmp = strtolower($rr['payment_status'] ?? '');
-                  if ($psTmp === 'rejected') { echo "</td>"; echo "</tr>"; continue; }
+                  if ($psTmp === 'rejected') { echo "<div class='muted' style='margin-top:6px;'>Wait for the updated proof.</div>"; echo "</td>"; echo "</tr>"; continue; }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
                       echo "<form method='post' style='display:inline;'>";
@@ -4511,6 +4511,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                if ($payStatusLower === 'rejected') { echo "<div class='muted' style='margin-top:6px;'>Wait for the updated proof.</div>"; }
                 $receiptPath = $rr['receipt_path'] ?? null;
                 $attempts = intval($rr['receipt_attempts'] ?? 0);
                 if ($attempts >= 3) {
