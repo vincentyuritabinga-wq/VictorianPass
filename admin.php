@@ -775,6 +775,64 @@ function getIncidentReportsTotal($con){
   $q = "SELECT COUNT(*) AS c FROM incident_reports";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
+function getPendingApprovalsSummary($con){
+  return getPendingResidentAmenityCount($con) + getPendingVisitorLegacyCount($con) + getPendingGuestFormCount($con) + getOpenIncidentCount($con);
+}
+function getMostRequestedAmenities($con, $limit = 5){
+  $lim = intval($limit);
+  if ($lim <= 0) { $lim = 5; }
+  $q = "SELECT amenity, SUM(cnt) AS total FROM (
+          SELECT amenity, COUNT(*) AS cnt FROM reservations WHERE amenity IS NOT NULL AND amenity <> '' GROUP BY amenity
+          UNION ALL
+          SELECT amenity, COUNT(*) AS cnt FROM resident_reservations WHERE amenity IS NOT NULL AND amenity <> '' GROUP BY amenity
+          UNION ALL
+          SELECT amenity, COUNT(*) AS cnt FROM guest_forms WHERE amenity IS NOT NULL AND amenity <> '' GROUP BY amenity
+        ) x
+        GROUP BY amenity
+        ORDER BY total DESC, amenity ASC
+        LIMIT ".$lim;
+  $rows = [];
+  if ($r = $con->query($q)) {
+    while ($row = $r->fetch_assoc()) { $rows[] = $row; }
+  }
+  return $rows;
+}
+function getResidentAmenityRequestsPendingApproved($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND amenity <> '' AND approval_status IN ('pending','approved') AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getVisitorAmenityRequestsPendingApproved($con){
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status IN ('pending','approved') OR status IN ('pending','approved')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getGuestFormRequestsPendingApproved($con){
+  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status IN ('pending','approved')";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
+}
+function getTotalRequestsThisMonth($con){
+  $ym = date('Y-m');
+  $q = "SELECT COALESCE(SUM(c),0) AS total FROM (
+          SELECT COUNT(*) AS c FROM reservations WHERE DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+          UNION ALL
+          SELECT COUNT(*) AS c FROM resident_reservations WHERE DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+          UNION ALL
+          SELECT COUNT(*) AS c FROM guest_forms WHERE DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+          UNION ALL
+          SELECT COUNT(*) AS c FROM incident_reports WHERE DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+        ) t";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['total']); return 0;
+}
+function getCancelledRequestsTotal($con){
+  $ym = date('Y-m');
+  $q = "SELECT COALESCE(SUM(c),0) AS total FROM (
+          SELECT COUNT(*) AS c FROM reservations WHERE (approval_status = 'cancelled' OR status = 'cancelled') AND DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+          UNION ALL
+          SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status = 'cancelled' AND DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+          UNION ALL
+          SELECT COUNT(*) AS c FROM incident_reports WHERE status = 'cancelled' AND DATE_FORMAT(created_at,'%Y-%m') = '$ym'
+        ) t";
+  $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['total']); return 0;
+}
 function getReservationsApprovalBreakdown($con){
   $map = [];
   $q = "SELECT COALESCE(approval_status,'pending') AS s, COUNT(*) AS c FROM reservations GROUP BY s";
@@ -2085,6 +2143,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
   $start = $m . '-01 00:00:00';
   $end = date('Y-m-t 23:59:59', strtotime($start));
   $rows = [];
+  $incidentRows = [];
   $approved = 0; $denied = 0; $pending = 0; $verifiedPay = 0; $pendingPay = 0; $total = 0;
   $amenityCounts = [];
   if ($con instanceof mysqli) {
@@ -2100,6 +2159,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
     $res2 = $stmt2->get_result();
     while ($res2 && ($row2 = $res2->fetch_assoc())) { $rows[] = ['source' => 'guest_form', 'payment_status' => '', 'user_type' => 'visitor', 'booked_by_role' => '', 'booked_by_name' => ''] + $row2; }
     $stmt2->close();
+    $stmt3 = $con->prepare("SELECT rr.ref_code, rr.amenity, rr.start_date, rr.end_date, rr.created_at, COALESCE(rr.approval_status,'pending') AS approval_status, COALESCE(u.user_type,'resident') AS user_type, COALESCE(u.first_name,'') AS first_name, COALESCE(u.middle_name,'') AS middle_name, COALESCE(u.last_name,'') AS last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.created_at BETWEEN ? AND ? ORDER BY rr.created_at ASC");
+    $stmt3->bind_param('ss', $start, $end);
+    $stmt3->execute();
+    $res3 = $stmt3->get_result();
+    while ($res3 && ($row3 = $res3->fetch_assoc())) {
+      $full = trim(($row3['first_name'] ?? '') . ' ' . ($row3['middle_name'] ?? '') . ' ' . ($row3['last_name'] ?? ''));
+      $rows[] = ['source' => 'resident_reservation', 'payment_status' => '', 'user_type' => $row3['user_type'] ?? 'resident', 'booked_by_role' => 'resident', 'booked_by_name' => $full] + $row3;
+    }
+    $stmt3->close();
+    $stmt4 = $con->prepare("SELECT ir.id, ir.complainant, ir.subject, ir.nature, ir.status, ir.created_at, u.first_name, u.middle_name, u.last_name FROM incident_reports ir LEFT JOIN users u ON ir.user_id = u.id WHERE ir.created_at BETWEEN ? AND ? ORDER BY ir.created_at ASC");
+    $stmt4->bind_param('ss', $start, $end);
+    $stmt4->execute();
+    $res4 = $stmt4->get_result();
+    while ($res4 && ($row4 = $res4->fetch_assoc())) { $incidentRows[] = $row4; }
+    $stmt4->close();
   }
   foreach ($rows as $r) {
     $total++;
@@ -2109,6 +2183,56 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
     if ($ps === 'verified') $verifiedPay++; elseif ($ps === 'pending' || $ps === 'submitted' || $ps === 'pending_update') $pendingPay++;
     $amen = trim((string)($r['amenity'] ?? ''));
     if ($amen !== '') { $amenityCounts[$amen] = ($amenityCounts[$amen] ?? 0) + 1; }
+  }
+  $topAmenities = [];
+  if (!empty($amenityCounts)) {
+    $topAmenities = $amenityCounts;
+    arsort($topAmenities);
+    $topAmenities = array_slice($topAmenities, 0, 5, true);
+  }
+  $residentAmenityPA = 0;
+  $visitorAmenityPA = 0;
+  $guestFormPA = 0;
+  $incidentCount = 0;
+  $pendingApprovals = 0;
+  $totalRequestsMonth = 0;
+  $cancelledMonth = 0;
+  if ($con instanceof mysqli) {
+    $q1 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND amenity <> '' AND approval_status IN ('pending','approved') AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) AND created_at BETWEEN ? AND ?");
+    $q1->bind_param('ss', $start, $end);
+    $q1->execute(); $r1 = $q1->get_result(); if ($r1 && ($rw=$r1->fetch_assoc())) { $residentAmenityPA = intval($rw['c']); } $q1->close();
+    $q2 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status IN ('pending','approved') OR status IN ('pending','approved')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) AND created_at BETWEEN ? AND ?");
+    $q2->bind_param('ss', $start, $end);
+    $q2->execute(); $r2 = $q2->get_result(); if ($r2 && ($rw=$r2->fetch_assoc())) { $visitorAmenityPA = intval($rw['c']); } $q2->close();
+    $q3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status IN ('pending','approved') AND created_at BETWEEN ? AND ?");
+    $q3->bind_param('ss', $start, $end);
+    $q3->execute(); $r3 = $q3->get_result(); if ($r3 && ($rw=$r3->fetch_assoc())) { $guestFormPA = intval($rw['c']); } $q3->close();
+    $q4 = $con->prepare("SELECT COUNT(*) AS c FROM incident_reports WHERE created_at BETWEEN ? AND ?");
+    $q4->bind_param('ss', $start, $end);
+    $q4->execute(); $r4 = $q4->get_result(); if ($r4 && ($rw=$r4->fetch_assoc())) { $incidentCount = intval($rw['c']); } $q4->close();
+    $q5 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND amenity <> '' AND approval_status = 'pending' AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) AND created_at BETWEEN ? AND ?");
+    $q5->bind_param('ss', $start, $end);
+    $q5->execute(); $r5 = $q5->get_result(); $pendingResident = ($r5 && ($rw=$r5->fetch_assoc())) ? intval($rw['c']) : 0; $q5->close();
+    $q6 = $con->prepare("SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status = 'pending' OR status = 'pending') AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) AND created_at BETWEEN ? AND ?");
+    $q6->bind_param('ss', $start, $end);
+    $q6->execute(); $r6 = $q6->get_result(); $pendingVisitor = ($r6 && ($rw=$r6->fetch_assoc())) ? intval($rw['c']) : 0; $q6->close();
+    $q7 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status = 'pending' AND created_at BETWEEN ? AND ?");
+    $q7->bind_param('ss', $start, $end);
+    $q7->execute(); $r7 = $q7->get_result(); $pendingGuest = ($r7 && ($rw=$r7->fetch_assoc())) ? intval($rw['c']) : 0; $q7->close();
+    $q8 = $con->prepare("SELECT COUNT(*) AS c FROM incident_reports WHERE escalated_to_admin = 1 AND status IN ('new','in_progress') AND created_at BETWEEN ? AND ?");
+    $q8->bind_param('ss', $start, $end);
+    $q8->execute(); $r8 = $q8->get_result(); $pendingInc = ($r8 && ($rw=$r8->fetch_assoc())) ? intval($rw['c']) : 0; $q8->close();
+    $pendingApprovals = $pendingResident + $pendingVisitor + $pendingGuest + $pendingInc;
+    $totalRequestsMonth = $total + $incidentCount;
+    $q9 = $con->prepare("SELECT COALESCE(SUM(c),0) AS total FROM (
+            SELECT COUNT(*) AS c FROM reservations WHERE (approval_status = 'cancelled' OR status = 'cancelled') AND created_at BETWEEN ? AND ?
+            UNION ALL
+            SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status = 'cancelled' AND created_at BETWEEN ? AND ?
+            UNION ALL
+            SELECT COUNT(*) AS c FROM incident_reports WHERE status = 'cancelled' AND created_at BETWEEN ? AND ?
+          ) t");
+    $q9->bind_param('ssssss', $start, $end, $start, $end, $start, $end);
+    $q9->execute(); $r9 = $q9->get_result(); if ($r9 && ($rw=$r9->fetch_assoc())) { $cancelledMonth = intval($rw['total']); } $q9->close();
   }
   $monthLabel = date('F Y', strtotime($start));
   $fmt = strtolower($_GET['format']);
@@ -2133,13 +2257,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
       $xml .= $mkRow(["Monthly Summary Report - $monthLabel"]);
       $xml .= $mkRow([""]);
       $xml .= $mkRow(["Totals"]);
-      $xml .= $mkRow(["Total Reservations", $total]);
       $xml .= $mkRow(["Approved", $approved]);
       $xml .= $mkRow(["Denied/Cancelled", $denied]);
       $xml .= $mkRow(["Pending", $pending]);
       $xml .= $mkRow(["Verified Payments", $verifiedPay]);
       $xml .= $mkRow(["Pending Payments", $pendingPay]);
-      foreach ($amenityCounts as $k=>$v) { $xml .= $mkRow(["Amenity: $k", $v]); }
+      $xml .= $mkRow(["Resident Amenity Requests", $residentAmenityPA]);
+      $xml .= $mkRow(["Visitor Amenity Requests", $visitorAmenityPA]);
+      $xml .= $mkRow(["Guest Form Requests", $guestFormPA]);
+      $xml .= $mkRow(["Incident Reports", $incidentCount]);
+      $xml .= $mkRow(["Pending Approvals", $pendingApprovals]);
+      $xml .= $mkRow(["Total Requests", $totalRequestsMonth]);
+      $xml .= $mkRow(["Cancelled Requests", $cancelledMonth]);
+      if (!empty($topAmenities)) {
+        $xml .= $mkRow(["Most Requested Amenities"]);
+        foreach ($topAmenities as $k=>$v) { $xml .= $mkRow(["Amenity: $k", $v]); }
+      }
       $xml .= $mkRow([""]);
       $xml .= $mkRow(["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"]);
       foreach ($rows as $r) {
@@ -2156,6 +2289,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
           $r['end_date'] ?? '',
           $r['created_at'] ?? ''
         ]);
+      }
+      if (!empty($incidentRows)) {
+        $xml .= $mkRow([""]);
+        $xml .= $mkRow(["Incident Reports"]);
+        $xml .= $mkRow(["Report ID","Resident","Status","Subject","Created At"]);
+        foreach ($incidentRows as $ir) {
+          $full = trim(($ir['first_name'] ?? '') . ' ' . ($ir['middle_name'] ?? '') . ' ' . ($ir['last_name'] ?? ''));
+          $name = $full !== '' ? $full : ($ir['complainant'] ?? '');
+          $subj = $ir['subject'] ?? '';
+          if ($subj === '') { $subj = $ir['nature'] ?? ''; }
+          $xml .= $mkRow(["IR-".intval($ir['id']), $name, $ir['status'] ?? '', $subj, $ir['created_at'] ?? '']);
+        }
       }
       $xml .= '</Table></Worksheet></Workbook>';
       $fname = 'Monthly_Summary_'.$m.'.xls';
@@ -2181,13 +2326,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
     $xmlRows[] = $makeRow(["Monthly Summary Report - $monthLabel"], $idx++); 
     $xmlRows[] = $makeRow([""], $idx++);
     $xmlRows[] = $makeRow(["Totals"], $idx++);
-    $xmlRows[] = $makeRow(["Total Reservations", $total], $idx++);
     $xmlRows[] = $makeRow(["Approved", $approved], $idx++);
     $xmlRows[] = $makeRow(["Denied/Cancelled", $denied], $idx++);
     $xmlRows[] = $makeRow(["Pending", $pending], $idx++);
     $xmlRows[] = $makeRow(["Verified Payments", $verifiedPay], $idx++);
     $xmlRows[] = $makeRow(["Pending Payments", $pendingPay], $idx++);
-    foreach ($amenityCounts as $k=>$v) { $xmlRows[] = $makeRow(["Amenity: $k", $v], $idx++); }
+    $xmlRows[] = $makeRow(["Resident Amenity Requests", $residentAmenityPA], $idx++);
+    $xmlRows[] = $makeRow(["Visitor Amenity Requests", $visitorAmenityPA], $idx++);
+    $xmlRows[] = $makeRow(["Guest Form Requests", $guestFormPA], $idx++);
+    $xmlRows[] = $makeRow(["Incident Reports", $incidentCount], $idx++);
+    $xmlRows[] = $makeRow(["Pending Approvals", $pendingApprovals], $idx++);
+    $xmlRows[] = $makeRow(["Total Requests", $totalRequestsMonth], $idx++);
+    $xmlRows[] = $makeRow(["Cancelled Requests", $cancelledMonth], $idx++);
+    if (!empty($topAmenities)) {
+      $xmlRows[] = $makeRow(["Most Requested Amenities"], $idx++);
+      foreach ($topAmenities as $k=>$v) { $xmlRows[] = $makeRow(["Amenity: $k", $v], $idx++); }
+    }
     $xmlRows[] = $makeRow([""], $idx++);
     $xmlRows[] = $makeRow(["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"], $idx++);
     foreach ($rows as $r) {
@@ -2204,6 +2358,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
         $r['end_date'] ?? '',
         $r['created_at'] ?? ''
       ], $idx++);
+    }
+    if (!empty($incidentRows)) {
+      $xmlRows[] = $makeRow([""], $idx++);
+      $xmlRows[] = $makeRow(["Incident Reports"], $idx++);
+      $xmlRows[] = $makeRow(["Report ID","Resident","Status","Subject","Created At"], $idx++);
+      foreach ($incidentRows as $ir) {
+        $full = trim(($ir['first_name'] ?? '') . ' ' . ($ir['middle_name'] ?? '') . ' ' . ($ir['last_name'] ?? ''));
+        $name = $full !== '' ? $full : ($ir['complainant'] ?? '');
+        $subj = $ir['subject'] ?? '';
+        if ($subj === '') { $subj = $ir['nature'] ?? ''; }
+        $xmlRows[] = $makeRow(["IR-".intval($ir['id']), $name, $ir['status'] ?? '', $subj, $ir['created_at'] ?? ''], $idx++);
+      }
     }
     $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.implode('', $xmlRows).'</sheetData></worksheet>';
     $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="Summary" sheetId="1" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>';
@@ -2227,29 +2393,67 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
     @unlink($tmp);
     exit;
   } else {
-    $pdf = "%PDF-1.4\n";
-    $objs = [];
-    $objs[] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
-    $objs[] = "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n";
-    $content = "BT /F1 12 Tf 50 800 Td (Monthly Summary Report - ".str_replace(['(',')'],['[',' ]'],$monthLabel).") Tj ET\n";
-    $y = 780;
-    $lines = [
-      "Total Reservations: $total",
-      "Approved: $approved",
-      "Denied/Cancelled: $denied",
-      "Pending: $pending",
-      "Verified Payments: $verifiedPay",
-      "Pending Payments: $pendingPay"
+    $pdfEscape = function($t){
+      $t = (string)$t;
+      $t = str_replace(["\\","(",")","\r"], ["\\\\","\\(","\\)",""], $t);
+      return $t;
+    };
+    $line = function($text, $size, $x, $y) use ($pdfEscape){
+      return "BT /F1 ".$size." Tf ".$x." ".$y." Td (".$pdfEscape($text).") Tj ET\n";
+    };
+    $content = '';
+    $y = 800;
+    $content .= $line("Monthly Summary Report - ".$monthLabel, 13, 50, $y); $y -= 22;
+    $content .= $line("Summary", 12, 50, $y); $y -= 16;
+    $summaryPairs = [
+      ["Approved", $approved],
+      ["Denied/Cancelled", $denied],
+      ["Pending", $pending],
+      ["Verified Payments", $verifiedPay],
+      ["Pending Payments", $pendingPay],
+      ["Resident Amenity Requests", $residentAmenityPA],
+      ["Visitor Amenity Requests", $visitorAmenityPA],
+      ["Guest Form Requests", $guestFormPA],
+      ["Incident Reports", $incidentCount],
+      ["Pending Approvals", $pendingApprovals],
+      ["Total Requests", $totalRequestsMonth],
+      ["Cancelled Requests", $cancelledMonth]
     ];
-    foreach ($amenityCounts as $k=>$v) { $lines[] = "Amenity $k: $v"; }
-    foreach ($lines as $ln) { $content .= "BT /F1 11 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'],$ln).") Tj ET\n"; $y -= 16; }
-    $y -= 8;
-    $hdr = ["Ref Code","Source","Amenity","Booked By","Role","User Type","Approval Status","Payment Status","Start Date","End Date","Created At"];
-    $content .= "BT /F1 11 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'], implode(' | ', $hdr)).") Tj ET\n";
-    $y -= 16;
+    foreach ($summaryPairs as $pair) {
+      $content .= $line($pair[0], 10, 60, $y);
+      $content .= $line($pair[1], 10, 300, $y);
+      $y -= 14;
+    }
+    if (!empty($topAmenities)) {
+      $y -= 6;
+      $content .= $line("Most Requested Amenities", 12, 50, $y); $y -= 16;
+      $content .= $line("Amenity", 10, 60, $y);
+      $content .= $line("Count", 10, 300, $y);
+      $y -= 14;
+      foreach ($topAmenities as $k=>$v) {
+        $content .= $line($k, 10, 60, $y);
+        $content .= $line($v, 10, 300, $y);
+        $y -= 14;
+      }
+    }
+    $y -= 6;
+    $content .= $line("Requests", 12, 50, $y); $y -= 16;
+    $cols = [
+      ["Ref Code", 40, 10],
+      ["Source", 100, 10],
+      ["Amenity", 150, 16],
+      ["Booked By", 230, 16],
+      ["Role", 310, 8],
+      ["Type", 350, 8],
+      ["Approval", 390, 10],
+      ["Payment", 445, 10],
+      ["Start", 500, 10]
+    ];
+    foreach ($cols as $c) { $content .= $line($c[0], 9, $c[1], $y); }
+    $y -= 12;
     foreach ($rows as $r) {
-      if ($y < 50) { $content .= "BT /F1 11 Tf 50 800 Td (Continued...) Tj ET\n"; $y = 780; }
-      $line = [
+      if ($y < 70) { $content .= $line("More rows omitted. Download Excel for full list.", 9, 50, $y); $y -= 12; break; }
+      $vals = [
         $r['ref_code'] ?? '',
         $r['source'] ?? '',
         $r['amenity'] ?? '',
@@ -2258,23 +2462,55 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
         $r['user_type'] ?? '',
         $r['approval_status'] ?? '',
         $r['payment_status'] ?? '',
-        $r['start_date'] ?? '',
-        $r['end_date'] ?? '',
-        $r['created_at'] ?? ''
+        $r['start_date'] ?? ''
       ];
-      $content .= "BT /F1 10 Tf 50 $y Td (".str_replace(['(',')'],['[',' ]'], implode(' | ', $line)).") Tj ET\n";
-      $y -= 14;
+      foreach ($cols as $i=>$c) {
+        $max = intval($c[2]);
+        $text = isset($vals[$i]) ? (string)$vals[$i] : '';
+        if ($max > 0 && mb_strlen($text) > $max) { $text = mb_substr($text, 0, $max - 1) . '…'; }
+        $content .= $line($text, 9, $c[1], $y);
+      }
+      $y -= 12;
     }
-    $stream = "5 0 obj << /Length ".strlen($content)." >> stream\n".$content."endstream endobj\n";
-    $objs[] = "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n";
-    $objs[] = "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n";
-    $offsets = [strlen($pdf)];
-    foreach ($objs as $o) { $pdf .= $o; $offsets[] = strlen($pdf); }
-    $pdf .= $stream;
-    $offsets[] = strlen($pdf);
+    if (!empty($incidentRows) && $y > 90) {
+      $y -= 6;
+      $content .= $line("Incident Reports", 12, 50, $y); $y -= 16;
+      $content .= $line("Report ID", 9, 50, $y);
+      $content .= $line("Resident", 9, 120, $y);
+      $content .= $line("Status", 9, 250, $y);
+      $content .= $line("Subject", 9, 310, $y);
+      $content .= $line("Created At", 9, 470, $y);
+      $y -= 12;
+      foreach ($incidentRows as $ir) {
+        if ($y < 70) { $content .= $line("More incident rows omitted. Download Excel for full list.", 9, 50, $y); $y -= 12; break; }
+        $full = trim(($ir['first_name'] ?? '') . ' ' . ($ir['middle_name'] ?? '') . ' ' . ($ir['last_name'] ?? ''));
+        $name = $full !== '' ? $full : ($ir['complainant'] ?? '');
+        $subj = $ir['subject'] ?? '';
+        if ($subj === '') { $subj = $ir['nature'] ?? ''; }
+        $rid = "IR-".intval($ir['id']);
+        $content .= $line($rid, 9, 50, $y);
+        $content .= $line(mb_strlen($name) > 16 ? mb_substr($name, 0, 15) . '…' : $name, 9, 120, $y);
+        $content .= $line($ir['status'] ?? '', 9, 250, $y);
+        $content .= $line(mb_strlen($subj) > 24 ? mb_substr($subj, 0, 23) . '…' : $subj, 9, 310, $y);
+        $content .= $line($ir['created_at'] ?? '', 9, 470, $y);
+        $y -= 12;
+      }
+    }
+    $objects = [];
+    $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+    $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+    $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>";
+    $objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+    $objects[5] = "<< /Length ".strlen($content)." >>\nstream\n".$content."\nendstream";
+    $pdf = "%PDF-1.4\n";
+    $offsets = [0];
+    for ($i = 1; $i <= 5; $i++) {
+      $offsets[$i] = strlen($pdf);
+      $pdf .= $i . " 0 obj\n" . $objects[$i] . "\nendobj\n";
+    }
     $xrefPos = strlen($pdf);
     $pdf .= "xref\n0 6\n0000000000 65535 f \n";
-    $pos = 0; for ($i=1;$i<=5;$i++){ $pos += strlen($objs[$i-1]); $pdf .= sprintf("%010d 00000 n \n", ($i==5)? ($offsets[$i]) : ($offsets[$i-1])); }
+    for ($i = 1; $i <= 5; $i++) { $pdf .= sprintf("%010d 00000 n \n", $offsets[$i]); }
     $pdf .= "trailer << /Size 6 /Root 1 0 R >>\nstartxref\n".$xrefPos."\n%%EOF";
     $fname = 'Monthly_Summary_'.$m.'.pdf';
     header('Content-Type: application/pdf');
@@ -3225,7 +3461,8 @@ body.modal-open { overflow: hidden; }
 #visitorModal .modal-content,
 #residentReservationModal .modal-content,
 #reservationModal .modal-content,
-#priceDetailsModal .modal-content {
+#priceDetailsModal .modal-content,
+#incidentDetailsModal .modal-content {
     width: min(92vw, 640px);
     aspect-ratio: auto;
     padding: 0;
@@ -3247,7 +3484,8 @@ body.modal-open { overflow: hidden; }
 #visitorModal .modal-content h3,
 #residentReservationModal .modal-content h3,
 #reservationModal .modal-content h3,
-#priceDetailsModal .modal-content h3 {
+#priceDetailsModal .modal-content h3,
+#incidentDetailsModal .modal-content h3 {
     margin: 0;
     padding: 12px 16px;
     background: #fff;
@@ -3772,16 +4010,13 @@ body.modal-open { overflow: hidden; }
   </form>
   <?php
     $totals = [
-      'Residents' => getResidentCount($con),
-      'Visitors' => getVisitorAccountsCount($con),
-      'Entry Passes' => getEntryPassesCount($con),
-      'All Reservations' => getReservationsTotalCount($con),
-      'Resident Amenity' => getResidentAmenityReservationsTotal($con),
-      'Visitor Requests' => getVisitorLegacyRequestsTotal($con),
-      'Guest Forms' => getGuestFormsTotal($con),
+      'Resident Amenity Requests' => getResidentAmenityRequestsPendingApproved($con),
+      'Visitor Amenity Requests' => getVisitorAmenityRequestsPendingApproved($con),
+      'Guest Form Requests' => getGuestFormRequestsPendingApproved($con),
       'Incident Reports' => getIncidentReportsTotal($con),
-      'Verified Receipts' => getPaymentReceiptsCount($con),
-      'Pending Receipts' => getPendingPaymentCount($con),
+      'Pending Approvals' => getPendingApprovalsSummary($con),
+      'Total Requests' => getTotalRequestsThisMonth($con),
+      'Cancelled Requests' => getCancelledRequestsTotal($con),
     ];
   ?>
   <div class="dashboard-grid">
@@ -3792,41 +4027,30 @@ body.modal-open { overflow: hidden; }
       </div>
     <?php endforeach; ?>
   </div>
-  <div class="content-row">
-      <h3>Guest Forms Activity</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Resident</th>
-            <th>Guest Name</th>
-            <th>Date Added</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php
-            $gfa = getGuestFormsActivity($con);
-            if ($gfa && $gfa->num_rows > 0) {
-              while ($row = $gfa->fetch_assoc()) {
-                $residentName = trim(($row['res_first_name'] ?? '') . ' ' . ($row['res_middle_name'] ?? '') . ' ' . ($row['res_last_name'] ?? ''));
-                $name = trim(($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_middle_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? ''));
-                $dateAdded = !empty($row['created_at']) ? date('M d, Y', strtotime($row['created_at'])) : '-';
-                $st = strtolower($row['approval_status'] ?? 'pending');
-                $cls = ($st === 'approved') ? 'badge-approved' : (($st === 'denied' || $st === 'cancelled') ? 'badge-rejected' : 'badge-pending');
-                echo "<tr>";
-                echo "<td><strong>" . htmlspecialchars($residentName ?: '-') . "</strong></td>";
-                echo "<td><strong>" . htmlspecialchars($name) . "</strong></td>";
-                echo "<td>" . htmlspecialchars($dateAdded) . "</td>";
-                echo "<td><span class='badge $cls'>" . htmlspecialchars(ucfirst($st)) . "</span></td>";
-                echo "</tr>";
-              }
-            } else {
-              echo "<tr><td colspan='4' style='text-align:center;'>No guest forms found</td></tr>";
-            }
-          ?>
-        </tbody>
-      </table>
-    </div>
+  <?php $topAmenities = getMostRequestedAmenities($con, 5); ?>
+  <div class="card-box" style="margin-top:20px;">
+    <h3>Most Requested Amenities</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Amenity</th>
+          <th>Requests</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (!empty($topAmenities)): ?>
+          <?php foreach ($topAmenities as $ta): ?>
+            <tr>
+              <td><?php echo htmlspecialchars($ta['amenity'] ?? '-'); ?></td>
+              <td><?php echo intval($ta['total'] ?? 0); ?></td>
+            </tr>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <tr><td colspan="2" style="text-align:center;">No amenity requests found</td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
     <div class="card-box" style="margin-top:20px;">
       <h3>Reservations Activity</h3>
       <table class="table">
@@ -4837,15 +5061,9 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
   <table class="table table-report">
     <thead>
       <tr>
+        <th>Report ID</th>
         <th>Reported By</th>
-        <th>Complainee</th>
-        <th>Nature</th>
-        <th>Address</th>
-        <th>Report Date</th>
         <th>Status</th>
-        <th>Escalated By</th>
-        <th>Escalated At</th>
-        <th>Proofs</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -4857,38 +5075,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               $fullName = trim(($r['first_name'] ?? '') . ' ' . ($r['middle_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
               $displayName = $fullName !== '' ? $fullName : $r['complainant'];
               echo '<tr>';
+              echo '<td>' . intval($r['id']) . '</td>';
               echo '<td>' . htmlspecialchars($displayName) . '</td>';
-              echo '<td>' . htmlspecialchars($r['subject'] ?: '-') . '</td>';
-              echo '<td>' . htmlspecialchars($r['nature'] ?: ($r['other_concern'] ?: '-')) . '</td>';
-              echo '<td>' . htmlspecialchars($r['address']) . '</td>';
-              $rdate = !empty($r['report_date']) ? date('M d, Y', strtotime($r['report_date'])) : date('M d, Y', strtotime($r['created_at']));
-              echo '<td>' . $rdate . '</td>';
               $status = $r['status'];
               $badgeClass = $status === 'resolved' ? 'badge badge-approved' : ($status === 'rejected' ? 'badge badge-rejected' : ($status === 'cancelled' ? 'badge badge-expired' : 'badge badge-warning'));
               echo '<td><span class="' . $badgeClass . '">' . ucfirst($status) . '</span></td>';
-              // Escalation details
-              $escBy = !empty($r['escalated_by_email']) ? $r['escalated_by_email'] : (isset($r['escalated_by_guard_id']) ? ('Guard ID ' . intval($r['escalated_by_guard_id'])) : '-');
-              $escAt = !empty($r['escalated_at']) ? date('M d, Y H:i', strtotime($r['escalated_at'])) : '-';
-              echo '<td>' . htmlspecialchars($escBy) . '</td>';
-              echo '<td>' . htmlspecialchars($escAt) . '</td>';
-              // Proofs
-              $files = getIncidentProofs($con, intval($r['id']));
-              echo '<td>';
-              if (count($files) > 0) {
-                  foreach ($files as $f) {
-                      $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
-                      if (in_array($ext, ['jpg','jpeg','png','gif'])) {
-                          echo '<img src="' . htmlspecialchars($f) . '" class="receipt-thumbnail" onclick="showIncidentProofModal(\'' . htmlspecialchars($f) . '\')" alt="proof"> ';
-                      } else {
-                          echo '<a href="' . htmlspecialchars($f) . '" target="_blank">View file</a><br/>';
-                      }
-                  }
-              } else {
-                  echo '<span class="muted">No proofs</span>';
-              }
-              echo '</td>';
               // Actions
               echo '<td>';
+              echo '<button type="button" class="btn btn-view" onclick="showIncidentDetails(' . intval($r['id']) . ')" style="margin-right:6px;"><i class="fa-solid fa-eye"></i> View Details</button>';
               echo '<form method="POST" style="display:inline-block;margin-right:6px;">';
               echo '<input type="hidden" name="report_id" value="' . intval($r['id']) . '">';
               if ($status === 'new' || $status === 'in_progress') {
@@ -4910,7 +5104,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
               echo '</tr>';
           }
       } else {
-          echo '<tr><td colspan="8" style="text-align:center;">No incidents reported yet</td></tr>';
+          echo '<tr><td colspan="4" style="text-align:center;">No incidents reported yet</td></tr>';
       }
       ?>
     </tbody>
@@ -5205,6 +5399,16 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
   </div>
 </div>
 
+<div id="incidentDetailsModal" class="modal">
+  <div class="modal-content">
+    <button type="button" class="close" onclick="closeIncidentDetailsModal()" aria-label="Close">✕</button>
+    <h3>Incident Details</h3>
+    <div style="max-height:80vh; overflow:auto;">
+      <iframe id="incidentDetailsFrame" src="" style="width:100%; height:70vh; border:0;"></iframe>
+    </div>
+  </div>
+</div>
+
 <script>
 // JavaScript to handle navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -5232,7 +5436,19 @@ function showIncidentProofModal(src){
 }
 function closeIncidentProofModal(){ var m=document.getElementById('incidentProofModal'); if(m){ m.style.display='none'; m.classList.remove('modal-top'); } }
 
-// Function to show visitor details modal
+function showIncidentDetails(id){
+  var m=document.getElementById('incidentDetailsModal');
+  var f=document.getElementById('incidentDetailsFrame');
+  if(f){ f.src='get_report_details.php?id=' + encodeURIComponent(id); }
+  if(m){ m.style.display='flex'; }
+}
+function closeIncidentDetailsModal(){
+  var m=document.getElementById('incidentDetailsModal');
+  var f=document.getElementById('incidentDetailsFrame');
+  if(m){ m.style.display='none'; }
+  if(f){ f.src=''; }
+}
+
 function showVisitorDetails(id, source) {
   // Reset modal
   const contentEl = document.getElementById('visitorDetailsContent');
@@ -5759,7 +5975,6 @@ function showUserDetails(userId, expectedType){
             ${d.house_number?`<p><strong>House No.:</strong> ${d.house_number}</p>`:''}
             ${d.address?`<p><strong>Address:</strong> ${d.address}</p>`:''}
             ${d.created_at?`<p><strong>Registered:</strong> ${new Date(d.created_at).toLocaleString()}</p>`:''}
-            ${d.status?`<p><strong>Status:</strong> ${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</p>`:''}
           </div>` : '';
       const content = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -5817,6 +6032,7 @@ window.addEventListener('click', function(event){
   (function(){
     var modal = document.getElementById('adminConfirmModal');
     var msgEl = document.getElementById('adminConfirmMessage');
+    var closeBtn = document.getElementById('adminConfirmClose');
     var cancelBtn = document.getElementById('adminConfirmCancelBtn');
     var okBtn = document.getElementById('adminConfirmOkBtn');
     var currentForm = null;
@@ -5831,6 +6047,7 @@ window.addEventListener('click', function(event){
       if(modal) modal.style.display = 'flex';
       return false;
     };
+    if(closeBtn) closeBtn.onclick = function(){ close(); };
     if(cancelBtn) cancelBtn.onclick = function(){ close(); };
     if(okBtn) okBtn.onclick = function(){
       var form = currentForm;

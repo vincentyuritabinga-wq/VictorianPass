@@ -102,6 +102,7 @@ if ($isGuest && $guest) {
     .wrap { padding: 24px; }
     .card { width: 360px; max-width: 92vw; background: #1e1e1e; border-radius: 16px; box-shadow: 0 10px 28px rgba(0,0,0,0.35); overflow: hidden; color:#fff; }
     .card-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#111; }
+    .pass-title { text-align:center; font-size:0.8rem; letter-spacing:0.08em; font-weight:600; color:#a9b1a6; padding:8px 16px 0; text-transform:uppercase; }
     .brand { display:flex; align-items:center; gap:8px; }
     .brand img { height:28px; }
     .brand .text { font-weight:700; color:#e5ddc6; }
@@ -133,6 +134,7 @@ if ($isGuest && $guest) {
       <div class="card-header">
         <div class="brand"><img src="images/logo.svg" alt="VictorianPass"><div class="text">Victorian Pass</div></div>
       </div>
+      <div class="pass-title"><?php echo $isGuest ? 'Guest Pass' : 'Resident Pass'; ?></div>
       <?php if (!empty($error)): ?>
         <div class="foot" style="color:#ffb3b3">⚠️ <?php echo htmlspecialchars($error); ?></div>
       <?php else: ?>

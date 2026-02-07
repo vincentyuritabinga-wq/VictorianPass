@@ -474,7 +474,7 @@
         const t2 = data.end_time ? fmtTime(data.end_time) : '';
         resRows.push(['Time', `${t1}${t2?(' → '+t2):''}`]);
       }
-      if (data.persons) resRows.push(['Persons', personsDisplay]);
+      if (!isGuestEntry && data.persons) resRows.push(['Persons', personsDisplay]);
       if (!isGuestEntry && data.price != null && data.price !== '') resRows.push(['Price', priceDisplay]);
       const reservationInfo = resRows.map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
 

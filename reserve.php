@@ -1208,6 +1208,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   const currentUserType="<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
   let selectedStart=null,selectedEnd=null;
   let bookedDates=new Set();
+  let availabilityCache=new Map();
+  let availabilityToken=0;
   let selectedAmenity=document.getElementById('amenityField').value||'';
   let hintShown=false;
   const approvedGuestsMax = <?php echo (isset($residentGuests) && is_array($residentGuests)) ? count($residentGuests) : 0; ?>;
@@ -1219,14 +1221,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     return `${parts[1]}/${parts[2]}/${String(parts[0]).slice(-2)}`;
   }
 
-  async function loadBookedDates(){
-    if(!selectedAmenity){ bookedDates=new Set(); renderCalendar(currentMonth,currentYear); computeAvailability(); return; }
-    try{ const res=await fetch(`reserve.php?action=booked_dates&amenity=${encodeURIComponent(selectedAmenity)}`); const data=await res.json(); bookedDates=new Set(data.dates||[]); }
-    catch(e){ bookedDates=new Set(); }
-    renderCalendar(currentMonth,currentYear); computeAvailability();
+  async function loadBookedDates(forceRefresh){
+    if(!selectedAmenity){ bookedDates=new Set(); renderCalendar(currentMonth,currentYear,forceRefresh); computeAvailability(); return; }
+    bookedDates=new Set();
+    renderCalendar(currentMonth,currentYear,forceRefresh); computeAvailability();
   }
 
-  function renderCalendar(month,year){
+  function renderCalendar(month,year,forceRefresh){
     calendarBody.innerHTML="";
     let firstDay=(new Date(year,month)).getDay();
     let daysInMonth=32-new Date(year,month,32).getDate();
@@ -1250,23 +1251,49 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       }
       calendarBody.appendChild(row);
     }
-    evaluateCalendarAvailability();
+    evaluateCalendarAvailability(forceRefresh);
   }
 
-  async function evaluateCalendarAvailability(){
+  function toDateString(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function buildDayIndex(allBooked,startDs,endDs){
+    const byDate={};
+    if(!Array.isArray(allBooked) || allBooked.length===0){ return byDate; }
+    const startObj=new Date(startDs);
+    const endObj=new Date(endDs);
+    for(const t of allBooked){
+      if(!t.start_date || !t.end_date) continue;
+      if(t.end_date < startDs || t.start_date > endDs) continue;
+      let d=new Date(t.start_date < startDs ? startDs : t.start_date);
+      const e=new Date(t.end_date > endDs ? endDs : t.end_date);
+      while(d<=e){
+        const ds=toDateString(d);
+        if(!byDate[ds]) byDate[ds]=[];
+        byDate[ds].push(t);
+        d.setDate(d.getDate()+1);
+      }
+    }
+    return byDate;
+  }
+  async function evaluateCalendarAvailability(forceRefresh){
     try{
       const amen=document.getElementById('amenityField').value;
       if(!amen){ return; }
       const cells=Array.from(document.querySelectorAll('.calendar td')).filter(c=>c.hasAttribute('data-date'));
       if(cells.length === 0) return;
-      
       const startDs = cells[0].getAttribute('data-date');
       const endDs = cells[cells.length-1].getAttribute('data-date');
-
-      // Batch fetch booked times
-      const res = await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(amen)}&start_date=${startDs}&end_date=${endDs}`);
-      const data = await res.json();
-      const allBooked = data.times || [];
+      const key = `${amen}|${startDs}|${endDs}`;
+      const token = ++availabilityToken;
+      let cached = availabilityCache.get(key);
+      if(!cached || forceRefresh){
+        const res = await fetch(`reserve.php?action=booked_times&amenity=${encodeURIComponent(amen)}&start_date=${startDs}&end_date=${endDs}`);
+        const data = await res.json();
+        const byDate = amen==='Pool' ? null : buildDayIndex(data.times||[], startDs, endDs);
+        cached = { data, byDate };
+        availabilityCache.set(key, cached);
+      }
+      if(token !== availabilityToken) return;
+      const data = cached.data || {};
       if(amen==='Pool'){
         const personsByDate = data.persons_by_date || {};
         const cap = parseInt(data.capacity||getAmenityMaxPersons(amen),10);
@@ -1286,12 +1313,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         }
         return;
       }
-      
       const hrsRange=getAmenityHours(amen);
       const minH=parseInt(hrsRange.min.split(':')[0],10);
       const maxH=parseInt(hrsRange.max.split(':')[0],10);
       const totalHours=Math.max(0,maxH-minH);
-
+      const byDate = cached.byDate || {};
       for(const cell of cells){
         const ds=cell.getAttribute('data-date');
         if(!ds) continue;
@@ -1300,15 +1326,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           cell.title = ds < todayStr ? 'Past date — cannot be booked.' : 'Reservations must be made at least 1 day in advance.';
           continue;
         }
-        
-        cell.classList.remove('disabled','partly','available');
-        
-        // Filter for this day
-        const dayBooked = allBooked.filter(t => {
-            if (!t.start_date || !t.end_date) return false;
-            return ds >= t.start_date && ds <= t.end_date;
-        });
-
+        cell.classList.remove('disabled','partly','available','fully-booked');
+        const dayBooked = byDate[ds] || [];
         const reservedHours = getReservedHoursForDay(dayBooked, minH, maxH, ds, amen);
         if(reservedHours>=totalHours){ cell.classList.add('disabled'); cell.classList.add('fully-booked'); cell.title='Fully Booked — no time slots available for this date.'; }
         else if(reservedHours>0){ cell.classList.add('partly'); cell.title='Partially Booked — some time slots are unavailable.'; }
@@ -1686,6 +1705,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const info=amenityData[key]||amenityData.pool;
     selectedAmenity=info.value;
     document.getElementById('amenityField').value=info.value;
+    availabilityCache.clear();
     
     document.querySelectorAll('.amenity-card').forEach(c=>c.classList.remove('selected'));
     const card=document.querySelector(`.amenity-card[data-key="${key}"]`);
@@ -2756,6 +2776,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             document.getElementById('reservationTitle').textContent='Reservation';
             document.getElementById('reservationHint').textContent='Select date, time, and persons';
             rc.scrollIntoView({behavior:'smooth',block:'start'});
+            requestAnimationFrame(function(){ refreshAvailabilityFromServer(); });
           }
         }catch(_){}
       }
@@ -3321,8 +3342,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   ['amenityField','startDateInput','endDateInput','startTimeInput','endTimeInput','personsInput','hoursInput','downpaymentInput'].forEach(id=>{const el=document.getElementById(id); if(el){ el.addEventListener('input',function(){ markDirty(id); persistForm(); updateActionStates(); showIncompleteWarnings(false); }); }});
   async function refreshAvailabilityFromServer(){
     selectedAmenity = document.getElementById('amenityField').value || '';
-    await loadBookedDates();
-    await evaluateCalendarAvailability();
+    availabilityCache.clear();
+    await loadBookedDates(true);
     computeAvailability();
     renderTimeSlotButtons();
     if(selectedAmenity === 'Pool'){ updatePoolRemainingNote(); }

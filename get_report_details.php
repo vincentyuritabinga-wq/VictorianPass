@@ -97,12 +97,19 @@ function fmt_dt($d){
   <div class="section-title">Report Information</div>
   <div class="info-grid">
     <?php $resident = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? '')); ?>
+    <div class="info-row"><span class="info-label">Report ID</span><span class="info-value"><?php echo intval($row['id']); ?></span></div>
     <div class="info-row"><span class="info-label">Resident</span><span class="info-value"><?php echo htmlspecialchars($resident ?: ($row['complainant'] ?? 'Resident')); ?></span></div>
+    <?php if (!empty($row['subject'])): ?><div class="info-row"><span class="info-label">Complainee</span><span class="info-value"><?php echo htmlspecialchars($row['subject']); ?></span></div><?php endif; ?>
     <?php if (!empty($row['address'])): ?><div class="info-row"><span class="info-label">Address</span><span class="info-value"><?php echo htmlspecialchars($row['address']); ?></span></div><?php endif; ?>
     <?php if (!empty($row['report_date'])): ?><div class="info-row"><span class="info-label">Report Date</span><span class="info-value"><?php echo htmlspecialchars(date('m/d/y', strtotime($row['report_date']))); ?></span></div><?php endif; ?>
     <?php if (!empty($row['nature'])): ?><div class="info-row"><span class="info-label">Nature</span><span class="info-value"><?php echo htmlspecialchars($row['nature']); ?></span></div><?php endif; ?>
     <?php if (!empty($row['other_concern'])): ?><div class="info-row"><span class="info-label">Details</span><span class="info-value"><?php echo htmlspecialchars($row['other_concern']); ?></span></div><?php endif; ?>
     <div class="info-row"><span class="info-label">Current Status</span><span class="info-value"><?php echo htmlspecialchars(ucwords(str_replace('_',' ', $row['status']))); ?></span></div>
+    <?php if (!empty($row['escalated_to_admin'])): ?><div class="info-row"><span class="info-label">Escalated to Admin</span><span class="info-value">Yes</span></div><?php endif; ?>
+    <?php if (!empty($row['escalated_at'])): ?><div class="info-row"><span class="info-label">Escalated At</span><span class="info-value"><?php echo fmt_dt($row['escalated_at']); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['handled_by_guard_id'])): ?><div class="info-row"><span class="info-label">Handled by Guard</span><span class="info-value"><?php echo intval($row['handled_by_guard_id']); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['handled_at'])): ?><div class="info-row"><span class="info-label">Handled At</span><span class="info-value"><?php echo fmt_dt($row['handled_at']); ?></span></div><?php endif; ?>
+    <?php if (!empty($row['updated_at'])): ?><div class="info-row"><span class="info-label">Last Updated</span><span class="info-value"><?php echo fmt_dt($row['updated_at']); ?></span></div><?php endif; ?>
   </div>
 
   <?php if (!empty($proofs)): ?>

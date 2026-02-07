@@ -682,6 +682,14 @@ body.account-blocked { overflow: hidden; }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 2000; }
     .modal-content { background: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 600px; position: relative; max-height:80vh; overflow-y:auto; }
     .close-btn { position: absolute; top: 15px; right: 15px; font-size: 20px; cursor: pointer; color: #555; }
+#guestPassModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; max-height: calc(100vh - 120px); }
+#guestPassModal h3 { margin: 0 0 12px; color: #23412e; font-size: 1.05rem; font-weight: 700; }
+#guestPassModal .guest-pass-header { margin-bottom: 10px; text-align: center; }
+#guestPassModal .guest-pass-name { font-size: 1rem; font-weight: 600; color: #333; }
+#guestPassModal .guest-pass-sub { margin-top: 4px; color: #666; font-size: 0.9rem; text-align: center; }
+#guestPassModal .guest-pass-note { margin-top: 12px; font-size: 0.85rem; color: #888; text-align: center; }
+#guestPassModal .guest-pass-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+#guestPassModal .guest-pass-link { display: inline-flex; margin-top: 10px; color: #4f46e5; text-decoration: underline; font-size: 0.9rem; }
 #submitNoticeModal { display: flex; align-items: center; justify-content: center; }
 #submitNoticeModal .modal-content { width: 92%; max-width: 420px; padding: 24px; text-align: center; height: auto; min-height: unset; }
 #submitNoticeModal .close { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; color: #111827; border: 0; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0; cursor: pointer; }
@@ -1291,10 +1299,10 @@ body.account-blocked { overflow: hidden; }
   </div>
   
   <div id="guestPassModal" class="modal">
-    <div class="modal-content" style="max-width:350px;text-align:center;">
+    <div class="modal-content">
       <span class="close" id="closeGuestPassModal">&times;</span>
       <h3>Guest Entry Pass</h3>
-      <div id="guestPassContent"></div>
+      <div id="guestPassContent" class="guest-pass-content"></div>
     </div>
   </div>
   <div id="qrWarningModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; z-index:3500;">
@@ -1378,6 +1386,24 @@ body.account-blocked { overflow: hidden; }
       if(modal) modal.style.display = 'flex';
     };
   })();
+  function escapeText(t){
+    return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function downloadGuestPassQR(qrSrc, filename){
+    function doDownload(){
+      var link = document.createElement('a');
+      link.href = qrSrc;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    if(typeof window.openQRWarning === 'function'){
+      window.openQRWarning(doDownload, 'Do not scan. Authorized guards only.');
+    } else {
+      doDownload();
+    }
+  }
   function openGuestPassModal(ref, name, resident) {
       if(!guestPassModal) return;
       var basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
@@ -1385,16 +1411,25 @@ body.account-blocked { overflow: hidden; }
       var qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(statusLink);
       
       var html = '';
-      html += '<div style="margin-bottom:15px;">';
-      html += '<h4 style="margin:0;color:#333;">' + name + '</h4>';
-      html += '<p style="margin:5px 0 0;color:#666;font-size:0.9rem;">Referred by Resident: ' + resident + '</p>';
+      html += '<div class="guest-pass-header">';
+      html += '<div class="guest-pass-name">' + escapeText(name) + '</div>';
+      html += '<div class="guest-pass-sub">Referred by Resident: ' + escapeText(resident) + '</div>';
       html += '</div>';
-      html += '<img src="' + qrSrc + '" style="width:200px;height:200px;border:1px solid #ddd;padding:10px;border-radius:0;object-fit:contain;">';
-      html += '<p style="margin-top:15px;font-size:0.85rem;color:#888;">Present this QR code at the gate for entry.</p>';
-      html += '<a href="' + statusLink + '" target="_blank" style="display:inline-block;margin-top:10px;color:#4f46e5;text-decoration:underline;font-size:0.9rem;">Open full pass</a>';
+      html += '<div class="guest-pass-note">Present this QR code at the gate for entry.</div>';
+      html += '<div class="guest-pass-actions">';
+      html += '<button type="button" class="btn-confirm guest-pass-download" data-qr="' + qrSrc + '" data-fn="GuestPass_' + escapeText(ref) + '.png">Download QR</button>';
+      html += '</div>';
       
       var contentEl = document.getElementById('guestPassContent');
       if(contentEl) contentEl.innerHTML = html;
+      var downloadBtn = contentEl ? contentEl.querySelector('.guest-pass-download') : null;
+      if(downloadBtn){
+        downloadBtn.onclick = function(){
+          var src = this.getAttribute('data-qr') || '';
+          var fn = this.getAttribute('data-fn') || 'GuestPass.png';
+          downloadGuestPassQR(src, fn);
+        };
+      }
       guestPassModal.style.display = "block";
   }
   // Event Delegation for View Pass buttons
@@ -1992,7 +2027,7 @@ body.account-blocked { overflow: hidden; }
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
     var isApproved=s.indexOf('approv')!==-1;
     if(isApproved) {
-        if(type==='guest_form') statusNote='This request is approved. View the entry pass in the "My Guests" tab.';
+        if(type==='guest_form') statusNote='Guest Request Approved';
         else statusNote='This request is approved. Use this QR pass at the gate.';
     }
     else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';

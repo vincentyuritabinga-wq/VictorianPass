@@ -478,6 +478,15 @@ if (empty($error)) {
             font-size: 0.9rem;
         }
 
+        .pass-type-title {
+            text-align: center;
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            color: #9ca3af;
+            margin: 6px 0 14px;
+            text-transform: uppercase;
+        }
         .footer {
             margin-top: 30px;
             color: #555;
@@ -500,6 +509,14 @@ if (empty($error)) {
                 <img src="images/logo.svg" alt="Logo">
                 <span>Victorian Heights</span>
             </div>
+
+            <?php
+              $passTypeTitle = ($data['type_label'] ?? '') === 'Guest' ? 'Guest Pass'
+                : (($data['type_label'] ?? '') === 'Amenity' ? 'Amenity Pass'
+                : (($data['type_label'] ?? '') === 'Resident' ? 'Resident Pass'
+                : trim(($data['type_label'] ?? 'Entry') . ' Pass')));
+            ?>
+            <div class="pass-type-title"><?php echo htmlspecialchars($passTypeTitle); ?></div>
 
             <!-- Status Header -->
             <div class="status-header" style="background: <?php echo $data['ui_color']; ?>;">
@@ -538,9 +555,24 @@ if (empty($error)) {
                 </div>
                 
                 <div class="detail-row">
-                    <span class="label">Name</span>
+                    <span class="label"><?php echo (isset($data['type_label']) && $data['type_label'] === 'Guest') ? 'Guest Name' : 'Name'; ?></span>
                     <span class="value"><?php echo htmlspecialchars($data['name']); ?></span>
                 </div>
+
+                <?php if (isset($data['type_label']) && $data['type_label'] === 'Guest'): ?>
+                <?php if (!empty($data['resident_name'])): ?>
+                <div class="detail-row">
+                    <span class="label">Referred by Resident</span>
+                    <span class="value"><?php echo htmlspecialchars($data['resident_name']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($data['house'])): ?>
+                <div class="detail-row">
+                    <span class="label">Resident House No.</span>
+                    <span class="value"><?php echo htmlspecialchars($data['house']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php endif; ?>
                 
                 <div class="detail-row">
                     <span class="label">Ref Code</span>
@@ -568,14 +600,14 @@ if (empty($error)) {
                 </div>
                 <?php endif; ?>
 
-                <?php if (!empty($data['pax'])): ?>
+                <?php if (!empty($data['pax']) && (!isset($data['type_label']) || $data['type_label'] !== 'Guest')): ?>
                 <div class="detail-row">
                     <span class="label">Persons</span>
                     <span class="value"><?php echo htmlspecialchars($data['pax']); ?></span>
                 </div>
                 <?php endif; ?>
-                
-                <?php if (!empty($data['house'])): ?>
+
+                <?php if (!empty($data['house']) && (!isset($data['type_label']) || $data['type_label'] !== 'Guest')): ?>
                 <div class="detail-row">
                     <span class="label">House No.</span>
                     <span class="value"><?php echo htmlspecialchars($data['house']); ?></span>
