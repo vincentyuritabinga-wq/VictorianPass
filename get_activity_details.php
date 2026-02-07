@@ -42,6 +42,7 @@ if ($resGF && $resGF->num_rows > 0) {
     $birthRaw = $row['visitor_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
     $publishDate = !empty($row['visit_date']) ? date('m/d/y', strtotime($row['visit_date'])) : '';
+    $validIdPath = $row['valid_id_path'] ?? '';
     $expireDate = '';
     $validWindow = ($publishDate ?: '-');
     $qrPath = !empty($row['qr_path']) ? $row['qr_path'] : '';
@@ -139,7 +140,8 @@ if ($resGF && $resGF->num_rows > 0) {
         'payment_status' => isset($rPayStatus) ? $rPayStatus : '',
         'receipt_path' => isset($rReceipt) ? $rReceipt : '',
         'denial_reason' => isset($rReason) ? $rReason : '',
-        'receipt_attempts' => isset($rAttempts) ? intval($rAttempts) : 0
+        'receipt_attempts' => isset($rAttempts) ? intval($rAttempts) : 0,
+        'valid_id_path' => $validIdPath
     ];
 }
 
@@ -603,6 +605,18 @@ if (!$data) {
             <span class="info-label"><?php echo !empty($data['is_resident_guest']) ? 'Guest Name' : 'Name'; ?></span>
             <span class="info-value"><?php echo htmlspecialchars($data['name']); ?></span>
         </div>
+        <?php if(!empty($data['sex'])): ?>
+        <div class="info-row">
+            <span class="info-label">Sex</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['sex']); ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if(!empty($data['birthdate'])): ?>
+        <div class="info-row">
+            <span class="info-label">Birthdate</span>
+            <span class="info-value"><?php echo htmlspecialchars($data['birthdate']); ?></span>
+        </div>
+        <?php endif; ?>
         <?php if(!empty($data['contact'])): ?>
         <div class="info-row">
             <span class="info-label">Contact</span>
@@ -622,6 +636,19 @@ if (!$data) {
     </div>
 
     <?php if (($data['status'] ?? '') === 'approved'): ?>
+    <?php endif; ?>
+
+    <?php $validId = trim($data['valid_id_path'] ?? ''); ?>
+    <?php if ($validId !== ''): ?>
+    <div class="section-title">Guest ID</div>
+    <div class="pay-proof">
+      <?php $isPdf = (bool)preg_match('/\.pdf$/i', $validId); ?>
+      <?php if($isPdf): ?>
+        <a href="<?php echo htmlspecialchars($validId); ?>" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded ID (PDF)</a>
+      <?php else: ?>
+        <img src="<?php echo htmlspecialchars($validId); ?>" alt="Uploaded guest ID">
+      <?php endif; ?>
+    </div>
     <?php endif; ?>
 
     <?php 

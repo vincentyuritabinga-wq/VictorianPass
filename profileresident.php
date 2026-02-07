@@ -727,6 +727,7 @@ body.account-blocked { overflow: hidden; }
 .cancel-modal-actions .cancel-modal-keep{background:#e5e7eb;color:#111827}
 .cancel-modal-actions .cancel-modal-confirm{background:#c0392b;color:#fff}
 .cancel-modal-content{width:90%;max-width:450px;padding:30px;border-radius:18px}
+.cancel-modal-body{text-align:center}
 .cancel-modal-note{color:#c0392b;font-weight:600;font-size:0.85rem}
 .item-extra-link.update-proof-btn{background:#7c3aed;color:#ffffff;border:1px solid #7c3aed;padding:8px 16px;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-weight:500;text-decoration:none}
 .item-extra-link.update-proof-btn:hover{background:#6d28d9;color:#ffffff;transform:translateY(-2px);box-shadow:0 4px 6px rgba(124, 58, 237, 0.25);text-decoration:none}
@@ -2071,16 +2072,6 @@ body.account-blocked { overflow: hidden; }
       if(reasonText){
         html+='<div class="item-reason'+(highlightReason?' is-rejected':'')+'">'+esc(reasonText)+'</div>';
       }
-      if(type==='guest_form'){
-        var guestName=li.getAttribute('data-guest-name')||'';
-        var guestRows='';
-        if(guestName){
-          guestRows+='<div class="schedule-row"><div class="schedule-key">Guest:</div><div class="schedule-val">'+esc(guestName)+'</div></div>';
-        }
-        if(guestRows){
-          html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Guest Details</div>'+guestRows+'</div>';
-        }
-      }
       if(type==='reservation' && scheduleText){
         var parts=scheduleParts(scheduleText);
         var rows='';
@@ -2145,7 +2136,7 @@ body.account-blocked { overflow: hidden; }
         reportRows+='<div class="schedule-row"><div class="schedule-key">Code:</div><div class="schedule-val">'+esc(ref)+'</div></div>';
       }
       if(reportRows){
-        html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Report Details</div>'+reportRows+'</div>';
+        html+='<div class="item-extra-schedule report-details '+statusClassFor(status)+'"><div class="schedule-title">Report Details</div>'+reportRows+'</div>';
       }
       if(canCancelReport && ref){
         html+='<div class="item-actions"><button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> Cancel Request</button></div>';
@@ -3269,7 +3260,6 @@ document.addEventListener('DOMContentLoaded',function(){
         </label>
         <input type="file" id="profileUpload" accept="image/*" style="display:none">
       </div>
-      <div class="profile-upload-note">Max 5MB</div>
       <div class="profile-title">
         <h3><?php echo htmlspecialchars($fullName); ?></h3>
         <span class="profile-role">Resident</span>

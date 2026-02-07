@@ -502,6 +502,9 @@ body {
     font-weight: 600;
     opacity: 0.85;
 }
+.item-extra-schedule.report-details .schedule-key {
+    color: #eab308;
+}
 
 .item-extra-schedule .schedule-val {
     font-weight: 600;
