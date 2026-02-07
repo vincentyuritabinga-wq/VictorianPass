@@ -653,7 +653,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <button type="button" class="update-proof-close" aria-label="Close">&times;</button>
     <h3>Upload the Updated Proof Here</h3>
     <input type="file" id="updateProofFile" class="update-proof-file" accept="image/*,application/pdf">
-    <div class="update-proof-hint">Max 5MB (JPG, PNG, PDF)</div>
+    <div class="update-proof-hint">JPG, PNG, PDF</div>
     <div id="updateProofFileName" class="update-proof-file-name">No file selected</div>
     <div id="updateProofPreview" class="update-proof-preview" style="display:none; margin-top:10px;"></div>
     <div class="update-proof-actions">
@@ -686,7 +686,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         </label>
         <input type="file" id="profileUpload" accept="image/*" style="display:none">
       </div>
-      <div class="profile-upload-note">Max 5MB</div>
       <div class="profile-title">
         <h3><?php echo htmlspecialchars($fullName); ?></h3>
         <span class="profile-role">Visitor</span>

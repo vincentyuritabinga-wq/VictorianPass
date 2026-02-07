@@ -1036,11 +1036,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                       <div class="res-label"><small>Total Participants</small></div>
                       <div class="counter">
                         <button type="button" onclick="changePersons(-1)">-</button>
-                        <input type="number" id="personCount" value="1" min="0" step="1" style="width:70px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-weight:600;">
+                        <input type="number" id="personCount" value="0" min="0" step="1" style="width:70px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-weight:600;">
                         <button type="button" onclick="changePersons(1)">+</button>
                       </div>
                       <?php endif; ?>
-                      <input type="hidden" name="persons" id="personsInput" value="1">
+                      <input type="hidden" name="persons" id="personsInput" value="0">
                       
                       <?php if ($isResident): ?>
                       <div id="participantWrap" style="display:block;">
@@ -1708,12 +1708,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       ids.forEach(function(id){ const el=document.getElementById(id); if(el){ el.value=''; } });
       const sd=document.getElementById('startDate'); if(sd){ sd.textContent='--'; }
       const ed=document.getElementById('endDate'); if(ed){ ed.textContent='--'; }
-      const pc=document.getElementById('personCount'); if(pc){ if('value' in pc){ pc.value='1'; } else { pc.textContent='1'; } }
-      const pi=document.getElementById('personsInput'); if(pi){ pi.value='1'; }
+      const pc=document.getElementById('personCount'); if(pc){ if('value' in pc){ pc.value = currentUserType === 'resident' ? '1' : '0'; } else { pc.textContent = currentUserType === 'resident' ? '1' : '0'; } }
+      const pi=document.getElementById('personsInput'); if(pi){ pi.value = currentUserType === 'resident' ? '1' : '0'; }
       const rc=document.getElementById('residentsCountInput'); if(rc){ rc.value = currentUserType === 'resident' ? '1' : '0'; }
-      const gc=document.getElementById('guestsCountInput'); if(gc){ gc.value = currentUserType === 'resident' ? '0' : '1'; }
+      const gc=document.getElementById('guestsCountInput'); if(gc){ gc.value = currentUserType === 'resident' ? '0' : '0'; }
       const rText=document.getElementById('residentsCountText'); if(rText){ rText.textContent = currentUserType === 'resident' ? '1' : '0'; }
-      const gText=document.getElementById('guestsCountText'); if(gText){ gText.textContent = currentUserType === 'resident' ? '0' : '1'; }
+      const gText=document.getElementById('guestsCountText'); if(gText){ gText.textContent = currentUserType === 'resident' ? '0' : '0'; }
       const pWrap=document.getElementById('participantWrap'); if(pWrap){ pWrap.style.display='none'; }
       document.querySelectorAll('.resident-check').forEach(function(cb, idx){ cb.checked = idx === 0; });
       document.querySelectorAll('.guest-check').forEach(function(cb){ cb.checked = false; });
@@ -1800,12 +1800,26 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     });
   }
 
-  async function changePersons(val){
+  async function setPersonsCount(desired){
     const pcEl=document.getElementById('personCount');
-    let count=parseInt(((pcEl && (pcEl.value||pcEl.textContent))||'1'),10) || 1;
     const amen=document.getElementById('amenityField').value;
+    const desiredCount=Math.max(0, parseInt(desired||'0',10) || 0);
     if(amen==='Pool' && getPoolBookingTypeValue()==='whole_pool'){
+      const cap=getAmenityMaxPersons('Pool');
+      if(pcEl){ if('value' in pcEl){ pcEl.value=String(cap); } else { pcEl.textContent=String(cap); } }
+      document.getElementById('personsInput').value=cap;
+      if(currentUserType !== 'resident'){
+        const rInput=document.getElementById('residentsCountInput'); if(rInput){ rInput.value='0'; }
+        const rText=document.getElementById('residentsCountText'); if(rText){ rText.textContent='0'; }
+        const gInput=document.getElementById('guestsCountInput'); if(gInput){ gInput.value=String(cap); }
+        const gText=document.getElementById('guestsCountText'); if(gText){ gText.textContent=String(cap); }
+      }
       setFieldWarning('personsInput','Whole pool booking fixes participants at 20.');
+      updateDisplayedPrice();
+      updateDownpaymentSuggestion();
+      updateBookingSummary();
+      updateActionStates();
+      if(amen==='Pool'){ computeAvailability(); evaluateCalendarAvailability(); }
       return;
     }
     let max=getAmenityMaxPersons(amen);
@@ -1815,9 +1829,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
       remaining=poolInfo.remaining;
       max=remaining;
     }
-    const desired=count+val;
     const minAllowed=(amen==='Pool' && remaining===0) ? 0 : 1;
-    count=Math.min(max,Math.max(minAllowed,desired));
+    const count=Math.min(max,Math.max(minAllowed,desiredCount));
     if(pcEl){ if('value' in pcEl){ pcEl.value=String(count); } else { pcEl.textContent=String(count); } }
     document.getElementById('personsInput').value=count;
     if(currentUserType !== 'resident'){
@@ -1829,7 +1842,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const note=document.getElementById('personsMaxNote');
     if(amen==='Pool'){
       if(note){ note.textContent = Number.isFinite(remaining)?`Available: ${remaining} slots`:''; }
-      if(desired>remaining){ setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`); }
+      if(desiredCount>remaining){ setFieldWarning('personsInput',`Only ${remaining} slots are available. Please select fewer persons.`); }
       else { setFieldWarning('personsInput',''); }
     } else {
       if(note){ note.textContent = max?(`Maximum: ${max} persons`):''; }
@@ -1840,6 +1853,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     updateBookingSummary();
     updateActionStates();
     if(amen==='Pool'){ computeAvailability(); evaluateCalendarAvailability(); }
+  }
+  async function changePersons(val){
+    const pcEl=document.getElementById('personCount');
+    let count=parseInt(((pcEl && (pcEl.value||pcEl.textContent))||'1'),10) || 1;
+    await setPersonsCount(count + val);
   }
   async function changeResidents(delta){
     const wrap=document.getElementById('participantWrap');
@@ -2836,11 +2854,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const personInput=document.getElementById('personCount');
     if(personInput){
       personInput.addEventListener('input', async function(){
-        const pHidden=document.getElementById('personsInput');
-        const prev=parseInt(pHidden?.value||'1',10)||1;
-        const desired=Math.max(0, parseInt(personInput.value||'0',10)||0);
-        await changePersons(desired - prev);
-        personInput.value=String(parseInt(document.getElementById('personsInput').value||'1',10));
+        const desired=parseInt(personInput.value||'0',10);
+        await setPersonsCount(desired);
       });
     }
   });
