@@ -244,7 +244,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'get_resident_reservation_detai
     $id = intval($_GET['id']);
     $stmt = $con->prepare("SELECT r.id, r.user_id, r.ref_code, r.amenity, r.start_date, r.end_date, r.start_time, r.end_time, r.persons, r.purpose,
                                     r.created_at, r.approval_status, r.approved_by, r.approval_date,
-                                    r.price, r.downpayment, r.payment_status, r.receipt_path, r.booking_for, r.booked_by_role, r.booked_by_name,
+                                    r.price, r.downpayment, r.payment_status, r.receipt_path, r.receipt_attempts, r.denial_reason, r.booking_for, r.booked_by_role, r.booked_by_name,
                                     u.first_name, u.middle_name, u.last_name, u.email, u.phone, u.house_number, u.user_type,
                                     gf.id AS gf_id, gf.visitor_first_name AS guest_first_name, gf.visitor_middle_name AS guest_middle_name,
                                     gf.visitor_last_name AS guest_last_name, gf.visitor_email AS guest_email, gf.visitor_contact AS guest_contact
@@ -651,7 +651,7 @@ function getPaymentReceiptsCount($con) {
 }
 
 function getPendingPaymentCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q);
   if($r){ $row = $r->fetch_assoc(); if($row){ return intval($row['c']); } }
   return 0;
@@ -662,8 +662,8 @@ function getAmenityAwaitingPaymentCount($con){
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
           AND (r.payment_status IS NULL OR r.payment_status <> 'verified')
-          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history'))
-          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history'))";
+          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history','permission_granted'))
+          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getAmenityReadyForApprovalCount($con){
@@ -672,8 +672,8 @@ function getAmenityReadyForApprovalCount($con){
         LEFT JOIN reservations r ON r.ref_code = gf.ref_code
         WHERE gf.amenity IS NOT NULL AND gf.approval_status = 'pending'
           AND r.payment_status = 'verified'
-          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history'))
-          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history'))";
+          AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history','permission_granted'))
+          AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getOpenIncidentCount($con){
@@ -681,15 +681,15 @@ function getOpenIncidentCount($con){
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingResidentAmenityCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE (entry_pass_id IS NULL OR entry_pass_id = 0) AND amenity IS NOT NULL AND approval_status='pending' AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingGuestFormCount($con){
-  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history'))";
+  $q = "SELECT COUNT(*) AS c FROM guest_forms WHERE approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getPendingVisitorLegacyCount($con){
-  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history'))";
+  $q = "SELECT COUNT(*) AS c FROM reservations WHERE entry_pass_id IS NOT NULL AND (approval_status='pending' OR (status IS NOT NULL AND status='pending')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history','permission_granted'))";
   $r = $con->query($q); if($r && ($row=$r->fetch_assoc())) return intval($row['c']); return 0;
 }
 function getNewRequestsCount($con){
@@ -701,20 +701,20 @@ function getUnreadSystemNotificationsCount($con){
 }
 function getRecentNotifications($con){
   $items = [];
-  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history')) ORDER BY created_at DESC LIMIT 5");
+  $res = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM reservations WHERE receipt_path IS NOT NULL AND (payment_status IS NULL OR payment_status IN ('pending','pending_update')) AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (status IS NULL OR status NOT IN ('cancelled','moved_to_history','permission_granted')) ORDER BY created_at DESC LIMIT 5");
   if($res){ while($row=$res->fetch_assoc()){ $items[] = ['type'=>'payment','source'=>'verify','title'=>'Receipt awaiting verification','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history')) ORDER BY created_at DESC LIMIT 5");
+  $gf = $con->query("SELECT id, ref_code, amenity, UNIX_TIMESTAMP(created_at) AS epoch, created_at FROM guest_forms WHERE amenity IS NOT NULL AND approval_status='pending' AND (approval_status IS NULL OR approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) ORDER BY created_at DESC LIMIT 5");
   if($gf){ while($row=$gf->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY gf.created_at DESC LIMIT 5");
+  $gf2 = $con->query("SELECT gf.id, gf.ref_code, gf.amenity, UNIX_TIMESTAMP(gf.created_at) AS epoch, gf.created_at FROM guest_forms gf LEFT JOIN reservations r ON r.ref_code = gf.ref_code WHERE gf.amenity IS NOT NULL AND gf.approval_status='pending' AND r.payment_status='verified' AND (gf.approval_status IS NULL OR gf.approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history','permission_granted')) ORDER BY gf.created_at DESC LIMIT 5");
   if($gf2){ while($row=$gf2->fetch_assoc()){ $items[] = ['type'=>'resident_guest','label'=>"Resident’s Guest",'source'=>'guest_form','title'=>"Resident’s Guest",'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
-  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY r.created_at DESC LIMIT 5");
+  $rr = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at, u.user_type FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND r.approval_status='pending' AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history','permission_granted')) ORDER BY r.created_at DESC LIMIT 5");
   if($rr){ while($row=$rr->fetch_assoc()){ 
       $uType = ($row['user_type'] === 'visitor') ? 'visitor' : 'resident';
       $title = ($uType === 'visitor') ? 'New visitor amenity request' : 'New resident amenity request';
       $src = ($uType === 'visitor') ? 'visitor_amenity' : 'resident';
       $items[] = ['type'=>'request','source'=>$src,'title'=>$title,'ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; 
   } }
-  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history')) ORDER BY r.created_at DESC LIMIT 5");
+  $legacy = $con->query("SELECT r.id, r.ref_code, r.amenity, UNIX_TIMESTAMP(r.created_at) AS epoch, r.created_at FROM reservations r WHERE r.entry_pass_id IS NOT NULL AND (r.approval_status='pending' OR (r.status IS NOT NULL AND r.status='pending')) AND (r.approval_status IS NULL OR r.approval_status NOT IN ('cancelled','moved_to_history','permission_granted')) AND (r.status IS NULL OR r.status NOT IN ('cancelled','moved_to_history','permission_granted')) ORDER BY r.created_at DESC LIMIT 5");
   if($legacy){ while($row=$legacy->fetch_assoc()){ $items[] = ['type'=>'request','source'=>'visitor','title'=>'New visitor request','ref'=>$row['ref_code'],'amenity'=>$row['amenity'],'time'=>$row['created_at'],'epoch'=>intval($row['epoch'])]; } }
   $ir = $con->query("SELECT id, complainant, created_at, status FROM incident_reports WHERE escalated_to_admin = 1 ORDER BY created_at DESC LIMIT 5");
   if($ir){ while($row=$ir->fetch_assoc()){ $items[] = ['type'=>'incident','source'=>'report','title'=>'Incident escalated','ref'=>null,'amenity'=>null,'time'=>$row['created_at'],'epoch'=>intval(strtotime($row['created_at']))]; } }
@@ -1101,8 +1101,8 @@ function getResidentReservations($con) {
               LEFT JOIN users u ON r.user_id = u.id
               LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL
-              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
-              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'denied')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'denied'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1116,8 +1116,8 @@ function getResidentOnlyReservations($con) {
               LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
               AND (r.booking_for IS NULL OR r.booking_for = 'resident')
-              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
-              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'approved' AND r.approval_status != 'denied')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'approved' AND r.status != 'denied'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1128,8 +1128,8 @@ function getVisitorAccountReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
-              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired')) 
-              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired'))
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'approved' AND r.approval_status != 'denied')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'approved' AND r.status != 'denied'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1143,7 +1143,7 @@ function getGuestAmenityReservations($con) {
               FROM guest_forms gf
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.amenity IS NOT NULL
-              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed'))
+              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed' AND gf.approval_status != 'approved' AND gf.approval_status != 'permission_granted' AND gf.approval_status != 'moved_to_history' AND gf.approval_status != 'expired'))
               ORDER BY gf.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -4258,10 +4258,12 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                         $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                         $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
-                        echo "<span class='reason-input-wrap'>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                        $wrapStyle = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
+                        echo "<span class='reason-input-wrap'$wrapStyle>";
+                        echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
                         if ($payStatusLower === 'pending_update') {
-                          echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                          echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
                         }
                         echo "</span>";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
@@ -4273,10 +4275,12 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
                         $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                         $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
-                        echo "<span class='reason-input-wrap'>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                        $wrapStyle2 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
+                        echo "<span class='reason-input-wrap'$wrapStyle2>";
+                        echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
+                        echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
                         if ($payStatusLower === 'pending_update') {
-                          echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                          echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
                         }
                         echo "</span>";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
@@ -4393,13 +4397,24 @@ body.modal-open { overflow: hidden; }
                   if ($approval_status === 'approved') { $statusClass = 'badge-approved'; }
                   else if ($approval_status === 'denied' || $approval_status === 'cancelled') { $statusClass = 'badge-rejected'; $statusLabelGar = ucfirst($approval_status); }
                   else if ($payStatusLowerGar === 'pending_update') { $statusClass = 'badge-pending'; $statusLabelGar = 'Pending (Resubmitted)'; }
-                  else if ($payStatusLowerGar === 'rejected') { $statusClass = 'badge-rejected'; $statusLabelGar = 'Rejected (Attempt ' . max($attemptsGar,1) . ' of 3)'; }
+                  else if ($payStatusLowerGar === 'rejected') { 
+                    $statusClass = 'badge-rejected'; 
+                    $statusLabelGar = ($attemptsGar >= 3) ? 'Denied – Max Attempts Reached' : ('Rejected (Attempt ' . max($attemptsGar,1) . ' of 3)'); 
+                  }
                   echo "<td><span class='badge $statusClass'>" . $statusLabelGar . "</span></td>";
                   
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showResidentReservationDetails(" . intval($gar['id']) . ")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick=\"showVisitorDetails(" . intval($gar['id']) . ", 'guest_form')\" style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
                   $payStatusLower = strtolower($gar['payment_status'] ?? '');
-                  if ($payStatusLower === 'rejected') { echo "<div class='muted' style='margin-top:6px;'>Wait for the updated proof.</div>"; echo "</td>"; echo "</tr>"; continue; }
+                  if ($payStatusLower === 'rejected') { 
+                    $attemptsGar = intval($gar['receipt_attempts'] ?? 0);
+                    $note = ($attemptsGar >= 3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.';
+                    echo "<div class='muted' style='margin-top:6px;'>$note</div>"; 
+                    if (!empty($denialReasonVal)) {
+                      echo "<div style='margin-top:6px;padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;width:100%;box-sizing:border-box;'>Reason: " . htmlspecialchars($denialReasonVal) . "</div>";
+                    }
+                    echo "</td>"; echo "</tr>"; continue; 
+                  }
                   $receiptPath = $gar['receipt_path'] ?? null;
                   if ($payStatusLower !== 'verified') {
                     if (!empty($receiptPath)) {
@@ -4451,7 +4466,7 @@ body.modal-open { overflow: hidden; }
               }
           }
           if (!$hasGAR) {
-              echo "<tr><td colspan='6' style='text-align:center;'>No resident’s guest amenity bookings found</td></tr>";
+              echo "<tr><td colspan='7' style='text-align:center;'>No resident’s guest amenity bookings found</td></tr>";
           }
           ?>
         </tbody>
@@ -4866,11 +4881,24 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
     var isReadonly = input.hasAttribute('readonly');
     if(isReadonly){
       input.removeAttribute('readonly');
-      btn.innerHTML = '<i class="fa-solid fa-check"></i> Save';
+      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
       input.focus();
+      var finalize = function(){
+        input.setAttribute('readonly','readonly');
+        btn.innerHTML = '<i class="fa-solid fa-pencil"></i>';
+      };
+      input.addEventListener('keydown', function(e){
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          finalize();
+        }
+      }, { once: true });
+      input.addEventListener('blur', function(){
+        finalize();
+      }, { once: true });
     }else{
       input.setAttribute('readonly','readonly');
-      btn.innerHTML = '<i class="fa-solid fa-pencil"></i> Edit';
+      btn.innerHTML = '<i class="fa-solid fa-pencil"></i>';
     }
   };
 })();
@@ -4950,14 +4978,30 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 $approval_status = $rr['approval_status'] ?? 'pending';
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $attempts = intval($rr['receipt_attempts'] ?? 0);
+                if ($payStatusLower === 'rejected' && $attempts >= 3 && strtolower($approval_status) !== 'denied') {
+                  $stmtAuto = $con->prepare("UPDATE reservations SET approval_status='denied' WHERE id=?");
+                  if ($stmtAuto) { $stmtAuto->bind_param('i', $rr['id']); $stmtAuto->execute(); $stmtAuto->close(); }
+                  continue;
+                }
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
-                if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
+                if ($payStatusLower === 'rejected') { 
+                  $statusClass = 'badge-rejected'; 
+                  $statusLabel = ($attempts >= 3) ? 'Denied – Max Attempts Reached' : ('Rejected (Attempt ' . max($attempts,1) . ' of 3)');
+                }
                 echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                 echo "<td class='actions'>";
                 echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
-                if ($payStatusLower === 'rejected') { echo "<div class='muted' style='margin-top:6px;'>Wait for the updated proof.</div>"; }
+                if ($payStatusLower === 'rejected') { 
+                  $attempts = intval($rr['receipt_attempts'] ?? 0);
+                  $note = ($attempts >= 3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.';
+                  echo "<div class='muted' style='margin-top:6px;'>$note</div>"; 
+                  $denReason = trim((string)($rr['denial_reason'] ?? ''));
+                  if ($denReason !== '') {
+                    echo "<div style='margin-top:6px;padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;width:100%;box-sizing:border-box;'>Reason: " . htmlspecialchars($denReason) . "</div>";
+                  }
+                }
                 $receiptPath = $rr['receipt_path'] ?? null;
                 $attempts = intval($rr['receipt_attempts'] ?? 0);
                 if ($attempts >= 3) {
@@ -4996,10 +5040,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
                       $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      echo "<span class='reason-input-wrap'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      $wrapStyle3 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
+                      echo "<span class='reason-input-wrap'$wrapStyle3>";
+                      echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
                       if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                        echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
                       }
                       echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
@@ -5011,10 +5057,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
                       $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      echo "<span class='reason-input-wrap'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
+                      $wrapStyle4 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
+                      echo "<span class='reason-input-wrap'$wrapStyle4>";
+                      echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
+                      echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
                       if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
+                        echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
                       }
                       echo "</span>";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
@@ -5158,6 +5206,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   $approval_status = $rr['approval_status'] ?? 'pending';
                   $payStatusLower = strtolower($rr['payment_status'] ?? '');
                   $attempts = intval($rr['receipt_attempts'] ?? 0);
+                  if ($payStatusLower === 'rejected' && $attempts >= 3 && strtolower($approval_status) !== 'denied') {
+                    $stmtAuto = $con->prepare("UPDATE reservations SET approval_status='denied' WHERE id=?");
+                    if ($stmtAuto) { $stmtAuto->bind_param('i', $rr['id']); $stmtAuto->execute(); $stmtAuto->close(); }
+                    continue;
+                  }
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
                   if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
@@ -5283,7 +5336,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             <th>Name</th>
             <th>Details</th>
             <th>Dates</th>
-            <th>Updated At</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -5292,12 +5344,13 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           $hasArchived = false;
           
           // 1. Archived Guest Forms
-          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history') ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history', 'permission_granted', 'approved') ORDER BY gf.updated_at DESC, gf.created_at DESC");
           if ($gf) {
             while ($row = $gf->fetch_assoc()) {
                $hasArchived = true;
-               $status = strtolower($row['approval_status'] ?? '');
-               $badgeClass = ($status === 'completed') ? 'badge-success' : 'badge-rejected';
+               $rawStatus = strtolower($row['approval_status'] ?? '');
+               $status = ($rawStatus === 'permission_granted') ? 'completed' : $rawStatus;
+               $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : 'badge-rejected';
                $statusLabel = ucfirst($status);
                
                $name = htmlspecialchars(($row['visitor_first_name']??'') . ' ' . ($row['visitor_last_name']??''));
@@ -5312,7 +5365,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                echo "<td><strong>$name</strong></td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
-               echo "<td>$updatedAt</td>";
+               
                echo "<td>";
                echo "<form method='post' onsubmit='return confirm(\"Permanently delete this archived request?\");'>";
                echo "<input type='hidden' name='action' value='delete_reservation'>";
@@ -5332,7 +5385,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             $hasReservationUpdatedAt = $chkUpdated && $chkUpdated->num_rows > 0;
           }
           $orderClause = $hasReservationUpdatedAt ? "r.updated_at DESC, r.created_at DESC" : "r.created_at DESC";
-          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired', 'moved_to_history') OR r.approval_status IN ('cancelled', 'completed', 'expired', 'moved_to_history')) ORDER BY $orderClause");
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'approved', 'denied') OR r.approval_status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'approved', 'denied')) ORDER BY $orderClause");
           if ($res) {
             while ($row = $res->fetch_assoc()) {
                $hasArchived = true;
@@ -5342,8 +5395,11 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                if ($s === 'completed' || $as === 'completed') { $status = 'completed'; }
                elseif ($s === 'expired' || $as === 'expired') { $status = 'expired'; }
                elseif ($s === 'moved_to_history' || $as === 'moved_to_history') { $status = 'cancelled'; }
+               elseif ($s === 'permission_granted' || $as === 'permission_granted') { $status = 'completed'; }
+               elseif ($s === 'approved' || $as === 'approved') { $status = 'approved'; }
+               elseif ($s === 'denied' || $as === 'denied') { $status = 'denied'; }
                
-               $badgeClass = ($status === 'completed') ? 'badge-success' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
+               $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
                $statusLabel = ucfirst($status);
 
                $uType = ucfirst($row['user_type'] ?? 'Visitor');
@@ -5361,7 +5417,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                echo "<td><strong>$name</strong></td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
-               echo "<td>$updatedAt</td>";
+               
                echo "<td>";
                echo "<form method='post' onsubmit='return confirm(\"Permanently delete this archived request?\");'>";
                echo "<input type='hidden' name='action' value='delete_reservation'>";
@@ -5375,7 +5431,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           }
           
           if (!$hasArchived) {
-             echo "<tr><td colspan='6' style='text-align:center;'>No archived requests found.</td></tr>";
+             echo "<tr><td colspan='5' style='text-align:center;'>No archived requests found.</td></tr>";
           }
           ?>
         </tbody>
@@ -5500,6 +5556,7 @@ function showVisitorDetails(id, source) {
         function fmtDateTime(dt){ try{ const d=new Date(dt); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const m=String(d.getMinutes()).padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}.${dd}.${yy} ${h}:${m} ${ap}`; }catch(e){ return String(dt); } }
         function fmtDateTimeSec(dt){ try{ const d=new Date(dt); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const m=String(d.getMinutes()).padStart(2,'0'); const s=String(d.getSeconds()).padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}.${dd}.${yy} ${h}:${m}:${s} ${ap}`; }catch(e){ return String(dt); } }
         const ps = ((details.payment_status || 'pending') + '').toLowerCase();
+        const att = parseInt(details.receipt_attempts||0, 10);
         const psClass = ps==='verified'?'badge-approved':(ps==='rejected'?'badge-rejected':'badge-pending');
         const isGuestEntry = !details.amenity || String(details.amenity).trim() === 'Guest Entry';
         const visitDateVal = (isGuestEntry ? details.visit_date : details.start_date);
@@ -5511,7 +5568,7 @@ function showVisitorDetails(id, source) {
         let stClass = 'st-pending';
         let stLabel = 'Pending Review';
         if (approvalStatus.includes('approv')) { stClass = 'st-approved'; stLabel = 'Approved'; }
-        else if (approvalStatus.includes('denied') || approvalStatus.includes('reject')) { stClass = 'st-denied'; stLabel = 'Denied'; }
+        else if ((approvalStatus.includes('denied') || approvalStatus.includes('reject')) || (ps==='rejected' && att>=3)) { stClass = 'st-denied'; stLabel = (ps==='rejected' && att>=3) ? 'Denied – Max Attempts Reached' : 'Denied'; }
         else if (approvalStatus.includes('cancel')) { stClass = 'st-denied'; stLabel = 'Cancelled'; }
         else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
 
@@ -5686,11 +5743,13 @@ function showReservationDetails(reservationId, expectedType){
       const displayName = isResidentGuest ? (guestName || 'Guest') : residentName;
       const displayEmail = isResidentGuest ? (d.guest_email||'') : (d.email||'');
       const displayPhone = isResidentGuest ? (d.guest_contact||'') : (d.phone||'');
+      const ps = ((d.payment_status||'pending')+'').toLowerCase();
+      const att = parseInt(d.receipt_attempts||0, 10);
       const approvalStatus = (d.approval_status || 'pending').toLowerCase();
       let stClass = 'st-pending';
       let stLabel = 'Pending Review';
       if (approvalStatus.includes('approv')) { stClass = 'st-approved'; stLabel = 'Approved'; }
-      else if (approvalStatus.includes('denied') || approvalStatus.includes('reject')) { stClass = 'st-denied'; stLabel = 'Denied'; }
+      else if ((approvalStatus.includes('denied') || approvalStatus.includes('reject')) || (ps==='rejected' && att>=3)) { stClass = 'st-denied'; stLabel = (ps==='rejected' && att>=3) ? 'Denied – Max Attempts Reached' : 'Denied'; }
       else if (approvalStatus.includes('cancel')) { stClass = 'st-denied'; stLabel = 'Cancelled'; }
       else if (approvalStatus.includes('expire')) { stClass = 'st-expired'; stLabel = 'Expired'; }
       const priceBlock = d.price ? (()=>{ 
@@ -5704,12 +5763,12 @@ function showReservationDetails(reservationId, expectedType){
         </div>`; 
       })() : '';
       const receiptPath = (d.receipt_path||'').toString().trim();
-      const payStatus = (d.payment_status||'').toString().toLowerCase();
+      const payStatus = ps;
       const isPdf = /\.pdf$/i.test(receiptPath);
       const redirectPage = isResidentGuest ? 'resident_guest_forms' : (userType === 'visitor' ? 'visitor_requests' : 'requests');
       const denialReason = (d.denial_reason||'').toString().trim();
       const showDenial = denialReason && (payStatus === 'rejected' || payStatus === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
-      const waitNote = payStatus === 'rejected' ? 'Wait for the updated proof.' : '';
+      const waitNote = payStatus === 'rejected' ? ((att>=3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.') : '';
       const receiptButton = (receiptPath && payStatus==='verified') ? (
         `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, '${redirectPage}')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
       ) : '';
@@ -5721,12 +5780,7 @@ function showReservationDetails(reservationId, expectedType){
           ${receiptButton}
         </div>`
       ) : '';
-      const denialHtml = showDenial ? (
-        `<div style="margin-top:12px;padding:12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;">
-          <div>Reason: ${denialReason}</div>
-          ${waitNote ? `<div style="margin-top:6px;color:#7f1d1d;font-weight:500;">${waitNote}</div>` : ''}
-        </div>`
-      ) : '';
+      const denialHtml = '';
       const content = `
         <div class="request-details">
           <div class="request-status"><span class="status-badge-lg ${stClass}">${stLabel}</span></div>
@@ -5858,8 +5912,9 @@ function showResidentReservationDetails(rrId){
       const receiptPath = (d.receipt_path||'').toString().trim();
       const isPdf = /\.pdf$/i.test(receiptPath);
       const denialReason = (d.denial_reason||'').toString().trim();
+      const att = parseInt(d.receipt_attempts||0, 10);
       const showDenial = denialReason && (ps === 'rejected' || ps === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
-      const waitNote = ps === 'rejected' ? 'Wait for the updated proof.' : '';
+      const waitNote = ps === 'rejected' ? ((att>=3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.') : '';
       const receiptButton = (receiptPath && ps==='verified') ? (
         `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, 'resident_guest_forms')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
       ) : '';

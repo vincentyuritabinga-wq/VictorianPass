@@ -32,11 +32,11 @@ function ensureEnumHasValues($con, $table, $column, $enumValues, $defaultValue){
 }
 
 function ensureStatusEnums($con){
-    ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
-    ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted','moved_to_history'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history','permission_granted'], 'pending');
+    ensureEnumHasValues($con, 'reservations', 'status', ['pending','approved','rejected','expired','cancelled','deleted','moved_to_history','permission_granted'], 'pending');
     ensureEnumHasValues($con, 'reservations', 'payment_status', ['pending','submitted','verified','rejected','pending_update'], 'pending');
-    ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
-    ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history'], 'pending');
+    ensureEnumHasValues($con, 'guest_forms', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history','permission_granted'], 'pending');
+    ensureEnumHasValues($con, 'resident_reservations', 'approval_status', ['pending','approved','denied','cancelled','deleted','moved_to_history','permission_granted'], 'pending');
 }
 ensureStatusEnums($con);
 
@@ -263,11 +263,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resG = $stmtG->get_result();
             $stmtG->close();
             if ($resG && $resG->num_rows > 0) {
-                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ?");
                 $stmtU->bind_param('s', $code);
                 $stmtU->execute();
                 $stmtU->close();
-                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ?");
                 $stmtUR->bind_param('s', $code);
                 $stmtUR->execute();
                 $stmtUR->close();
@@ -281,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resR = $stmtR->get_result();
             $stmtR->close();
             if ($resR && $resR->num_rows > 0) {
-                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ?");
                 $stmtU2->bind_param('s', $code);
                 $stmtU2->execute();
                 $stmtU2->close();
@@ -295,11 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resRR = $stmtRR->get_result();
             $stmtRR->close();
             if ($resRR && $resRR->num_rows > 0) {
-                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ?");
                 $stmtU3->bind_param('s', $code);
                 $stmtU3->execute();
                 $stmtU3->close();
-                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ?");
                 $stmtUR2->bind_param('s', $code);
                 $stmtUR2->execute();
                 $stmtUR2->close();
@@ -657,6 +657,21 @@ if ($resGF && $resGF->num_rows > 0) {
           $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
           @$stmtLog->execute();
           @$stmtLog->close();
+        }
+        // Auto-archive and mark as permission_granted for valid passes
+        if (strtolower($statusVal) === 'approved') {
+          try {
+            // guest_forms
+            $stmtA = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired'))");
+            if ($stmtA) { $stmtA->bind_param('s', $row['ref_code']); $stmtA->execute(); $stmtA->close(); }
+            // reservations
+            $stmtB = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ? AND (status IS NULL OR status NOT IN ('permission_granted','cancelled','denied','expired'))");
+            if ($stmtB) { $stmtB->bind_param('s', $row['ref_code']); $stmtB->execute(); $stmtB->close(); }
+            // resident_reservations
+            $stmtC = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired'))");
+            if ($stmtC) { $stmtC->bind_param('s', $row['ref_code']); $stmtC->execute(); $stmtC->close(); }
+            $resp['status'] = 'permission_granted';
+          } catch (Throwable $e) { /* swallow */ }
         }
       }
     }

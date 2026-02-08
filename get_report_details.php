@@ -66,33 +66,7 @@ function fmt_dt($d){
     <div class="title">Incident Report Details</div>
   </div>
 
-  <div class="section-title">Action Log</div>
-  <div class="timeline">
-    <div class="timeline-item">
-      <div>Report submitted</div>
-      <div class="timeline-time"><?php echo fmt_dt($row['created_at']); ?></div>
-    </div>
-    <?php if (!empty($row['handled_at'])): ?>
-    <div class="timeline-item">
-      <div>Guard acknowledged</div>
-      <div class="timeline-time"><?php echo fmt_dt($row['handled_at']); ?></div>
-    </div>
-    <div class="timeline-item">
-      <div>Guard handling on-site</div>
-      <div class="timeline-time"><?php echo fmt_dt($row['handled_at']); ?></div>
-    </div>
-    <?php endif; ?>
-    <?php if (strtolower((string)$row['status']) === 'resolved'): ?>
-    <div class="timeline-item">
-      <div>Resolved</div>
-      <div class="timeline-time"><?php echo fmt_dt($row['updated_at']); ?></div>
-    </div>
-    <div class="timeline-item">
-      <div>Resident notified</div>
-      <div class="timeline-time"><?php echo fmt_dt($row['updated_at']); ?></div>
-    </div>
-    <?php endif; ?>
-  </div>
+  
 
   <div class="section-title">Report Information</div>
   <div class="info-grid">
@@ -104,7 +78,8 @@ function fmt_dt($d){
     <?php if (!empty($row['report_date'])): ?><div class="info-row"><span class="info-label">Report Date</span><span class="info-value"><?php echo htmlspecialchars(date('m/d/y', strtotime($row['report_date']))); ?></span></div><?php endif; ?>
     <?php if (!empty($row['nature'])): ?><div class="info-row"><span class="info-label">Nature</span><span class="info-value"><?php echo htmlspecialchars($row['nature']); ?></span></div><?php endif; ?>
     <?php if (!empty($row['other_concern'])): ?><div class="info-row"><span class="info-label">Details</span><span class="info-value"><?php echo htmlspecialchars($row['other_concern']); ?></span></div><?php endif; ?>
-    <div class="info-row"><span class="info-label">Current Status</span><span class="info-value"><?php echo htmlspecialchars(ucwords(str_replace('_',' ', $row['status']))); ?></span></div>
+    <?php $cur = strtolower((string)$row['status']); $disp = ($cur === 'new') ? 'Pending' : ucwords(str_replace('_',' ', $row['status'])); ?>
+    <div class="info-row"><span class="info-label">Current Status</span><span class="info-value"><?php echo htmlspecialchars($disp); ?></span></div>
     <?php if (!empty($row['escalated_to_admin'])): ?><div class="info-row"><span class="info-label">Escalated to Admin</span><span class="info-value">Yes</span></div><?php endif; ?>
     <?php if (!empty($row['escalated_at'])): ?><div class="info-row"><span class="info-label">Escalated At</span><span class="info-value"><?php echo fmt_dt($row['escalated_at']); ?></span></div><?php endif; ?>
     <?php if (!empty($row['handled_by_guard_id'])): ?><div class="info-row"><span class="info-label">Handled by Guard</span><span class="info-value"><?php echo intval($row['handled_by_guard_id']); ?></span></div><?php endif; ?>

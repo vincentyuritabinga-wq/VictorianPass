@@ -297,7 +297,7 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false || strpos($s, 'permission_granted') !== false) {
         $isHistory = true;
     }
 
@@ -1080,7 +1080,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               li.setAttribute('data-attempts', String(newItem.attempts || 0));
             }
 
-            var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
+            var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1;
             if(panelId === 'panel-requests' && shouldMoveHistory && historyList && activeList){
               var safeCode=code.replace(/"/g,'&quot;');
               var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
@@ -1091,9 +1091,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 if(titleEl && newItem.title) titleEl.textContent=newItem.title;
                 var badge=li.querySelector('.status-badge');
                 if(badge){
-                  if(newStatusLower.indexOf('moved_to_history') !== -1){
+                  if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
                     badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
-                    badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                    badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                   } else {
                     badge.textContent=fmtLabel(newStatus);
                     badge.className='status-badge '+statusClassFor(newStatus);
@@ -1121,9 +1121,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             if(oldStatus !== newStatus && panelId !== 'panel-history'){
               var badge=li.querySelector('.status-badge');
               if(badge){
-                if(newStatusLower.indexOf('moved_to_history') !== -1){
+                if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
                   badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
-                  badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                  badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                 } else {
                   badge.textContent=fmtLabel(newStatus);
                   badge.className='status-badge '+statusClassFor(newStatus);
@@ -1176,9 +1176,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
               var s=(String(item.status||'').toLowerCase());
               var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
               var hasScan = !!(item.scanned_at);
-              if(s.indexOf('moved_to_history')!==-1) statusText = hasScan ? 'Permission Granted' : 'Denied';
+              if(s.indexOf('moved_to_history')!==-1 || s.indexOf('permission_granted')!==-1) statusText = hasScan || s.indexOf('permission_granted')!==-1 ? 'Permission Granted' : 'Denied';
               var statusCls=(function(){
           if(hasScan && s.indexOf('moved_to_history')!==-1) return 'status-approved';
+          if(s.indexOf('permission_granted')!==-1) return 'status-approved';
           if(s.indexOf('approv')!==-1 || s.indexOf('resolved')!==-1 || s.indexOf('ongoing')!==-1) return 'status-approved';
           if(s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('moved_to_history')!==-1) return 'status-denied';
                 if(s.indexOf('cancel')!==-1) return 'status-cancelled';
@@ -1544,8 +1545,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         alert(data && data.message ? data.message : 'Unable to move to history.');
         return;
       }
-      li.setAttribute('data-status','moved_to_history');
-      if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='moved_to_history';
+      li.setAttribute('data-status','permission_granted');
+      if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='permission_granted';
       var badge=li.querySelector('.status-badge');
       if(badge){
         var scannedAt=li.getAttribute('data-scanned-at')||'';

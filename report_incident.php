@@ -111,7 +111,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $tz = new DateTimeZone('Asia/Manila');
         $dt = DateTime::createFromFormat('Y-m-d', $report_date, $tz);
         if (!($dt && $dt->format('Y-m-d') === $report_date)) { $reportErrors[] = 'Date format is invalid.'; }
-        else { if ($dt > new DateTime('today', $tz)) { $reportErrors[] = 'Date must be today or earlier.'; } }
+        else {
+            $dt->setTime(0, 0, 0);
+            $today = new DateTime('today', $tz);
+            if ($dt > $today) { $reportErrors[] = 'Date must be today or earlier.'; }
+        }
     }
     if (count($natureArr) === 0) { $reportErrors[] = 'Please select at least one nature of concern.'; }
 

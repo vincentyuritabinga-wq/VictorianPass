@@ -253,7 +253,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN scanned_at DATETIME NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, r.scanned_at, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status <> 'deleted' AND r.approval_status <> 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, r.scanned_at, r.receipt_attempts, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status <> 'deleted' AND r.approval_status <> 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -325,7 +325,7 @@ if ($stmt) {
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
             'payment_status' => $row['payment_status'] ?? null,
-            'attempts' => 0,
+            'attempts' => intval($row['receipt_attempts'] ?? 0),
             'scanned_at' => $row['scanned_at'] ?? null
         ];
     }
@@ -506,7 +506,7 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false || strpos($s, 'permission_granted') !== false) {
         $isHistory = true;
     }
 
@@ -1851,8 +1851,8 @@ body.account-blocked { overflow: hidden; }
         alert(data && data.message ? data.message : 'Unable to move to history.');
         return;
       }
-      li.setAttribute('data-status','moved_to_history');
-      prevStatuses[ref]='moved_to_history';
+      li.setAttribute('data-status','permission_granted');
+      prevStatuses[ref]='permission_granted';
       var badge=li.querySelector('.status-badge');
       if(badge){
         var scannedAt=li.getAttribute('data-scanned-at')||'';
@@ -2060,6 +2060,7 @@ body.account-blocked { overflow: hidden; }
     var label=fmtLabel(effectiveStatus);
     var reservedBy=li.getAttribute('data-reserved-by')||'';
     var paymentStatus=(li.getAttribute('data-payment-status')||'').toLowerCase();
+    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
     var scheduleText=li.getAttribute('data-schedule')||'';
     var reasonText=li.getAttribute('data-reason')||'';
     var statusNote='';
@@ -2081,7 +2082,7 @@ body.account-blocked { overflow: hidden; }
     if(type==='reservation' && paymentStatus==='rejected'){
         var att = isNaN(attempts)?0:attempts;
         if(att >= 3){
-          statusNote='This request was denied.';
+          statusNote='Denied — Max Attempts Reached. Payment was rejected 3 times. No further uploads are allowed. The reservation is permanently denied.';
         }else{
           statusNote='Your reservation payment was rejected. Please upload a clear and legible payment receipt to avoid denial. You have 3 attempts. ';
           statusNote+='Attempt '+Math.max(att,1)+' of 3.';
@@ -2122,12 +2123,11 @@ body.account-blocked { overflow: hidden; }
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
-    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
     if (type==='reservation' && paymentStatus==='rejected') {
       var att = isNaN(attempts)?0:attempts;
       var headerBadge = li.querySelector('.status-badge');
       if(att >= 3){
-        label = 'Denied';
+        label = 'Denied – Max Attempts Reached';
         if (headerBadge) { headerBadge.textContent = label; }
         canUpdateProof=false; canCancel=false; canMoveHistory=false; canDelete=false;
       }else{
@@ -2196,6 +2196,8 @@ body.account-blocked { overflow: hidden; }
       html+='</div>';
       html+='</div></div></div>';
     }else if(type==='report'){
+      var curStat=(String(effectiveStatus||'').toLowerCase());
+      if(curStat==='new'){ label='Pending'; }
       html+='<div class="item-extra-section">';
       html+='<div class="item-extra-title">Incident Status</div>';
       html+='<div class="item-extra-body">';
@@ -3075,6 +3077,7 @@ body.account-blocked { overflow: hidden; }
                     li.setAttribute('data-status', newStatus);
                     
                     var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
+                    shouldMoveHistory = shouldMoveHistory || newStatusLower.indexOf('permission_granted') !== -1;
                     if(panelId === 'panel-requests' && shouldMoveHistory && historyList){
                         var safeCode=String(code||'').replace(/"/g,'&quot;');
                         var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
@@ -3085,9 +3088,9 @@ body.account-blocked { overflow: hidden; }
                             if(titleEl && item.title) titleEl.textContent = item.title;
                             var badge = li.querySelector('.status-badge');
                             if(badge){
-                                if(newStatusLower.indexOf('moved_to_history') !== -1){
+                                if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
                                   badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
-                                  badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                                  badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                                 } else {
                                   badge.textContent = fmtLabel(newStatus);
                                   badge.className = 'status-badge ' + statusClassFor(newStatus);
@@ -3118,9 +3121,9 @@ body.account-blocked { overflow: hidden; }
                       
                       var badge = li.querySelector('.status-badge');
                       if(badge){
-                          if(newStatusLower.indexOf('moved_to_history') !== -1){
+                          if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
                             badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
-                            badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                            badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                           } else {
                             badge.textContent = fmtLabel(newStatus);
                             badge.className = 'status-badge ' + statusClassFor(newStatus);
@@ -3179,8 +3182,8 @@ body.account-blocked { overflow: hidden; }
               var s=(String(item.status||'').toLowerCase());
               var hasScan = !!(item.scanned_at);
               var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
-              if(s.indexOf('moved_to_history')!==-1) statusText = hasScan ? 'Permission Granted' : 'Denied';
-              var statusCls=statusClassFor((hasScan && s.indexOf('moved_to_history')!==-1) ? 'permission_granted' : (s||'cancelled'));
+              if(s.indexOf('moved_to_history')!==-1 || s.indexOf('permission_granted')!==-1) statusText = (hasScan || s.indexOf('permission_granted')!==-1) ? 'Permission Granted' : 'Denied';
+              var statusCls=statusClassFor((hasScan && s.indexOf('moved_to_history')!==-1) ? 'permission_granted' : (s.indexOf('permission_granted')!==-1 ? 'permission_granted' : (s||'cancelled')));
               var isReservation=(String(item.type||'').toLowerCase()==='reservation');
               var displayTitle=String(item.title||'');
               if(isReservation){
