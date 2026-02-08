@@ -262,6 +262,21 @@
       h = h%12; if(h===0) h=12;
       return `${h}:${m} ${ap}`;
     }
+    function countWeekdaysInclusive(startStr,endStr){
+      if(!startStr || !endStr) return 0;
+      const s=new Date(startStr);
+      const e=new Date(endStr);
+      if(isNaN(s) || isNaN(e)) return 0;
+      let count=0;
+      const d=new Date(s.getFullYear(),s.getMonth(),s.getDate());
+      const end=new Date(e.getFullYear(),e.getMonth(),e.getDate());
+      while(d<=end){
+        const dow=d.getDay();
+        if(dow!==0 && dow!==6){ count++; }
+        d.setDate(d.getDate()+1);
+      }
+      return count;
+    }
     let statusData = {};
     
     document.addEventListener('DOMContentLoaded', function() {
@@ -448,6 +463,21 @@
           : (data.start_date || '-')
       const personsDisplay = (function(p){ const n = parseInt(p, 10); return isNaN(n) ? '-' : String(n); })(data.persons);
       const priceDisplay = (function(p){ const n = parseFloat(p); if (isNaN(n)) return '-'; try { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n); } catch(e) { return `₱ ${n.toFixed(2)}`; } })(data.price);
+      let durationDisplay = '';
+      if (data.start_date && data.end_date) {
+        let days = 0;
+        if (String(data.type || '') === 'Pool') {
+          days = countWeekdaysInclusive(data.start_date, data.end_date);
+        } else {
+          const sDate = new Date(data.start_date);
+          const eDate = new Date(data.end_date);
+          const diff = Math.floor((eDate - sDate) / (1000 * 60 * 60 * 24));
+          days = isNaN(diff) ? 0 : (diff + 1);
+        }
+        if (days > 0) {
+          durationDisplay = `${days} day${days > 1 ? 's' : ''}`;
+        }
+      }
 
       const yourInfoPairs = isGuestEntry
         ? [
@@ -469,6 +499,7 @@
       if (!isGuestEntry && (data.type || '')) resRows.push(['Amenity', data.type]);
       resRows.push(['Purpose', data.purpose || '-']);
       resRows.push(['Date', dateDisplay]);
+      if (!isGuestEntry && durationDisplay) resRows.push(['Duration', durationDisplay]);
       if (data.start_time || data.end_time) {
         const t1 = fmtTime(data.start_time);
         const t2 = data.end_time ? fmtTime(data.end_time) : '';
