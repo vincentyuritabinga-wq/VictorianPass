@@ -244,6 +244,10 @@ if ($con instanceof mysqli) {
     if ($check && $check->num_rows === 0) {
         $con->query("ALTER TABLE reservations ADD COLUMN denial_reason TEXT NULL");
     }
+    $check = $con->query("SHOW COLUMNS FROM reservations LIKE 'receipt_attempts'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE reservations ADD COLUMN receipt_attempts INT NULL DEFAULT 0");
+    }
     $check = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'denial_reason'");
     if ($check && $check->num_rows === 0) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
@@ -512,7 +516,7 @@ foreach ($activities as $act) {
 
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false || strpos($s, 'permission_granted') !== false) {
+    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
         $isHistory = true;
     }
 
@@ -963,11 +967,11 @@ body.account-blocked { overflow: hidden; }
                   $s = strtolower($act['status']);
                   if (strpos($s, 'permission')!==false || strpos($s, 'granted')!==false) $statusClass = 'status-access-granted';
                   elseif (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
-                  elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
-                  elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'permission_granted') !== false) $displayStatus = 'Access Granted';
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
@@ -1053,12 +1057,12 @@ body.account-blocked { overflow: hidden; }
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
                   if (strpos($s, 'permission')!==false || strpos($s, 'granted')!==false || (!empty($act['scanned_at']) && strpos($s, 'moved_to_history')!==false)) $statusClass = 'status-access-granted';
-                  elseif (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
-                  elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
-                  elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
+                  elseif (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
+                  elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
+                  if (strpos($s, 'permission_granted') !== false) $displayStatus = 'Access Granted';
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
@@ -1316,6 +1320,22 @@ body.account-blocked { overflow: hidden; }
       </div>
     </div>
   </div>
+  <div id="moveHistoryModal" class="cancel-modal" style="display:none;">
+    <div class="cancel-modal-content">
+      <div class="cancel-modal-header">
+        <h3>Move to History</h3>
+        <button type="button" class="cancel-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="cancel-modal-body">
+        <p>Are you sure you want to move this request to history?</p>
+        <p class="cancel-modal-note" style="display:none;"></p>
+      </div>
+      <div class="cancel-modal-actions">
+        <button type="button" class="cancel-modal-keep">Keep in My Requests</button>
+        <button type="button" class="cancel-modal-confirm">Move to History</button>
+      </div>
+    </div>
+  </div>
   <div id="updateProofModal" class="update-proof-modal">
     <div class="update-proof-content">
       <button type="button" class="update-proof-close" aria-label="Close">&times;</button>
@@ -1525,10 +1545,11 @@ body.account-blocked { overflow: hidden; }
     s=(s||'').toLowerCase();
     if(s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1) return 'status-access-granted';
     if(s.indexOf('approv')!==-1) return 'status-approved';
-    if(s.indexOf('resolved')!==-1) return 'status-completed';
-    if(s.indexOf('ongoing')!==-1) return 'status-ongoing';
+    if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
+    if(s.indexOf('expired')!==-1) return 'status-denied';
+    if(s.indexOf('complete')!==-1) return 'status-completed';
     return 'status-pending';
   }
   function fmtLabel(s){
@@ -1552,6 +1573,12 @@ body.account-blocked { overflow: hidden; }
   var cancelModalRef=null;
   var cancelModalLi=null;
   var modalAction = 'cancel';
+  var moveHistoryModal=document.getElementById('moveHistoryModal');
+  var moveHistoryKeep=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-keep'):null;
+  var moveHistoryConfirm=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-confirm'):null;
+  var moveHistoryClose=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-close'):null;
+  var moveHistoryRef=null;
+  var moveHistoryLi=null;
   var updateProofModal=document.getElementById('updateProofModal');
   var updateProofClose=updateProofModal?updateProofModal.querySelector('.update-proof-close'):null;
   var updateProofFile=document.getElementById('updateProofFile');
@@ -1591,6 +1618,20 @@ body.account-blocked { overflow: hidden; }
     updateProofLi=null;
     updateProofRef=null;
     resetUpdateProofForm();
+  }
+
+  function openMoveHistoryModal(li, ref){
+    if(!moveHistoryModal) return;
+    moveHistoryLi=li;
+    moveHistoryRef=ref;
+    moveHistoryModal.style.display='flex';
+  }
+
+  function closeMoveHistoryModal(){
+    if(!moveHistoryModal) return;
+    moveHistoryModal.style.display='none';
+    moveHistoryLi=null;
+    moveHistoryRef=null;
   }
 
   function renderNotifPopup(items){
@@ -1967,6 +2008,26 @@ body.account-blocked { overflow: hidden; }
       }
     });
   }
+  if(moveHistoryKeep){
+    moveHistoryKeep.addEventListener('click',function(){
+      closeMoveHistoryModal();
+    });
+  }
+  if(moveHistoryClose){
+    moveHistoryClose.addEventListener('click',function(){
+      closeMoveHistoryModal();
+    });
+  }
+  if(moveHistoryConfirm){
+    moveHistoryConfirm.addEventListener('click',function(){
+      var ref=moveHistoryRef;
+      var li=moveHistoryLi;
+      closeMoveHistoryModal();
+      if(ref && li){
+        performMoveToHistory(li, ref);
+      }
+    });
+  }
 
   if(updateProofClose){
     updateProofClose.addEventListener('click',function(){
@@ -2190,7 +2251,7 @@ body.account-blocked { overflow: hidden; }
       if(moveBtn && ref && canMoveHistory){
         moveBtn.addEventListener('click', function(ev){
           ev.stopPropagation();
-          performMoveToHistory(li, ref);
+          openMoveHistoryModal(li, ref);
         });
       }
       var viewBtns = extra.querySelectorAll('.view-details-trigger');
@@ -2339,7 +2400,7 @@ body.account-blocked { overflow: hidden; }
     if(moveBtn && ref && canMoveHistory){
       moveBtn.addEventListener('click',function(ev){
         ev.stopPropagation();
-        performMoveToHistory(li, ref);
+        openMoveHistoryModal(li, ref);
       });
     }
     var viewBtns=extra.querySelectorAll('.view-details-trigger');
@@ -2354,7 +2415,7 @@ body.account-blocked { overflow: hidden; }
     if(dropdownMove && ref && canMoveHistory){
       dropdownMove.addEventListener('click', function(ev){
         ev.stopPropagation();
-        performMoveToHistory(li, ref);
+        openMoveHistoryModal(li, ref);
       });
     }
     var viewReportBtn = extra.querySelector('.view-report-btn');
@@ -2554,6 +2615,9 @@ body.account-blocked { overflow: hidden; }
   window.addEventListener('click', function(event) {
      if (event.target == activityModal) {
        activityModal.style.display = "none";
+     }
+     if (event.target == moveHistoryModal) {
+       closeMoveHistoryModal();
      }
      if (event.target == updateProofModal) {
        closeUpdateProofModal();
@@ -3151,7 +3215,6 @@ body.account-blocked { overflow: hidden; }
                     li.setAttribute('data-status', newStatus);
                     
                     var shouldMoveHistory = newStatusLower.indexOf('cancel') !== -1 || newStatusLower.indexOf('expired') !== -1 || newStatusLower.indexOf('moved_to_history') !== -1;
-                    shouldMoveHistory = shouldMoveHistory || newStatusLower.indexOf('permission_granted') !== -1;
                     if(panelId === 'panel-requests' && shouldMoveHistory && historyList){
                         var safeCode=String(code||'').replace(/"/g,'&quot;');
                         var existing=historyList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');

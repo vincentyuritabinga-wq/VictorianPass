@@ -689,6 +689,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     </div>
   </div>
 </div>
+<div id="moveHistoryModal" class="cancel-modal" style="display:none;">
+    <div class="cancel-modal-content">
+      <div class="cancel-modal-header">
+        <h3>Move to History</h3>
+        <button type="button" class="cancel-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="cancel-modal-body">
+        <p>Are you sure you want to move this request to history?</p>
+        <p class="cancel-modal-note" style="display:none;"></p>
+      </div>
+      <div class="cancel-modal-actions">
+        <button type="button" class="cancel-modal-keep">Keep in My Requests</button>
+        <button type="button" class="cancel-modal-confirm">Move to History</button>
+      </div>
+    </div>
+  </div>
 
 <div id="updateProofModal" class="update-proof-modal">
   <div class="update-proof-content">
@@ -1372,6 +1388,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
   var cancelModalLi=null;
   var modalAction = 'cancel';
   var updateProofModal=document.getElementById('updateProofModal');
+  var moveHistoryModal=document.getElementById('moveHistoryModal');
+  var moveHistoryKeep=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-keep'):null;
+  var moveHistoryConfirm=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-confirm'):null;
+  var moveHistoryClose=moveHistoryModal?moveHistoryModal.querySelector('.cancel-modal-close'):null;
+  var moveHistoryRef=null;
+  var moveHistoryLi=null;
   var updateProofClose=updateProofModal?updateProofModal.querySelector('.update-proof-close'):null;
   var updateProofFile=document.getElementById('updateProofFile');
   var updateProofFileName=document.getElementById('updateProofFileName');
@@ -1410,6 +1432,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     updateProofLi=null;
     updateProofRef=null;
     resetUpdateProofForm();
+  }
+
+  function openMoveHistoryModal(li, ref){
+    if(!moveHistoryModal) return;
+    moveHistoryLi=li;
+    moveHistoryRef=ref;
+    moveHistoryModal.style.display='flex';
+  }
+
+  function closeMoveHistoryModal(){
+    if(!moveHistoryModal) return;
+    moveHistoryModal.style.display='none';
+    moveHistoryLi=null;
+    moveHistoryRef=null;
   }
 
   window.openCancelModal = function(li,ref){
@@ -1656,6 +1692,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       }
     });
   }
+  if(moveHistoryKeep){
+    moveHistoryKeep.addEventListener('click',function(){
+      closeMoveHistoryModal();
+    });
+  }
+  if(moveHistoryClose){
+    moveHistoryClose.addEventListener('click',function(){
+      closeMoveHistoryModal();
+    });
+  }
+  if(moveHistoryConfirm){
+    moveHistoryConfirm.addEventListener('click',function(){
+      var ref=moveHistoryRef;
+      var li=moveHistoryLi;
+      closeMoveHistoryModal();
+      if(ref && li){
+        performMoveToHistory(li, ref);
+      }
+    });
+  }
 
   if(updateProofClose){
     updateProofClose.addEventListener('click',function(){
@@ -1874,6 +1930,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if (e.target === cancelModal) {
           cancelModal.style.display = 'none';
       }
+      if (e.target === moveHistoryModal) {
+          closeMoveHistoryModal();
+      }
       if (e.target === updateProofModal) {
           closeUpdateProofModal();
       }
@@ -1994,7 +2053,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(moveBtn && ref && canMoveHistory){
         moveBtn.addEventListener('click', function(e){
           e.stopPropagation();
-          performMoveToHistory(li, ref);
+          openMoveHistoryModal(li, ref);
         });
       }
       var viewBtns = extra.querySelectorAll('.view-details-trigger');
@@ -2079,7 +2138,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(moveBtn && ref && canMoveHistory){
       moveBtn.addEventListener('click', function(e){
         e.stopPropagation();
-        performMoveToHistory(li, ref);
+        openMoveHistoryModal(li, ref);
       });
     }
     
@@ -2095,7 +2154,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(dropdownMove && ref && canMoveHistory){
       dropdownMove.addEventListener('click', function(e){
         e.stopPropagation();
-        performMoveToHistory(li, ref);
+        openMoveHistoryModal(li, ref);
       });
     }
 

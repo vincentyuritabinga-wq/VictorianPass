@@ -272,7 +272,7 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
       content: "";
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(0, 0, 0, 0.28);
     }
 
     .branding {

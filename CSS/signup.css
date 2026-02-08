@@ -43,7 +43,7 @@ body {
 .image-side {
   flex: 1 1 50%;
   position: relative;
-  background: url("../images/registerbg.jpg") center/cover no-repeat;
+  background: url("../images/signupbackground.svg") 26% center/cover no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,7 +56,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.15);
   z-index: 0;
 }
 .image-side .branding {
