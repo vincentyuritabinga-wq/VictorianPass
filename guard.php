@@ -75,6 +75,21 @@ if ($con instanceof mysqli) {
     INDEX idx_scanned_at (scanned_at)
   ) ENGINE=InnoDB");
 }
+function ensureNotificationsTable($con) {
+  if (!($con instanceof mysqli)) { return; }
+  $con->query("CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    entry_pass_id INT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_read (is_read)
+  ) ENGINE=InnoDB");
+}
 
 // API: list incidents for guards (not yet escalated)
 if (isset($_GET['action']) && $_GET['action'] === 'list_incidents') {
@@ -220,6 +235,71 @@ if (isset($_POST['action']) && $_POST['action'] === 'resolve' && isset($_POST['r
   } else {
     echo json_encode(['success' => false]);
   }
+  exit;
+}
+if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
+  header('Content-Type: application/json');
+  ensureNotificationsTable($con);
+  $items = [];
+  $incidentCount = 0;
+  $systemCount = 0;
+  $ir = $con->query("SELECT id, status, created_at, UNIX_TIMESTAMP(created_at) AS epoch FROM incident_reports WHERE COALESCE(escalated_to_admin,0) = 0 ORDER BY created_at DESC LIMIT 12");
+  if ($ir) {
+    while ($row = $ir->fetch_assoc()) {
+      $items[] = [
+        'id' => intval($row['id']),
+        'type' => 'incident',
+        'label' => 'Incident',
+        'source' => 'report',
+        'title' => 'Incident reported',
+        'message' => 'Status: ' . ($row['status'] ?? 'new'),
+        'time' => $row['created_at'],
+        'epoch' => intval($row['epoch'] ?? 0)
+      ];
+      $incidentCount++;
+    }
+  }
+  $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 12");
+  if ($notifs) {
+    while ($row = $notifs->fetch_assoc()) {
+      $items[] = [
+        'id' => intval($row['id']),
+        'type' => 'notification',
+        'label' => 'System',
+        'source' => 'system',
+        'title' => $row['title'] ?? 'Notification',
+        'message' => $row['message'] ?? '',
+        'time' => $row['created_at'],
+        'epoch' => intval($row['epoch'] ?? 0)
+      ];
+      $systemCount++;
+    }
+  }
+  usort($items, function($a, $b){
+    $ea = isset($a['epoch']) ? intval($a['epoch']) : 0;
+    $eb = isset($b['epoch']) ? intval($b['epoch']) : 0;
+    if ($eb === $ea) return 0;
+    return ($eb > $ea) ? 1 : -1;
+  });
+  echo json_encode([
+    'total' => ($incidentCount + $systemCount),
+    'items' => array_slice($items, 0, 12)
+  ]);
+  exit;
+}
+if (isset($_GET['action']) && $_GET['action'] === 'dismiss_notification' && isset($_GET['id'])) {
+  header('Content-Type: application/json');
+  ensureNotificationsTable($con);
+  $nid = intval($_GET['id']);
+  if ($nid > 0) {
+    $stmt = $con->prepare("UPDATE notifications SET is_read = 1 WHERE id = ?");
+    if ($stmt) {
+      $stmt->bind_param('i', $nid);
+      $stmt->execute();
+      $stmt->close();
+    }
+  }
+  echo json_encode(['success' => true]);
   exit;
 }
 // API: list today's entry scans
@@ -421,6 +501,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     overflow-y: auto;
     z-index: 100;
     flex-shrink: 0;
+    transition: width 0.2s ease;
 }
 
 .brand {
@@ -429,10 +510,11 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     align-items: center;
     gap: 12px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
+    justify-content: center;
 }
 
 .brand img { width: 36px; height: 36px; }
-.brand .title { display: flex; flex-direction: column; }
+.brand .title { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .brand h1 { font-size: 1rem; color: #f4efe6; line-height: 1.2; }
 .brand p { font-size: 0.75rem; color: rgba(255,255,255,0.7); margin: 0; }
 
@@ -531,6 +613,217 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     align-items: center;
     gap: 15px;
 }
+.header-brand {
+    gap: 12px;
+    min-width: 0;
+}
+.header-brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+.header-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.4px;
+}
+.header-subtitle {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.75);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.sidebar-toggle {
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    cursor: pointer;
+    transition: var(--transition);
+    align-items: center;
+    justify-content: center;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,0.2); }
+
+.icon-btn {
+    border: none;
+    background: transparent;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.icon-btn:hover { background: rgba(255,255,255,0.15); }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+
+.notifications { position: relative; }
+.notif-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    cursor: pointer;
+    position: relative;
+    color: rgba(255,255,255,0.9);
+    transition: var(--transition);
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.notif-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.notif-btn img { width: 20px; height: 20px; display: block; }
+.notif-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    background: var(--danger);
+    color: #fff;
+    border-radius: 50%;
+    min-width: 19px;
+    height: 19px;
+    font-size: 0.66rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #2b2623;
+    font-weight: 700;
+}
+.notif-badge.pulse { animation: pulse 1s; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
+.notif-panel {
+    position: fixed;
+    top: calc(var(--header-height) + 12px);
+    right: 24px;
+    margin-top: 0;
+    width: 340px;
+    max-height: 450px;
+    background: var(--bg-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+    z-index: 200;
+    border: 1px solid var(--border);
+    display: none;
+}
+.notif-panel.open { animation: fadeIn 0.2s ease; }
+.notif-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    z-index: 1;
+}
+.notif-panel-title { font-size: 0.88rem; font-weight: 600; color: var(--text-main); }
+.notif-panel-close {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+.notif-panel-body { padding: 6px 0; }
+.notif-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    gap: 12px;
+    transition: var(--transition);
+    position: relative;
+    align-items: flex-start;
+    animation: slideIn 0.2s ease;
+}
+.notif-item:hover { background: var(--bg-body); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item-link {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    text-decoration: none;
+    color: inherit;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+}
+.notif-type {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.notif-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-meta strong { font-weight: 600; font-size: 0.88rem; color: var(--text-main); }
+.notif-meta div { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.35; word-wrap: break-word; overflow-wrap: anywhere; white-space: normal; hyphens: auto; }
+.notif-item-time { font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
+.notif-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: var(--transition);
+}
+.notif-item:hover .notif-dismiss { opacity: 1; }
+.notif-dismiss:hover { color: var(--danger); }
+.notif-unread-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--danger);
+    display: inline-block;
+    margin-left: 6px;
+}
+.notif-empty { padding: 10px 14px; font-size: 0.82rem; color: var(--text-muted); }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+body.sidebar-collapsed .sidebar { width: 72px; }
+body.sidebar-collapsed .brand { justify-content: center; padding: 16px 12px; }
+body.sidebar-collapsed .brand .title { display: none; }
+body.sidebar-collapsed .nav-list { padding: 16px 8px; }
+body.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; gap: 0; }
+body.sidebar-collapsed .nav-item span { display: none; }
+body.sidebar-collapsed .sidebar-footer { padding: 16px 10px; }
+body.sidebar-collapsed .sidebar-footer .text-muted-link span { display: none; }
+body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 100%; }
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 95;
+}
 
 .avatar {
     width: 36px;
@@ -571,6 +864,12 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     border: 1px solid var(--border);
     margin: 0 30px 30px 30px;
     overflow-x: auto;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    will-change: transform;
+}
+.panel:hover, .card:hover, .card-box:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
 }
 
 .panel h3, .card-header, .card-box h3 {
@@ -607,6 +906,7 @@ th {
 }
 tr:last-child td { border-bottom: none; }
 tr:hover { background-color: #f8fafc; }
+tbody tr { transition: background-color 0.2s ease; }
 
 /* Buttons */
 .action-btn, .btn {
@@ -623,10 +923,19 @@ tr:hover { background-color: #f8fafc; }
     text-decoration: none;
     line-height: 1;
     color: #fff;
+    gap: 6px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    transform: translateZ(0);
 }
 .action-btn.approve, .btn-approve { background: var(--success); }
 .action-btn.deny, .btn-reject { background: var(--danger); }
-.action-btn:hover { filter: brightness(92%); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.action-btn:hover, .btn:hover {
+    filter: brightness(96%);
+    transform: translateY(-1px) scale(1.01);
+    box-shadow: 0 8px 14px rgba(15, 23, 42, 0.12);
+}
+.action-btn:active, .btn:active { transform: translateY(0) scale(0.98); }
+.action-btn:focus-visible, .btn:focus-visible { box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.2); }
 .btn-view { background: var(--info); color: #fff; }
 .btn-view:hover { background: #2563eb; }
 
@@ -636,9 +945,9 @@ tr:hover { background-color: #f8fafc; }
 
 /* Toast */
 .toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
+    display: none;
+    position: relative;
+    margin: 12px 24px 0 auto;
     background: var(--bg-surface);
     border-left: 5px solid var(--primary);
     box-shadow: var(--shadow-lg);
@@ -651,14 +960,46 @@ tr:hover { background-color: #f8fafc; }
     transform: translateY(20px);
     color: var(--text-main);
 }
-.toast.show { opacity: 1; transform: translateY(0); }
+.toast.show { display: block; opacity: 1; transform: translateY(0); }
+
+.nav-item {
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.nav-item:hover { transform: translateX(2px); }
+.nav-item:active { transform: translateX(0) scale(0.98); }
+
+.panel h3, .card-header, .card-box h3 {
+    transition: color 0.2s ease;
+}
+
+.fade-in {
+    animation: fadeInUp 0.4s ease both;
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
 
 /* Responsive */
 @media(max-width:900px){
-    .app { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; overflow-x: auto; flex-direction: row; }
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+        z-index: 100;
+        width: var(--sidebar-width);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay.show { display: block; }
+    .main { width: 100%; }
     .dashboard { grid-template-columns: 1fr; }
-    .nav-list { flex-direction: row; }
     .top-header { padding: 12px 18px; height: auto; }
     .page-header { padding: 16px 20px 6px; }
 }
@@ -671,12 +1012,13 @@ tr:hover { background-color: #f8fafc; }
     padding: 8px 15px;
     width: 100%;
     outline: none;
-    transition: var(--transition);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     color: var(--text-main);
 }
 .scan-search:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
+    transform: translateY(-1px);
 }
 .profile-mini {
     display: flex;
@@ -711,13 +1053,48 @@ tr:hover { background-color: #f8fafc; }
 .modal.modal-top { z-index: 3000; }
 .modal-content { background-color: var(--bg-surface); margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); position: relative; display: flex; flex-direction: column; gap: 12px; width: min(92vw, 640px); aspect-ratio: auto; max-height: 90vh; overflow: hidden; }
 .modal-content h3 { padding: 12px 16px; border-bottom: 1px solid var(--border-light); margin: 0; font-size: 1.05rem; background: var(--bg-surface); position: sticky; top: 0; z-index: 10; color: #23412e; font-weight: 700; }
-.modal-close { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #ffffff; color: #111827; border: 1px solid #333; font-size: 20px; cursor: pointer; line-height: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
-.modal-close:hover { transform: translateY(-1px); color: #0f172a; border-color: #111827; }
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef2f0;
+    color: #23412e;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    z-index: 100;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease, color 0.2s ease, filter 0.2s ease;
+}
+.modal-close:hover { filter: brightness(0.95); transform: scale(1.05); }
 .modal-header { display: flex; justify-content: space-between; align-items: center; }
 .incident-details-content { overflow-y: auto; flex: 1; padding: 18px 20px 22px; }
 .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .proofs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.proofs img { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.proofs img { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.proofs img:hover { transform: translateY(-1px) scale(1.02); border-color: #cbd5e1; box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12); }
+.image-modal .modal-content {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    width: auto;
+    max-width: 90vw;
+    max-height: 90vh;
+}
+.image-modal img {
+    max-width: 90vw;
+    max-height: 80vh;
+    border-radius: 12px;
+    border: 2px solid #fff;
+    display: block;
+}
 .proofs a { display: inline-block; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
 </style>
 </head>
@@ -726,17 +1103,12 @@ tr:hover { background-color: #f8fafc; }
 <aside class="sidebar">
   <div class="brand">
     <img src="images/logo.svg" alt="VictorianPass logo">
-    <div class="title">
-      <h1>Guard Panel</h1>
-      <p>Victorian Heights Subdivision</p>
-    </div>
   </div>
   <nav class="nav-list">
     <div class="nav-item" data-section="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></div>
     <div class="nav-item active" data-section="expected"><img src="images/dashboard.svg"><span>Scheduled Arrivals</span></div>
     <div class="nav-item" data-section="entries"><img src="images/dashboard.svg"><span>Today's Entry</span></div>
     <div class="nav-item" data-section="restricted"><img src="images/dashboard.svg"><span>Incident Reports</span></div>
-    <div class="nav-item" data-section="notifications"><img src="images/dashboard.svg"><span>Notifications</span></div>
   </nav>
   <div class="sidebar-footer">
     <a href="logout.php" class="text-muted-link">
@@ -746,20 +1118,33 @@ tr:hover { background-color: #f8fafc; }
   </div>
 </aside>
 <main class="main">
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <header class="top-header">
     <div class="header-brand">
-       <!-- Placeholder for future header items -->
+      <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+      </button>
+      <div class="header-brand-text">
+        <div class="header-title">Guard Panel</div>
+        <div class="header-subtitle">Victorian Heights</div>
+      </div>
     </div>
     <div class="header-actions">
-      <div class="profile-mini">
-        <img src="images/logo.svg" alt="Guard" class="avatar">
-        <span style="colo r:white; margin-top: 2px;"><?php echo htmlspecialchars($surname); ?></span>
+      <div class="notifications">
+        <button id="notifToggle" class="notif-btn" aria-label="Notifications" title="Notifications">
+          <img alt="Notifications" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 10-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' fill='%23fff'/></svg>" />
+        </button>
+        <div id="notifPanel" class="notif-panel" style="display:none"></div>
       </div>
+      <button type="button" class="icon-btn" aria-label="Profile" title="Profile">
+        <img src="images/mainpage/profile'.jpg" alt="Profile">
+      </button>
     </div>
   </header>
   <div class="page-header">
     <h2 id="page-title">Scheduled Arrivals</h2>
   </div>
+  <div id="toast" class="toast"></div>
   <div id="dashboardSection" class="dashboard section hidden">
     <div class="panel">
       <h3>Today's Entry</h3>
@@ -829,12 +1214,6 @@ tr:hover { background-color: #f8fafc; }
       </table>
     </div>
   </div>
-  <div id="notificationsSection" class="section hidden">
-    <div class="panel">
-      <h3>Notifications</h3>
-      <div>All notifications will appear here.</div>
-    </div>
-  </div>
   <div class="section" id="historySection">
     <div class="panel">
       <h3>Your Login History</h3>
@@ -864,13 +1243,214 @@ tr:hover { background-color: #f8fafc; }
   </div>
 </main>
 </div>
-<div id="toast" class="toast"></div>
 <script>
 const navItems = document.querySelectorAll('.nav-item');
 const sections = document.querySelectorAll('.section');
 const pageTitle = document.getElementById('page-title');
-navItems.forEach(item=>{ item.addEventListener('click',()=>{ navItems.forEach(i=>i.classList.remove('active')); item.classList.add('active'); sections.forEach(s=>s.classList.add('hidden')); const target=document.getElementById(item.dataset.section+'Section'); if(target) target.classList.remove('hidden'); const ph=document.querySelector('.page-header'); if(ph){ ph.style.display = ''; } pageTitle.textContent=item.querySelector('span').textContent; if(item.dataset.section==='entries'){ loadTodayEntries(); } if(item.dataset.section==='expected'){ const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); const sv=s&&s.value?s.value:formatInputDate(new Date()); const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+7*24*60*60*1000)); loadExpected(sv,ev); } }); });
-function showToast(message, type){ const toast=document.getElementById('toast'); toast.textContent=message; toast.style.background=type==='error'?"var(--status-rejected)":"var(--status-approved)"; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2500); }
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebar = document.querySelector('.sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+const notifToggle = document.getElementById('notifToggle');
+const notifPanel = document.getElementById('notifPanel');
+let notifItems = [];
+let toastTimer;
+let notifMap = {};
+let notifDismissed = new Set();
+let lastNotifTotal = 0;
+try { notifDismissed = new Set(JSON.parse(localStorage.getItem('guardNotifDismissed') || '[]')); } catch(_){}
+function saveNotifDismissed(){ localStorage.setItem('guardNotifDismissed', JSON.stringify(Array.from(notifDismissed))); }
+
+if(sidebarToggle && sidebar && overlay){
+  function isMobile(){
+    return window.matchMedia('(max-width: 900px)').matches;
+  }
+  function closeSidebar(){
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  }
+  sidebarToggle.addEventListener('click', function(){
+    if(isMobile()){
+      sidebar.classList.add('open');
+      overlay.classList.add('show');
+      return;
+    }
+    document.body.classList.toggle('sidebar-collapsed');
+  });
+  overlay.addEventListener('click', closeSidebar);
+  window.addEventListener('resize', function(){
+    if(!isMobile()){
+      closeSidebar();
+    }
+  });
+}
+function setActiveSection(sectionKey){
+  navItems.forEach(i=>i.classList.remove('active'));
+  sections.forEach(s=>s.classList.add('hidden'));
+  const activeItem = Array.from(navItems).find(i=>i.dataset.section === sectionKey);
+  if(activeItem){
+    activeItem.classList.add('active');
+    pageTitle.textContent = activeItem.querySelector('span').textContent;
+  }
+  const target = document.getElementById(sectionKey+'Section');
+  if(target) target.classList.remove('hidden');
+  const ph = document.querySelector('.page-header');
+  if(ph){ ph.style.display = ''; }
+  if(sectionKey === 'entries'){ loadTodayEntries(); }
+  if(sectionKey === 'expected'){
+    const s=document.getElementById('expectedStart');
+    const e=document.getElementById('expectedEnd');
+    const sv=s&&s.value?s.value:formatInputDate(new Date());
+    const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+7*24*60*60*1000));
+    loadExpected(sv,ev);
+  }
+}
+navItems.forEach(item=>{ item.addEventListener('click',()=>{ setActiveSection(item.dataset.section); }); });
+function escapeHtml(value){
+  return String(value||'').replace(/[&<>"']/g,function(m){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+  });
+}
+function keyFor(it){ return [String(it.type||''), String(it.id||''), String(it.time||'')].join('|'); }
+function getVisibleNotifs(){ return notifItems.filter(it=>!notifDismissed.has(keyFor(it))); }
+function updateNotifBadge(total){
+  if(!notifToggle) return;
+  let badge = notifToggle.querySelector('.notif-badge');
+  if(total > 0){
+    if(!badge){ badge = document.createElement('span'); badge.className = 'notif-badge'; notifToggle.appendChild(badge); }
+    badge.textContent = total > 99 ? '99+' : String(total);
+    if(total > lastNotifTotal){
+      badge.classList.remove('pulse');
+      void badge.offsetWidth;
+      badge.classList.add('pulse');
+    }
+  } else {
+    if(badge) badge.remove();
+  }
+  lastNotifTotal = total;
+}
+function renderNotifPanel(){
+  if(!notifPanel) return;
+  const items = getVisibleNotifs();
+  notifMap = {};
+  let body = '';
+  if(items.length === 0){
+    body = `<div class="notif-empty">No new notifications</div>`;
+  } else {
+    items.forEach(it=>{
+      const key = keyFor(it);
+      notifMap[key] = it;
+      const label = String(it.label || it.type || 'NTF').slice(0,3).toUpperCase();
+      const title = escapeHtml(it.title || 'Notification');
+      const msg = escapeHtml(it.message || '');
+      const time = it.time ? formatDateTime(it.time) : '';
+      body += `<div class="notif-item" data-key="${key}"><button type="button" class="notif-item-link"><span class="notif-type">${label}</span><div class="notif-meta"><strong>${title}<span class="notif-unread-dot"></span></strong><div>${msg}</div><div class="notif-item-time">${time}</div></div></button><button type="button" class="notif-dismiss" aria-label="Dismiss">×</button></div>`;
+    });
+  }
+  notifPanel.innerHTML = `<div class="notif-panel-header"><div class="notif-panel-title">Notifications</div><button type="button" class="notif-panel-close" aria-label="Close">×</button></div><div class="notif-panel-body">${body}</div>`;
+}
+function extractRef(text){
+  const val = String(text||'');
+  let m = val.match(/Code:\s*([A-Z0-9\-]+)/i);
+  if(m && m[1]) return m[1];
+  m = val.match(/(?:Reservation|Request|Amenity|Guest)\s+([A-Z0-9\-]+)/i);
+  if(m && m[1]) return m[1];
+  return '';
+}
+function handleNotifClick(it){
+  if(String(it.type||'') === 'incident'){
+    setActiveSection('restricted');
+    const id = parseInt(it.id||0);
+    if(id){
+      fetch(`guard.php?action=incident_details&id=${encodeURIComponent(id)}`).then(r=>r.json()).then(data=>{
+        if(data&&data.success){ showIncidentDetailsModal(data.report, data.proofs||[]); }
+      }).catch(_=>{});
+    }
+    return;
+  }
+  const ref = extractRef(it.message || it.title || '');
+  if(ref){
+    setActiveSection('expected');
+    return;
+  }
+  setActiveSection('dashboard');
+}
+function refreshNotifications(){
+  fetch('guard.php?action=get_notifications').then(r=>r.json()).then(data=>{
+    notifItems = Array.isArray(data.items) ? data.items : [];
+    updateNotifBadge(getVisibleNotifs().length);
+    if(notifPanel && notifPanel.style.display === 'block'){ renderNotifPanel(); }
+  }).catch(_=>{});
+}
+if(notifToggle && notifPanel){
+  notifToggle.addEventListener('click', function(e){
+    e.stopPropagation();
+    const isOpen = notifPanel.style.display === 'block';
+    if(isOpen){
+      notifPanel.style.display = 'none';
+      notifPanel.classList.remove('open');
+      return;
+    }
+    renderNotifPanel();
+    notifPanel.style.display = 'block';
+    notifPanel.classList.add('open');
+  });
+  document.addEventListener('click', function(e){
+    if(notifPanel.style.display !== 'block') return;
+    if(notifPanel.contains(e.target) || notifToggle.contains(e.target)) return;
+    notifPanel.style.display = 'none';
+    notifPanel.classList.remove('open');
+  });
+  notifPanel.addEventListener('click', function(e){
+    const closeBtn = e.target.closest('.notif-panel-close');
+    if(closeBtn){
+      notifPanel.style.display = 'none';
+      notifPanel.classList.remove('open');
+      return;
+    }
+    const dismissBtn = e.target.closest('.notif-dismiss');
+    if(dismissBtn){
+      const itemEl = dismissBtn.closest('.notif-item');
+      const key = itemEl ? itemEl.getAttribute('data-key') : '';
+      if(key && notifMap[key]){
+        const it = notifMap[key];
+        notifDismissed.add(key);
+        saveNotifDismissed();
+        if(String(it.type||'') === 'notification' && it.id){
+          fetch(`guard.php?action=dismiss_notification&id=${encodeURIComponent(it.id)}`).catch(_=>{});
+        }
+      }
+      renderNotifPanel();
+      updateNotifBadge(getVisibleNotifs().length);
+      return;
+    }
+    const itemBtn = e.target.closest('.notif-item-link');
+    if(itemBtn){
+      const itemEl = itemBtn.closest('.notif-item');
+      const key = itemEl ? itemEl.getAttribute('data-key') : '';
+      if(key && notifMap[key]){ handleNotifClick(notifMap[key]); }
+      notifPanel.style.display = 'none';
+      notifPanel.classList.remove('open');
+    }
+  });
+}
+function showToast(message, type){
+  const toast = document.getElementById('toast');
+  if(!toast){ return; }
+  toast.textContent = message;
+  toast.style.background = type === 'error' ? "var(--status-rejected)" : "var(--status-approved)";
+  toast.classList.remove('show');
+  toast.style.display = 'block';
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+  if(toastTimer){ clearTimeout(toastTimer); }
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 220);
+  }, 2500);
+}
 function scanCode(){
   const raw=(document.getElementById('scanCode').value||'').trim();
   if(!raw){ showToast('Enter a code to scan','error'); return; }
@@ -1005,6 +1585,8 @@ function loadExpected(start,end){ const rng = start&&end ? {start,end} : getRang
 document.addEventListener('DOMContentLoaded', function(){
   loadTodayEntries();
   loadDashboardEntries();
+  refreshNotifications();
+  setInterval(refreshNotifications, 60000);
   const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); if(s&&e){ const today=new Date(); const next=new Date(Date.now()+7*24*60*60*1000); s.value=formatInputDate(today); e.value=formatInputDate(next); }
   const apply=document.getElementById('applyExpected'); if(apply){ apply.addEventListener('click', function(){ const rng=getRange(); loadExpected(rng.start,rng.end); }); }
   const wk=document.getElementById('weekFromStartBtn'); if(wk){ wk.addEventListener('click', function(){ const base=new Date(); const end=new Date(base.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(base); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
@@ -1038,7 +1620,7 @@ function showIncidentDetailsModal(report, proofs){
     proofs.forEach(function(p){
       var ext = p.split('.').pop().toLowerCase();
       if (['jpg','jpeg','png','gif'].indexOf(ext) >= 0) {
-        var img = document.createElement('img'); img.src = p; pf.appendChild(img);
+        var img = document.createElement('img'); img.src = p; img.addEventListener('click', function(){ openProofImage(p); }); pf.appendChild(img);
       } else {
         var a = document.createElement('a'); a.href = p; a.target = '_blank'; a.textContent = 'View file'; pf.appendChild(a);
       }
@@ -1052,6 +1634,26 @@ function closeIncidentDetailsModal(){
   var m = document.getElementById('incidentDetailsModal');
   if (m) { m.style.display = 'none'; }
 }
+function openProofImage(src){
+  var m = document.getElementById('proofImageModal');
+  var img = document.getElementById('proofImagePreview');
+  if (m && img) {
+    img.src = src;
+    m.style.display = 'flex';
+  }
+}
+function closeProofImage(){
+  var m = document.getElementById('proofImageModal');
+  if (m) { m.style.display = 'none'; }
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var proofModal = document.getElementById('proofImageModal');
+  if (proofModal) {
+    proofModal.addEventListener('click', function(e){
+      if (e.target === proofModal) { closeProofImage(); }
+    });
+  }
+});
 </script>
 <script src="js/logout-modal.js"></script>
 <div id="incidentDetailsModal" class="modal">
@@ -1072,6 +1674,12 @@ function closeIncidentDetailsModal(){
       <div style="margin-top:12px"><strong>Proofs</strong></div>
       <div id="incProofs" class="proofs"></div>
     </div>
+  </div>
+</div>
+<div id="proofImageModal" class="modal modal-top image-modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeProofImage()">×</button>
+    <img id="proofImagePreview" src="" alt="Proof preview">
   </div>
 </div>
 </body>

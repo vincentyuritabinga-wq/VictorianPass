@@ -2665,6 +2665,12 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     let w=container.querySelector('.field-warning[data-for="'+id+'"]');
     if(msg){
       if(!w){ w=document.createElement('div'); w.className='field-warning'; w.setAttribute('data-for',id); container.appendChild(w);} 
+      if(id==='personsInput'){
+        const note=document.getElementById('personsMaxNote');
+        if(note && note.parentElement===container){
+          container.insertBefore(w, note.nextSibling);
+        }
+      }
       let icon=w.querySelector('.warn-icon'); if(!icon){ icon=document.createElement('span'); icon.className='warn-icon'; icon.textContent='!'; w.appendChild(icon);} 
       let m=w.querySelector('.msg'); if(!m){ m=document.createElement('span'); m.className='msg'; w.appendChild(m);} m.textContent=msg;
       let close=w.querySelector('.close-warn'); if(!close){ close=document.createElement('button'); close.className='close-warn'; close.type='button'; close.textContent='\u00d7'; w.appendChild(close); close.addEventListener('click',function(){ w.remove(); }); }
