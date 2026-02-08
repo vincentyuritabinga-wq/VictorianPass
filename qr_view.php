@@ -103,14 +103,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_
     if ($blocked) {
         $error = 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.';
     } elseif (in_array($tbl, ['guest_forms', 'reservations', 'resident_reservations'])) {
-        $upStmt = $con->prepare("UPDATE $tbl SET scanned_at = NOW() WHERE id = ? AND ref_code = ?");
-        $upStmt->bind_param('is', $sid, $ref);
-        $upStmt->execute();
-        $upStmt->close();
-        $_SESSION['just_confirmed_ref'] = $ref;
-        $_SESSION['just_confirmed_time'] = time();
-        $_SESSION['confirm_popup'] = 1;
-        header("Location: " . $_SERVER['REQUEST_URI']);
+        if ($tbl === 'guest_forms') {
+            $upStmt = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt->bind_param('is', $sid, $ref);
+            $upStmt->execute();
+            $upStmt->close();
+        } elseif ($tbl === 'reservations') {
+            $upStmt = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (status IS NULL OR status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt->bind_param('is', $sid, $ref);
+            $upStmt->execute();
+            $upStmt->close();
+        } elseif ($tbl === 'resident_reservations') {
+            $upStmt = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt->bind_param('is', $sid, $ref);
+            $upStmt->execute();
+            $upStmt->close();
+        }
+        $_SESSION['guard_confirmed_ref'] = $ref;
+        $_SESSION['guard_confirmed_time'] = time();
+        header("Location: guard.php");
         exit;
     }
 }

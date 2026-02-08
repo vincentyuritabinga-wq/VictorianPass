@@ -11,6 +11,14 @@ $s = preg_replace('/[^a-zA-Z]/', '', $s);
 $surname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
 $staffId = intval($_SESSION['staff_id'] ?? 0);
 $currentLoginId = intval($_SESSION['login_history_id'] ?? 0);
+$guardConfirmRef = '';
+if (!empty($_SESSION['guard_confirmed_ref'])) {
+  $age = time() - intval($_SESSION['guard_confirmed_time'] ?? 0);
+  if ($age >= 0 && $age < 120) {
+    $guardConfirmRef = (string)$_SESSION['guard_confirmed_ref'];
+  }
+  unset($_SESSION['guard_confirmed_ref'], $_SESSION['guard_confirmed_time']);
+}
 $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
 $currentLogin = null;
 if ($currentLoginId > 0) {
@@ -1507,6 +1515,8 @@ function showToast(message, type){
     }, 220);
   }, 2500);
 }
+const guardConfirmMsg = <?php echo json_encode($guardConfirmRef !== '' ? ('Confirmed entry of code number ' . $guardConfirmRef) : ''); ?>;
+if(guardConfirmMsg){ showToast(guardConfirmMsg); }
 function scanCode(){
   const raw=(document.getElementById('scanCode').value||'').trim();
   if(!raw){ showToast('Enter a code to scan','error'); return; }

@@ -1116,8 +1116,8 @@ function getResidentOnlyReservations($con) {
               LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code AND gf.resident_user_id IS NOT NULL
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'resident'
               AND (r.booking_for IS NULL OR r.booking_for = 'resident')
-              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'approved' AND r.approval_status != 'denied')) 
-              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'approved' AND r.status != 'denied'))
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'denied')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'denied'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1128,8 +1128,8 @@ function getVisitorAccountReservations($con) {
               FROM reservations r
               LEFT JOIN users u ON r.user_id = u.id
               WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0) AND r.amenity IS NOT NULL AND u.user_type = 'visitor'
-              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'approved' AND r.approval_status != 'denied')) 
-              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'approved' AND r.status != 'denied'))
+              AND (r.approval_status IS NULL OR (r.approval_status != 'cancelled' AND r.approval_status != 'completed' AND r.approval_status != 'expired' AND r.approval_status != 'permission_granted' AND r.approval_status != 'moved_to_history' AND r.approval_status != 'denied')) 
+              AND (r.status IS NULL OR (r.status != 'cancelled' AND r.status != 'completed' AND r.status != 'expired' AND r.status != 'permission_granted' AND r.status != 'moved_to_history' AND r.status != 'denied'))
               ORDER BY r.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -1143,7 +1143,7 @@ function getGuestAmenityReservations($con) {
               FROM guest_forms gf
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.amenity IS NOT NULL
-              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed' AND gf.approval_status != 'approved' AND gf.approval_status != 'permission_granted' AND gf.approval_status != 'moved_to_history' AND gf.approval_status != 'expired'))
+              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed' AND gf.approval_status != 'permission_granted' AND gf.approval_status != 'moved_to_history' AND gf.approval_status != 'expired'))
               ORDER BY gf.created_at DESC";
     $result = $con->query($query);
     return $result ?: false;
@@ -4963,6 +4963,19 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
         $hasRR = false;
         if ($residentRes && $residentRes->num_rows > 0) {
             while ($rr = $residentRes->fetch_assoc()) {
+                $approval_status = $rr['approval_status'] ?? 'pending';
+                $statusValue = $rr['status'] ?? '';
+                $statusLower = strtolower((string)$statusValue);
+                $scannedAt = $rr['scanned_at'] ?? null;
+                $approvalLower = strtolower((string)$approval_status);
+                if ($approvalLower === 'permission_granted' || $statusLower === 'permission_granted') {
+                  continue;
+                }
+                if (!empty($scannedAt) && !in_array($approvalLower, ['denied','cancelled','expired','moved_to_history'], true)) {
+                  $stmtGrant = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', updated_at = NOW() WHERE id = ?");
+                  if ($stmtGrant) { $stmtGrant->bind_param('i', $rr['id']); $stmtGrant->execute(); $stmtGrant->close(); }
+                  continue;
+                }
                 $hasRR = true;
                 echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='resident'>";
                 $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
@@ -4975,7 +4988,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
 
                 echo "<td>" . htmlspecialchars($rr['house_number'] ?? '-') . "</td>";
-                $approval_status = $rr['approval_status'] ?? 'pending';
                 $payStatusLower = strtolower($rr['payment_status'] ?? '');
                 $attempts = intval($rr['receipt_attempts'] ?? 0);
                 if ($payStatusLower === 'rejected' && $attempts >= 3 && strtolower($approval_status) !== 'denied') {
@@ -4985,6 +4997,10 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                 }
                 $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                 $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                if ($approvalLower === 'permission_granted' || $statusLower === 'permission_granted') {
+                  $statusClass = 'badge-approved';
+                  $statusLabel = 'Access Granted';
+                }
                 if ($payStatusLower === 'rejected') { 
                   $statusClass = 'badge-rejected'; 
                   $statusLabel = ($attempts >= 3) ? 'Denied – Max Attempts Reached' : ('Rejected (Attempt ' . max($attempts,1) . ' of 3)');
@@ -5193,6 +5209,19 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           $hasVR = false;
           if ($visitorRes && $visitorRes->num_rows > 0) {
               while ($rr = $visitorRes->fetch_assoc()) {
+                  $approval_status = $rr['approval_status'] ?? 'pending';
+                  $statusValue = $rr['status'] ?? '';
+                  $statusLower = strtolower((string)$statusValue);
+                  $scannedAt = $rr['scanned_at'] ?? null;
+                  $approvalLower = strtolower((string)$approval_status);
+                  if ($approvalLower === 'permission_granted' || $statusLower === 'permission_granted') {
+                    continue;
+                  }
+                  if (!empty($scannedAt) && !in_array($approvalLower, ['denied','cancelled','expired','moved_to_history'], true)) {
+                    $stmtGrant = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', updated_at = NOW() WHERE id = ?");
+                    if ($stmtGrant) { $stmtGrant->bind_param('i', $rr['id']); $stmtGrant->execute(); $stmtGrant->close(); }
+                    continue;
+                  }
                   $hasVR = true;
                   echo "<tr data-ref='" . htmlspecialchars($rr['ref_code'] ?? '') . "' data-id='" . intval($rr['id']) . "' data-source='visitor'>";
                   $fullName = trim(($rr['first_name'] ?? '') . ' ' . ($rr['middle_name'] ?? '') . ' ' . ($rr['last_name'] ?? ''));
@@ -5202,8 +5231,6 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   $uType = ucfirst($rr['user_type'] ?? 'Visitor');
                   $uTypeClass = 'badge-approved'; 
                   echo "<td><span class='badge $uTypeClass' style='font-size:0.8rem;'>$uType</span></td>";
-
-                  $approval_status = $rr['approval_status'] ?? 'pending';
                   $payStatusLower = strtolower($rr['payment_status'] ?? '');
                   $attempts = intval($rr['receipt_attempts'] ?? 0);
                   if ($payStatusLower === 'rejected' && $attempts >= 3 && strtolower($approval_status) !== 'denied') {
@@ -5213,10 +5240,25 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   }
                   $statusClass = $approval_status === 'approved' ? 'badge-approved' : (($approval_status === 'denied' || $approval_status === 'cancelled') ? 'badge-rejected' : 'badge-pending');
                   $statusLabel = ($payStatusLower === 'pending_update') ? 'Pending (Resubmitted)' : ucfirst($approval_status);
+                  if ($approvalLower === 'permission_granted' || $statusLower === 'permission_granted') {
+                    $statusClass = 'badge-approved';
+                    $statusLabel = 'Access Granted';
+                  }
                   if ($payStatusLower === 'rejected') { $statusClass = 'badge-rejected'; $statusLabel = 'Rejected (Attempt ' . max($attempts,1) . ' of 3)'; }
                   echo "<td><span class='badge $statusClass'>" . $statusLabel . "</span></td>";
                   echo "<td class='actions'>";
-                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")' style='margin-bottom: 5px;'><i class='fa-solid fa-eye'></i> View Details</button>";
+                  echo "<button type='button' class='btn btn-view' onclick='showReservationDetails(" . intval($rr['id']) . ",\"visitor\")'><i class='fa-solid fa-eye'></i> View Details</button>";
+                  $payStatusLower = strtolower($rr['payment_status'] ?? '');
+                  if ($payStatusLower === 'rejected') { 
+                    $attempts = intval($rr['receipt_attempts'] ?? 0);
+                    $denialReasonVal = trim((string)($rr['denial_reason'] ?? ''));
+                    $note = ($attempts >= 3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the uploaded proof.';
+                    echo "<div class='muted' style='margin-top:6px;'>$note</div>"; 
+                    if (!empty($denialReasonVal)) {
+                      echo "<div style='margin-top:6px;padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;font-weight:600;width:100%;box-sizing:border-box;'>Reason: " . htmlspecialchars($denialReasonVal) . "</div>";
+                    }
+                    echo "</td>"; echo "</tr>"; continue; 
+                  }
                   $attempts = intval($rr['receipt_attempts'] ?? 0);
                   if ($attempts >= 3) {
                     echo "<form method='post' class='action-form action-deny' onsubmit='return openDenyModal(this)'>";
@@ -5240,12 +5282,12 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   if (!empty($receiptPath)) {
                     $isPdf = (bool)preg_match('/\.pdf$/i', (string)$receiptPath);
                     if ($isPdf) {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\"><i class='fa-solid fa-file'></i> Open Receipt (PDF)</button>";
                     } else {
-                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\" style='margin:6px 0;'><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
+                      echo "<button type='button' class='btn btn-receipt' onclick=\"openReceiptModal('" . htmlspecialchars($receiptPath) . "', " . intval($rr['id']) . ", 'visitor_requests')\"><i class='fa-solid fa-file'></i> Verify Payment Receipt</button>";
                     }
                   } else {
-                    echo "<div class='muted' style='margin:6px 0;'>No receipt</div>";
+                    echo "<div class='muted'>No receipt</div>";
                   }
                   }
                   if (!empty($rr['id']) && !empty($receiptPath) && $payStatusLower !== 'verified') {
@@ -5266,7 +5308,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                       echo "</form>";
                     } else {
-                      echo "<form method='post' style='display:inline;' onsubmit='return openDenyModal(this)'>";
+                      echo "<form method='post' onsubmit='return openDenyModal(this)'>";
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
@@ -5284,7 +5326,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   }
                   if ($approval_status == 'pending') {
                       $disabled = !isAmenityPaymentVerified($con, $rr['ref_code'] ?? '');
-                      echo "<form method='post' style='display:inline;'>";
+                      echo "<form method='post'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='approve_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
@@ -5292,7 +5334,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "</form>";
 
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
-                      echo "<form method='post' style='display:inline;' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
+                      echo "<form method='post' onsubmit='return confirm(\"Delete this " . $approval_status . " reservation? This cannot be undone.\")'>";
                       echo "<input type='hidden' name='rr_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='delete_resident_reservation'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
@@ -5301,7 +5343,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   } else {
                       $approvedBy = !empty($rr['approved_by']) ? "by Admin" : "";
                       if ($approval_status === 'approved' && !empty($rr['ref_code'])) {
-                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($rr['ref_code']) . "' target='_blank'><i class='fa-solid fa-qrcode'></i> View QR</a>";
                       }
                       echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
@@ -5327,13 +5369,14 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
 <section class="panel" id="history-panel">
   <div class="content-row">
     <div class="card-box">
-      <h3>Archived Requests (Cancelled & Completed)</h3>
+      <h3>Archived Requests (Cancelled, Completed, Access Granted)</h3>
       <div class="notice">List of all cancelled and completed requests. You can permanently delete them here.</div>
       <table class="table table-history">
         <thead>
           <tr>
             <th>Type & Status</th>
             <th>Name</th>
+            <th>Reference Code</th>
             <th>Details</th>
             <th>Dates</th>
             <th>Actions</th>
@@ -5344,25 +5387,32 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           $hasArchived = false;
           
           // 1. Archived Guest Forms
-          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history', 'permission_granted', 'approved') ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history', 'permission_granted') ORDER BY gf.updated_at DESC, gf.created_at DESC");
           if ($gf) {
             while ($row = $gf->fetch_assoc()) {
                $hasArchived = true;
                $rawStatus = strtolower($row['approval_status'] ?? '');
-               $status = ($rawStatus === 'permission_granted') ? 'completed' : $rawStatus;
-               $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : 'badge-rejected';
-               $statusLabel = ucfirst($status);
+               if ($rawStatus === 'permission_granted') {
+                 $statusLabel = 'Access Granted';
+                 $badgeClass = 'badge-approved';
+               } else {
+                 $status = $rawStatus;
+                 $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : 'badge-rejected';
+                 $statusLabel = ucfirst($status);
+               }
                
                $name = htmlspecialchars(($row['visitor_first_name']??'') . ' ' . ($row['visitor_last_name']??''));
-               $details = "Role: " . htmlspecialchars($row['purpose']??'Co-owner');
+              $details = "Role: " . htmlspecialchars($row['purpose']??'Co-owner');
                if (!empty($row['amenity'])) $details .= "<br>Amenity: " . htmlspecialchars($row['amenity']);
                $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
                        (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
+              $refCode = htmlspecialchars($row['ref_code'] ?? '-');
                $updatedAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
                
                echo "<tr>";
                echo "<td><div style='display:flex;flex-direction:column;gap:4px;'><span class='badge' style='background:#ccc;color:#333'>Guest Form</span><span class='badge $badgeClass'>$statusLabel</span></div></td>";
                echo "<td><strong>$name</strong></td>";
+              echo "<td>$refCode</td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
                
@@ -5385,36 +5435,45 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
             $hasReservationUpdatedAt = $chkUpdated && $chkUpdated->num_rows > 0;
           }
           $orderClause = $hasReservationUpdatedAt ? "r.updated_at DESC, r.created_at DESC" : "r.created_at DESC";
-          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'approved', 'denied') OR r.approval_status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'approved', 'denied')) ORDER BY $orderClause");
+          $res = $con->query("SELECT r.*, u.first_name, u.last_name, u.user_type, u.house_number FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE (r.status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'denied') OR r.approval_status IN ('cancelled', 'completed', 'expired', 'moved_to_history', 'permission_granted', 'denied')) ORDER BY $orderClause");
           if ($res) {
             while ($row = $res->fetch_assoc()) {
                $hasArchived = true;
                $status = 'cancelled';
                $s = strtolower($row['status']??'');
                $as = strtolower($row['approval_status']??'');
-               if ($s === 'completed' || $as === 'completed') { $status = 'completed'; }
+               if ($s === 'permission_granted' || $as === 'permission_granted') { 
+                 $status = 'access granted';
+               }
+               elseif ($s === 'completed' || $as === 'completed') { $status = 'completed'; }
                elseif ($s === 'expired' || $as === 'expired') { $status = 'expired'; }
                elseif ($s === 'moved_to_history' || $as === 'moved_to_history') { $status = 'cancelled'; }
-               elseif ($s === 'permission_granted' || $as === 'permission_granted') { $status = 'completed'; }
                elseif ($s === 'approved' || $as === 'approved') { $status = 'approved'; }
                elseif ($s === 'denied' || $as === 'denied') { $status = 'denied'; }
                
-               $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
-               $statusLabel = ucfirst($status);
+               if ($status === 'access granted') {
+                 $badgeClass = 'badge-approved';
+                 $statusLabel = 'Access Granted';
+               } else {
+                 $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : (($status === 'expired') ? 'badge-rejected' : 'badge-rejected');
+                 $statusLabel = ucfirst($status);
+               }
 
                $uType = ucfirst($row['user_type'] ?? 'Visitor');
                $name = htmlspecialchars(($row['first_name']??'') . ' ' . ($row['last_name']??''));
                if (empty(trim($name)) && !empty($row['entry_pass_id'])) {
                    $name = "Visitor (Entry Pass)";
                }
-               $details = "Amenity: " . htmlspecialchars($row['amenity']??'-');
+              $details = "Amenity: " . htmlspecialchars($row['amenity']??'-');
                $date = (!empty($row['start_date']) ? date('M d', strtotime($row['start_date'])) : '') . 
                        (!empty($row['end_date']) ? ' - ' . date('M d', strtotime($row['end_date'])) : '');
+              $refCode = htmlspecialchars($row['ref_code'] ?? '-');
                $updatedAt = !empty($row['updated_at']) ? date('M d, Y H:i', strtotime($row['updated_at'])) : '-';
                
                echo "<tr>";
                echo "<td><div style='display:flex;flex-direction:column;gap:4px;'><span class='badge' style='background:#ccc;color:#333'>Reservation ($uType)</span><span class='badge $badgeClass'>$statusLabel</span></div></td>";
                echo "<td><strong>$name</strong></td>";
+              echo "<td>$refCode</td>";
                echo "<td>$details</td>";
                echo "<td>$date</td>";
                
@@ -5431,7 +5490,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           }
           
           if (!$hasArchived) {
-             echo "<tr><td colspan='5' style='text-align:center;'>No archived requests found.</td></tr>";
+            echo "<tr><td colspan='6' style='text-align:center;'>No archived requests found.</td></tr>";
           }
           ?>
         </tbody>

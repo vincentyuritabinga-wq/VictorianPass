@@ -961,13 +961,14 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($activeActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false || strpos($s, 'permission')!==false || strpos($s, 'granted')!==false) $statusClass = 'status-approved';
+                  if (strpos($s, 'permission')!==false || strpos($s, 'granted')!==false) $statusClass = 'status-access-granted';
+                  elseif (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
                   elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
-                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Permission Granted' : 'Denied';
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
                   if ($pay === 'rejected' && $att >= 3) {
@@ -1051,13 +1052,14 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($historyActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false || strpos($s, 'permission')!==false || strpos($s, 'granted')!==false || (!empty($act['scanned_at']) && strpos($s, 'moved_to_history')!==false)) $statusClass = 'status-approved';
+                  if (strpos($s, 'permission')!==false || strpos($s, 'granted')!==false || (!empty($act['scanned_at']) && strpos($s, 'moved_to_history')!==false)) $statusClass = 'status-access-granted';
+                  elseif (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
                   elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
-                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Permission Granted' : 'Denied';
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
                   if ($pay === 'rejected' && $att >= 3) {
@@ -1521,7 +1523,8 @@ body.account-blocked { overflow: hidden; }
   });
   function statusClassFor(s){
     s=(s||'').toLowerCase();
-    if(s.indexOf('approv')!==-1 || s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1) return 'status-approved';
+    if(s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1) return 'status-access-granted';
+    if(s.indexOf('approv')!==-1) return 'status-approved';
     if(s.indexOf('resolved')!==-1) return 'status-completed';
     if(s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
@@ -1530,6 +1533,7 @@ body.account-blocked { overflow: hidden; }
   }
   function fmtLabel(s){
     s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
+    if(s.indexOf('access granted')!==-1 || s.indexOf('permission granted')!==-1) return 'Access Granted';
     if(s.indexOf('moved to history')!==-1) return 'Denied';
     return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
@@ -1881,7 +1885,7 @@ body.account-blocked { overflow: hidden; }
       prevStatuses[ref]= hasScan ? 'permission_granted' : 'denied';
       var badge=li.querySelector('.status-badge');
       if(badge){
-        badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+        badge.textContent = hasScan ? 'Access Granted' : 'Denied';
         badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
       }
       var extraEl=li.querySelector('.item-extra');
@@ -2164,7 +2168,41 @@ body.account-blocked { overflow: hidden; }
         canUpdateProof=true; canCancel=false; canMoveHistory=false; canDelete=false;
       }
     }
+    var isAccessGranted = s.indexOf('permission_granted')!==-1 || s.indexOf('access granted')!==-1 || s.indexOf('access_granted')!==-1 || s.indexOf('permission granted')!==-1;
     var html='';
+    if((type==='reservation'||type==='guest_form') && isAccessGranted){
+      html+='<div class="item-extra-section">';
+      html+='<div class="item-extra-body">';
+      html+='<div class="item-extra-info-only">';
+      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">Access Granted</span></div>';
+      html+='<div class="item-extra-note">'+esc('Access granted. Your QR entry pass has already been scanned by the guard.')+'</div>';
+      html+='<div class="item-actions">';
+      if(ref){
+        html+='<button type="button" class="item-extra-link view-details-btn view-details-trigger" data-ref="'+esc(ref)+'">View details</button>';
+      }
+      if(canMoveHistory && ref){
+        html+='<button type="button" class="item-extra-link item-extra-move-history"><i class="fa-solid fa-box-archive"></i> Move to History</button>';
+      }
+      html+='</div>';
+      html+='</div></div></div>';
+      extra.innerHTML=html;
+      var moveBtn = extra.querySelector('.item-extra-move-history');
+      if(moveBtn && ref && canMoveHistory){
+        moveBtn.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          performMoveToHistory(li, ref);
+        });
+      }
+      var viewBtns = extra.querySelectorAll('.view-details-trigger');
+      viewBtns.forEach(function(btn){
+        btn.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          var code = btn.getAttribute('data-ref') || ref;
+          if(code) openActivityModal(code);
+        });
+      });
+      return;
+    }
     if(type==='reservation'||type==='guest_form'){
       html+='<div class="item-extra-section">';
       var qrSrcForDownload = '';
@@ -3125,7 +3163,7 @@ body.account-blocked { overflow: hidden; }
                             var badge = li.querySelector('.status-badge');
                             if(badge){
                                 if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
-                                  badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+                                  badge.textContent = hasScan ? 'Access Granted' : 'Denied';
                                   badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                                 } else {
                                   badge.textContent = fmtLabel(newStatus);
@@ -3158,7 +3196,7 @@ body.account-blocked { overflow: hidden; }
                       var badge = li.querySelector('.status-badge');
                       if(badge){
                           if(newStatusLower.indexOf('moved_to_history') !== -1 || newStatusLower.indexOf('permission_granted') !== -1){
-                            badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+                            badge.textContent = hasScan ? 'Access Granted' : 'Denied';
                             badge.className = 'status-badge ' + statusClassFor(hasScan || newStatusLower.indexOf('permission_granted') !== -1 ? 'permission_granted' : 'denied');
                           } else {
                             badge.textContent = fmtLabel(newStatus);
@@ -3218,7 +3256,7 @@ body.account-blocked { overflow: hidden; }
               var s=(String(item.status||'').toLowerCase());
               var hasScan = !!(item.scanned_at);
               var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
-              if(s.indexOf('moved_to_history')!==-1 || s.indexOf('permission_granted')!==-1) statusText = (hasScan || s.indexOf('permission_granted')!==-1) ? 'Permission Granted' : 'Denied';
+              if(s.indexOf('moved_to_history')!==-1 || s.indexOf('permission_granted')!==-1) statusText = (hasScan || s.indexOf('permission_granted')!==-1) ? 'Access Granted' : 'Denied';
               var statusCls=statusClassFor((hasScan && s.indexOf('moved_to_history')!==-1) ? 'permission_granted' : (s.indexOf('permission_granted')!==-1 ? 'permission_granted' : (s||'cancelled')));
               var isReservation=(String(item.type||'').toLowerCase()==='reservation');
               var displayTitle=String(item.title||'');

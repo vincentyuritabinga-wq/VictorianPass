@@ -258,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'move_to_history' && $code !== '' && ($con instanceof mysqli)) {
         try {
             // Guest Forms path
-            $stmtG = $con->prepare("SELECT id, scanned_at FROM guest_forms WHERE ref_code = ? LIMIT 1");
+            $stmtG = $con->prepare("SELECT id, scanned_at, approval_status FROM guest_forms WHERE ref_code = ? LIMIT 1");
             $stmtG->bind_param('s', $code);
             $stmtG->execute();
             $resG = $stmtG->get_result();
@@ -266,31 +266,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resG && $resG->num_rows > 0) {
                 $rowG = $resG->fetch_assoc();
                 $hasScan = !empty($rowG['scanned_at']);
-                if ($hasScan) {
-                    $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU->bind_param('s', $code);
-                    $stmtU->execute();
-                    $stmtU->close();
-                    $stmtUR = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtUR->bind_param('s', $code);
-                    $stmtUR->execute();
-                    $stmtUR->close();
-                } else {
-                    $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU->bind_param('s', $code);
-                    $stmtU->execute();
-                    $stmtU->close();
-                    $stmtUR = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtUR->bind_param('s', $code);
-                    $stmtUR->execute();
-                    $stmtUR->close();
+                $approvalLower = strtolower((string)($rowG['approval_status'] ?? ''));
+                if (!$hasScan && $approvalLower === 'approved') {
+                    echo json_encode(['success' => false, 'message' => 'Approved requests can only be archived after access is granted.']);
+                    exit;
                 }
+                $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU->bind_param('s', $code);
+                $stmtU->execute();
+                $stmtU->close();
+                $stmtUR = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR->bind_param('s', $code);
+                $stmtUR->execute();
+                $stmtUR->close();
                 echo json_encode(['success' => true]);
                 exit;
             }
             
             // Direct Reservations path
-            $stmtR = $con->prepare("SELECT id, scanned_at FROM reservations WHERE ref_code = ? LIMIT 1");
+            $stmtR = $con->prepare("SELECT id, scanned_at, status, approval_status FROM reservations WHERE ref_code = ? LIMIT 1");
             $stmtR->bind_param('s', $code);
             $stmtR->execute();
             $resR = $stmtR->get_result();
@@ -298,23 +292,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resR && $resR->num_rows > 0) {
                 $rowR = $resR->fetch_assoc();
                 $hasScan = !empty($rowR['scanned_at']);
-                if ($hasScan) {
-                    $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU2->bind_param('s', $code);
-                    $stmtU2->execute();
-                    $stmtU2->close();
-                } else {
-                    $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU2->bind_param('s', $code);
-                    $stmtU2->execute();
-                    $stmtU2->close();
+                $statusLower = strtolower((string)($rowR['status'] ?? ''));
+                $approvalLower = strtolower((string)($rowR['approval_status'] ?? ''));
+                if (!$hasScan && ($statusLower === 'approved' || $approvalLower === 'approved')) {
+                    echo json_encode(['success' => false, 'message' => 'Approved requests can only be archived after access is granted.']);
+                    exit;
                 }
+                $stmtU2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU2->bind_param('s', $code);
+                $stmtU2->execute();
+                $stmtU2->close();
                 echo json_encode(['success' => true]);
                 exit;
             }
 
             // Resident Reservations mirror
-            $stmtRR = $con->prepare("SELECT id, scanned_at FROM resident_reservations WHERE ref_code = ? LIMIT 1");
+            $stmtRR = $con->prepare("SELECT id, scanned_at, approval_status FROM resident_reservations WHERE ref_code = ? LIMIT 1");
             $stmtRR->bind_param('s', $code);
             $stmtRR->execute();
             $resRR = $stmtRR->get_result();
@@ -322,25 +315,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($resRR && $resRR->num_rows > 0) {
                 $rowRR = $resRR->fetch_assoc();
                 $hasScan = !empty($rowRR['scanned_at']);
-                if ($hasScan) {
-                    $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU3->bind_param('s', $code);
-                    $stmtU3->execute();
-                    $stmtU3->close();
-                    $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtUR2->bind_param('s', $code);
-                    $stmtUR2->execute();
-                    $stmtUR2->close();
-                } else {
-                    $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtU3->bind_param('s', $code);
-                    $stmtU3->execute();
-                    $stmtU3->close();
-                    $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
-                    $stmtUR2->bind_param('s', $code);
-                    $stmtUR2->execute();
-                    $stmtUR2->close();
+                $approvalLower = strtolower((string)($rowRR['approval_status'] ?? ''));
+                if (!$hasScan && $approvalLower === 'approved') {
+                    echo json_encode(['success' => false, 'message' => 'Approved requests can only be archived after access is granted.']);
+                    exit;
                 }
+                $stmtU3 = $con->prepare("UPDATE resident_reservations SET approval_status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtU3->bind_param('s', $code);
+                $stmtU3->execute();
+                $stmtU3->close();
+                $stmtUR2 = $con->prepare("UPDATE reservations SET approval_status='moved_to_history', status='moved_to_history', updated_at = NOW() WHERE ref_code = ?");
+                $stmtUR2->bind_param('s', $code);
+                $stmtUR2->execute();
+                $stmtUR2->close();
                 echo json_encode(['success' => true]);
                 exit;
             }
