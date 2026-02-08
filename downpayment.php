@@ -357,6 +357,27 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $isPersonBased = in_array($amenity, ['Pool'], true);
     if ($downpayment === null || $downpayment <= 0) { $downpayment = round($price * 0.5, 2); }
     $remaining = max(0, round($price - $downpayment, 2));
+    $durationText = '--';
+    $sd = $pending['start_date'] ?? null;
+    $ed = $pending['end_date'] ?? null;
+    if ($sd && $ed) {
+      try {
+        $sdObj = new DateTime($sd);
+        $edObj = new DateTime($ed);
+        $days = 0;
+        if ($amenity === 'Pool') {
+          $period = new DatePeriod($sdObj, new DateInterval('P1D'), (clone $edObj)->modify('+1 day'));
+          foreach ($period as $d) {
+            $dow = intval($d->format('N'));
+            if ($dow >= 1 && $dow <= 5) { $days++; }
+          }
+        } else {
+          $diffDays = $sdObj->diff($edObj)->days;
+          $days = $diffDays + 1;
+        }
+        if ($days > 0) { $durationText = $days . ' day' . ($days > 1 ? 's' : ''); }
+      } catch (Throwable $_) { }
+    }
     $refDisplay = 'N/A';
     $qrUrl = 'images/downpayment.jpg';
     if ($ref_code === '' && $continue !== 'reserve_resident') { $ref_code = 'VP-' . str_pad(rand(0, 99999), 5, '0', STR_PAD_LEFT); }
@@ -405,6 +426,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             echo ($st && $et) ? (format_time_ap($st) . ' – ' . format_time_ap($et)) : '--';
           ?>
         </span></div>
+        <div class="row"><span class="label">Duration</span><span class="amount"><?php echo htmlspecialchars($durationText); ?></span></div>
         <div class="row"><span class="label">Persons</span><span class="amount"><?php echo intval($persons); ?></span></div>
         <div class="row"><span class="label">Total Price</span><span class="amount">₱<?php echo number_format($price, 2); ?></span></div>
         <div class="row"><span class="label">Online Payment (Partial)</span><span class="amount">₱<?php echo number_format($downpayment, 2); ?></span></div>
