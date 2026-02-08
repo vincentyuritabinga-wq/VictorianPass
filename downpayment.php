@@ -108,8 +108,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $tokenPosted = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : '';
     $ref_code = isset($_POST['ref_code']) ? trim($_POST['ref_code']) : '';
     $gcashReferenceNumber = isset($_POST['gcashreferencenumber']) ? trim($_POST['gcashreferencenumber']) : '';
-    if ($gcashReferenceNumber === '' || !preg_match('/^\d{12}$/', $gcashReferenceNumber)) {
-      $msg = 'GCash reference number is required.';
+    if ($gcashReferenceNumber === '' || !preg_match('/^\d{13}$/', $gcashReferenceNumber) || preg_match('/^(\d)\1{12}$/', $gcashReferenceNumber)) {
+      $msg = 'Invalid GCash reference number.';
     }
     $continue_post = isset($_POST['continue']) ? $_POST['continue'] : $continue;
     $entry_pass_id_post_form = isset($_POST['entry_pass_id']) ? intval($_POST['entry_pass_id']) : $entry_pass_id;
@@ -445,7 +445,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
           <button type="button" class="btn btn-outline" id="removeFileBtn" disabled>Remove Selected File</button>
         </div>
         <label for="gcashReferenceNumber" class="field-label">GCash Reference Number (from receipt)</label>
-        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" class="field-input" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d{12}" minlength="12" maxlength="12">
+        <input type="text" name="gcashreferencenumber" id="gcashReferenceNumber" class="field-input" placeholder="Enter the GCash reference number from your receipt" required inputmode="numeric" pattern="\d{13}" minlength="13" maxlength="13">
         <button type="submit" class="btn" id="confirmBtn" disabled>Confirm Payment</button>
       </form>
     </div>
@@ -513,7 +513,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
       function update(){
         const hasFile=!!(input && input.files && input.files.length>0);
         const refVal=(refInput && (refInput.value||'').trim())||'';
-        const validRef=/^\d{12}$/.test(refVal);
+        const validRef=/^\d{13}$/.test(refVal) && !/^(\d)\1{12}$/.test(refVal);
         btn.disabled=!(hasFile && validRef);
         removeBtn.disabled=!hasFile;
         renderPreview(hasFile?input.files[0]:null);
