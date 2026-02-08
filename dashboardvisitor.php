@@ -227,10 +227,16 @@ if ($stmt) {
         }
         $paymentStatusLower = strtolower((string)($row['payment_status'] ?? ''));
         if ($paymentStatusLower === 'rejected') {
-            $atts = intval($row['receipt_attempts'] ?? 0);
-            $statusVal = ($atts >= 3) ? 'denied' : 'rejected';
+            $svLower = strtolower((string)$statusVal);
+            if (strpos($svLower, 'moved_to_history') === false && strpos($svLower, 'permission_granted') === false) {
+                $atts = intval($row['receipt_attempts'] ?? 0);
+                $statusVal = ($atts >= 3) ? 'denied' : 'rejected';
+            }
         } elseif ($paymentStatusLower === 'pending_update') {
-            $statusVal = 'pending_update';
+            $svLower = strtolower((string)$statusVal);
+            if (strpos($svLower, 'moved_to_history') === false && strpos($svLower, 'permission_granted') === false) {
+                $statusVal = 'pending_update';
+            }
         }
         if (!empty($row['scanned_at'])) {
             $statusLower = strtolower((string)$statusVal);
@@ -396,6 +402,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 .cancel-modal-note{color:#c0392b;font-weight:600;font-size:0.85rem}
 .item-extra-link.update-proof-btn{background:#7c3aed;color:#ffffff;border:1px solid #7c3aed;padding:8px 16px;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-weight:500;text-decoration:none}
 .item-extra-link.update-proof-btn:hover{background:#6d28d9;color:#ffffff;transform:translateY(-2px);box-shadow:0 4px 6px rgba(124, 58, 237, 0.25);text-decoration:none}
+.item-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.item-extra-link.item-extra-move-history{background:#e5e7eb;color:#6b7280!important;border:1px solid #d1d5db!important;padding:8px 16px;border-radius:50px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;font-weight:500;text-decoration:none;line-height:1;margin-top:0!important;box-sizing:border-box}
+.item-extra-link.item-extra-move-history:hover{background:#d1d5db;color:#6b7280!important;transform:translateY(-2px);box-shadow:0 4px 6px rgba(0,0,0,0.12);text-decoration:none}
+.item-extra-schedule.status-neutral{background:#ffffff;color:#111827;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
 </style>
 </head>
 <body class="<?php echo $isAccountBlocked ? 'account-blocked' : ''; ?>">
@@ -489,6 +499,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Permission Granted' : 'Denied';
+                  $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
+                  $pay = strtolower((string)($act['payment_status'] ?? ''));
+                  if ($pay === 'rejected' && $att >= 3) {
+                    $displayStatus = 'Denied – Max Attempts Reached';
+                    $statusClass = 'status-denied';
+                  }
                   $isReservation = (($act['type'] ?? '') === 'reservation');
                   $detailsText = (string)($act['details'] ?? '');
                   $reasonText = '';
@@ -569,6 +585,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = $hasScan ? 'Permission Granted' : 'Denied';
+                  $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
+                  $pay = strtolower((string)($act['payment_status'] ?? ''));
+                  if ($pay === 'rejected' && $att >= 3) {
+                    $displayStatus = 'Denied – Max Attempts Reached';
+                    $statusClass = 'status-denied';
+                  }
                   $isReservation = (($act['type'] ?? '') === 'reservation');
                   $detailsText = (string)($act['details'] ?? '');
                   $reasonText = '';
@@ -1545,12 +1567,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         alert(data && data.message ? data.message : 'Unable to move to history.');
         return;
       }
-      li.setAttribute('data-status','permission_granted');
+      var scannedAt=li.getAttribute('data-scanned-at')||'';
+      var hasScan=!!scannedAt;
+      li.setAttribute('data-status', hasScan ? 'permission_granted' : 'denied');
       if(typeof prevStatuses !== 'undefined') prevStatuses[ref]='permission_granted';
       var badge=li.querySelector('.status-badge');
       if(badge){
-        var scannedAt=li.getAttribute('data-scanned-at')||'';
-        var hasScan=!!scannedAt;
         badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
         badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
       }
@@ -1867,6 +1889,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var paymentStatus=(li.getAttribute('data-payment-status')||'').toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
     var isApproved=s.indexOf('approv')!==-1 || s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1;
+    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
+    var isDeniedMax = (type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts)>=3);
+    if(isDeniedMax){
+      isApproved=false;
+    }
 
     // Visitor specific notes
     if(isApproved) {
@@ -1882,7 +1909,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(type==='reservation' && paymentStatus==='rejected'){
         var att = isNaN(attempts)?0:attempts;
         if(att >= 3){
-          statusNote='This request was denied.';
+          statusNote='Denied — Max Attempts Reached.';
         }else{
           statusNote='Your reservation payment was rejected. Please upload a clear and legible payment receipt to avoid denial. You have 3 attempts. ';
           statusNote+='Attempt '+Math.max(att,1)+' of 3.';
@@ -1918,20 +1945,20 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     var isHistoryPanel=!!li.closest('#panel-history');
     var rawStatus=(String(status||'').toLowerCase());
     var canDelete=isHistoryPanel && (rawStatus.indexOf('cancel')!==-1 || rawStatus.indexOf('denied')!==-1 || rawStatus.indexOf('reject')!==-1 || rawStatus.indexOf('expired')!==-1 || rawStatus.indexOf('moved_to_history')!==-1);
-    var canMoveHistory=(!isHistoryPanel) && (rawStatus.indexOf('denied')!==-1 || rawStatus.indexOf('reject')!==-1 || rawStatus.indexOf('permission')!==-1 || rawStatus.indexOf('granted')!==-1);
+    var isDeniedMaxPanel = (type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts)>=3);
+    var canMoveHistory=(!isHistoryPanel) && !isDeniedMaxPanel && (rawStatus.indexOf('denied')!==-1 || rawStatus.indexOf('reject')!==-1 || rawStatus.indexOf('permission')!==-1 || rawStatus.indexOf('granted')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
-    
-    var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
+
     if (type==='reservation' && paymentStatus==='rejected') {
       var att = isNaN(attempts)?0:attempts;
       var headerBadge = li.querySelector('.status-badge');
       if(att >= 3){
-        label = 'Denied';
+        label = 'Denied – Max Attempts Reached';
         if (headerBadge) { headerBadge.textContent = label; }
-        canUpdateProof=false; canCancel=false; canMoveHistory=false; canDelete=false;
+        canUpdateProof=false; canCancel=false; canMoveHistory=!isHistoryPanel; canDelete=false;
       }else{
         label = 'Rejected (Attempt '+Math.max(att,1)+' of 3)';
         if (headerBadge) { headerBadge.textContent = label; }
@@ -1974,7 +2001,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       if(!rows){
         rows='<div class="schedule-row"><div class="schedule-key">Schedule:</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
       }
-      html+='<div class="item-extra-schedule '+statusClassFor(effectiveStatus)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
+      var scheduleClass = (isHistoryPanel || s.indexOf('denied')!==-1 || (paymentStatus==='rejected' && (isNaN(attempts)?0:attempts)>=3)) ? 'status-neutral' : statusClassFor(effectiveStatus);
+      html+='<div class="item-extra-schedule '+scheduleClass+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
     }
     if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
     
@@ -2022,6 +2050,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         if(code) window.openActivityModal(code);
       });
     });
+    var dropdownMove = extra.querySelector('.dropdown-move-history, [data-action="move_history"]');
+    if(dropdownMove && ref && canMoveHistory){
+      dropdownMove.addEventListener('click', function(e){
+        e.stopPropagation();
+        performMoveToHistory(li, ref);
+      });
+    }
 
     var downloadBtn = extra.querySelector('.download-qr-btn');
     if(downloadBtn) downloadBtn.addEventListener('click', function(e){
