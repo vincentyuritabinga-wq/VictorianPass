@@ -268,7 +268,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
   ensureNotificationsTable($con);
   $items = [];
   $incidentCount = 0;
-  $systemCount = 0;
   $ir = $con->query("SELECT id, status, created_at, UNIX_TIMESTAMP(created_at) AS epoch FROM incident_reports WHERE COALESCE(escalated_to_admin,0) = 0 ORDER BY created_at DESC LIMIT 12");
   if ($ir) {
     while ($row = $ir->fetch_assoc()) {
@@ -285,20 +284,77 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
       $incidentCount++;
     }
   }
-  $notifs = $con->query("SELECT id, title, message, created_at, UNIX_TIMESTAMP(created_at) AS epoch, type FROM notifications WHERE user_id IS NULL AND is_read = 0 ORDER BY created_at DESC LIMIT 12");
-  if ($notifs) {
-    while ($row = $notifs->fetch_assoc()) {
-      $items[] = [
-        'id' => intval($row['id']),
-        'type' => 'notification',
-        'label' => 'System',
-        'source' => 'system',
-        'title' => $row['title'] ?? 'Notification',
-        'message' => $row['message'] ?? '',
-        'time' => $row['created_at'],
-        'epoch' => intval($row['epoch'] ?? 0)
-      ];
-      $systemCount++;
+  $arrivalCount = 0;
+  $start = date('Y-m-d');
+  $end = date('Y-m-d', strtotime('+7 day'));
+  $normalize = function($v){
+    if(!$v) return null;
+    $formats = [
+      'Y-m-d','m/d/Y','d/m/Y','M d, Y','F d, Y','Y/m/d','d-m-Y',
+      'Y-m-d H:i:s','m/d/Y H:i:s','d/m/Y H:i:s','d-m-Y H:i:s'
+    ];
+    foreach($formats as $fmt){
+      $dt = DateTime::createFromFormat($fmt, trim($v));
+      if($dt) return $dt->format('Y-m-d');
+    }
+    $ts = strtotime($v);
+    return $ts ? date('Y-m-d',$ts) : null;
+  };
+  $addArrival = function($ref, $name, $sd, $ed, $status) use (&$items, &$arrivalCount){
+    $startDate = $sd ?: null;
+    if(!$startDate) return;
+    $endDate = $ed ?: $startDate;
+    $dateLabel = ($endDate && $endDate !== $startDate) ? ($startDate . ' → ' . $endDate) : $startDate;
+    $epoch = strtotime($startDate);
+    $items[] = [
+      'id' => $ref ?: ('arrival_' . ($arrivalCount + 1)),
+      'type' => 'arrival',
+      'label' => 'Arrival',
+      'source' => 'schedule',
+      'title' => 'Scheduled arrival approved',
+      'message' => 'Code: ' . ($ref ?: '-') . ' • ' . ($name ?: '-') . ' • ' . $dateLabel,
+      'time' => $startDate,
+      'epoch' => $epoch ? intval($epoch) : 0
+    ];
+    $arrivalCount++;
+  };
+  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date, TRIM(approval_status) AS approval_status, approval_date FROM guest_forms WHERE LOWER(TRIM(approval_status))='approved'");
+  if ($resGF) {
+    while ($r = $resGF->fetch_assoc()) {
+      $nm = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
+      $sd = $normalize($r['visit_date'] ?? '') ?: $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $ed = $normalize($r['end_date'] ?? '') ?: $sd;
+      if(!$sd) continue;
+      if($ed < $start || $sd > $end) continue;
+      $addArrival($r['ref_code'] ?? '', $nm, $sd, $ed, $r['approval_status'] ?? '');
+    }
+  }
+  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, r.approval_date, TRIM(COALESCE(r.approval_status, r.status)) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE LOWER(TRIM(COALESCE(r.approval_status, r.status)))='approved'");
+  if ($resR) {
+    while ($r = $resR->fetch_assoc()) {
+      $sd = $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $ed = $normalize($r['end_date'] ?? '') ?: $sd;
+      if(!$sd) continue;
+      if($ed < $start || $sd > $end) continue;
+      $full = trim(($r['ep_full_name'] ?? '')) ?: trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? '')) ?: trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
+      $addArrival($r['ref_code'] ?? '', $full, $sd, $ed, $r['status'] ?? '');
+    }
+  }
+  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(rr.approval_status)='approved'");
+  if ($resRR) {
+    while ($r = $resRR->fetch_assoc()) {
+      $sd = $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $ed = $normalize($r['end_date'] ?? '') ?: $sd;
+      if(!$sd) continue;
+      if($ed < $start || $sd > $end) continue;
+      $fullResident = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
+      $fullGuest = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
+      $bookingFor = strtolower(trim($r['booking_for'] ?? ''));
+      $accountType = strtolower(trim($r['account_type'] ?? ''));
+      $hasGuestRef = !empty($r['guest_ref_code']) || !empty($r['guest_id']);
+      $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($r['entry_pass_id']);
+      $full = ($isVisitor && $fullGuest !== '') ? $fullGuest : $fullResident;
+      $addArrival($r['ref_code'] ?? '', $full, $sd, $ed, $r['approval_status'] ?? '');
     }
   }
   usort($items, function($a, $b){
@@ -308,7 +364,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
     return ($eb > $ea) ? 1 : -1;
   });
   echo json_encode([
-    'total' => ($incidentCount + $systemCount),
+    'total' => ($incidentCount + $arrivalCount),
     'items' => array_slice($items, 0, 12)
   ]);
   exit;
@@ -538,7 +594,8 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     overflow-y: auto;
     z-index: 100;
     flex-shrink: 0;
-    transition: width 0.2s ease;
+    transition: width 0.25s ease, transform 0.25s ease;
+    will-change: width, transform;
 }
 
 .brand {
@@ -551,7 +608,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 }
 
 .brand img { width: 36px; height: 36px; }
-.brand .title { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.brand .title { display: flex; flex-direction: column; align-items: center; text-align: center; overflow: hidden; max-width: 200px; transition: var(--transition); }
 .brand h1 { font-size: 1rem; color: #f4efe6; line-height: 1.2; }
 .brand p { font-size: 0.75rem; color: rgba(255,255,255,0.7); margin: 0; }
 
@@ -575,6 +632,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     transition: var(--transition);
     cursor: pointer;
 }
+.nav-item span { overflow: hidden; max-width: 220px; transition: var(--transition); }
 
 .nav-item:hover, .nav-item.active {
     background: rgba(255,255,255,0.1);
@@ -630,6 +688,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     border-radius: 10px;
     text-decoration: none;
 }
+.sidebar-footer .text-muted-link span { overflow: hidden; max-width: 180px; transition: var(--transition); }
 .sidebar-footer .text-muted-link:hover { background: #a93226; color: #fff; }
 .sidebar-footer .text-muted-link svg { width: 18px; height: 18px; flex-shrink: 0; }
 
@@ -640,6 +699,7 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     flex-direction: column;
     min-width: 0;
     background: var(--bg-body);
+    animation: dashboardEntry 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 /* Top Header */
@@ -766,7 +826,6 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     border: 1px solid var(--border);
     display: none;
 }
-.notif-panel.open { animation: fadeIn 0.2s ease; }
 .notif-panel-header {
     display: flex;
     align-items: center;
@@ -797,7 +856,6 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     transition: var(--transition);
     position: relative;
     align-items: flex-start;
-    animation: slideIn 0.2s ease;
 }
 .notif-item:hover { background: var(--bg-body); }
 .notif-item:last-child { border-bottom: none; }
@@ -855,16 +913,20 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 }
 .notif-empty { padding: 10px 14px; font-size: 0.82rem; color: var(--text-muted); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideInLeft { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes dashboardEntry { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes highlightRow { 0% { background-color: var(--warning-bg); } 100% { background-color: var(--primary-light); } }
+.row-highlight { animation: highlightRow 2s ease-out; background-color: var(--primary-light) !important; }
 
 body.sidebar-collapsed .sidebar { width: 72px; }
 body.sidebar-collapsed .brand { justify-content: center; padding: 16px 12px; }
-body.sidebar-collapsed .brand .title { display: none; }
+body.sidebar-collapsed .brand .title { opacity: 0; max-width: 0; }
 body.sidebar-collapsed .nav-list { padding: 16px 8px; }
 body.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; gap: 0; }
-body.sidebar-collapsed .nav-item span { display: none; }
+body.sidebar-collapsed .nav-item span { opacity: 0; max-width: 0; }
 body.sidebar-collapsed .sidebar-footer { padding: 16px 10px; }
-body.sidebar-collapsed .sidebar-footer .text-muted-link span { display: none; }
+body.sidebar-collapsed .sidebar-footer .text-muted-link span { opacity: 0; max-width: 0; }
 body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 100%; }
 
 .sidebar-overlay {
@@ -875,7 +937,7 @@ body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 
     z-index: 95;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease-in-out;
 }
 .sidebar-overlay.show {
     opacity: 1;
@@ -921,12 +983,8 @@ body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 
     border: 1px solid var(--border);
     margin: 0 30px 30px 30px;
     overflow-x: auto;
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    transition: var(--transition);
     will-change: transform;
-}
-.panel:hover, .card:hover, .card-box:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
 }
 
 .panel h3, .card-header, .card-box h3 {
@@ -963,7 +1021,7 @@ th {
 }
 tr:last-child td { border-bottom: none; }
 tr:hover { background-color: #f8fafc; }
-tbody tr { transition: background-color 0.2s ease; }
+tbody tr { transition: background-color 0.2s ease-in-out; }
 
 /* Buttons */
 .action-btn, .btn {
@@ -987,14 +1045,19 @@ tbody tr { transition: background-color 0.2s ease; }
 .action-btn.approve, .btn-approve { background: var(--success); }
 .action-btn.deny, .btn-reject { background: var(--danger); }
 .action-btn:hover, .btn:hover {
-    filter: brightness(96%);
-    transform: translateY(-1px) scale(1.01);
-    box-shadow: 0 8px 14px rgba(15, 23, 42, 0.12);
+    filter: brightness(92%);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.action-btn:active, .btn:active { transform: translateY(0) scale(0.98); }
+.action-btn:active, .btn:active { transform: translateY(0); box-shadow: none; }
 .action-btn:focus-visible, .btn:focus-visible { box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.2); }
 .btn-view { background: var(--info); color: #fff; }
 .btn-view:hover { background: #2563eb; }
+.btn.is-clicked {
+    background: #111827 !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.2) !important;
+}
 
 /* Guard Specific Adapters */
 .section.hidden { display: none; }
@@ -1003,8 +1066,9 @@ tbody tr { transition: background-color 0.2s ease; }
 /* Toast */
 .toast {
     display: none;
-    position: relative;
-    margin: 12px 24px 0 auto;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
     background: var(--bg-surface);
     border-left: 5px solid var(--primary);
     box-shadow: var(--shadow-lg);
@@ -1013,20 +1077,25 @@ tbody tr { transition: background-color 0.2s ease; }
     width: min(96vw, 380px);
     z-index: 2000;
     opacity: 0;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    transform: translateY(20px);
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
     color: var(--text-main);
+    flex-direction: column;
+    gap: 8px;
+    max-height: 40vh;
+    overflow-y: auto;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    hyphens: auto;
 }
-.toast.show { display: block; opacity: 1; transform: translateY(0); }
+.toast.show { display: flex; opacity: 1; transform: translateY(0); animation: slideInLeft 0.3s; }
 
 .nav-item {
-    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    transition: var(--transition);
 }
-.nav-item:hover { transform: translateX(2px); }
-.nav-item:active { transform: translateX(0) scale(0.98); }
 
 .panel h3, .card-header, .card-box h3 {
-    transition: color 0.2s ease;
+    transition: var(--transition);
 }
 
 .fade-in {
@@ -1048,7 +1117,7 @@ tbody tr { transition: background-color 0.2s ease; }
         top: 0;
         height: 100vh;
         transform: translateX(-100%);
-        transition: transform 0.3s ease;
+        transition: transform 0.25s ease;
         box-shadow: 2px 0 10px rgba(0,0,0,0.2);
         z-index: 100;
         width: var(--sidebar-width);
@@ -1103,13 +1172,15 @@ tbody tr { transition: background-color 0.2s ease; }
     padding: 10px 12px;
     text-decoration: none;
     font-weight: 600;
-    transition: background 0.2s ease;
+    transition: background-color 0.2s ease, transform 0.2s ease;
 }
 .logout-btn:hover { background: #a93226; color: #fff; }
 .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
 .modal.modal-top { z-index: 3000; }
-.modal-content { background-color: var(--bg-surface); margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); position: relative; display: flex; flex-direction: column; gap: 12px; width: min(92vw, 640px); aspect-ratio: auto; max-height: 90vh; overflow: hidden; }
+.modal-content { background-color: var(--bg-surface); margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); position: relative; display: flex; flex-direction: column; gap: 12px; width: min(92vw, 640px); aspect-ratio: auto; max-height: 90vh; overflow: hidden; animation: slideIn 0.3s ease-out; }
 .modal-content h3 { padding: 12px 16px; border-bottom: 1px solid var(--border-light); margin: 0; font-size: 1.05rem; background: var(--bg-surface); position: sticky; top: 0; z-index: 10; color: #23412e; font-weight: 700; }
+.modal.closing { animation: fadeIn 0.2s ease-out reverse; }
+.modal.closing .modal-content { animation: slideIn 0.2s ease-out reverse; }
 .modal-close {
     position: absolute;
     top: 12px;
@@ -1135,7 +1206,7 @@ tbody tr { transition: background-color 0.2s ease; }
 .incident-details-content { overflow-y: auto; flex: 1; padding: 18px 20px 22px; }
 .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .proofs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.proofs img { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.proofs img { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease, border-color 0.2s ease; }
 .proofs img:hover { transform: translateY(-1px) scale(1.02); border-color: #cbd5e1; box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12); }
 .image-modal .modal-content {
     background: transparent;
@@ -1564,6 +1635,14 @@ function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
 // Incident listing & escalation
 let lastIncidentIds = new Set();
+function setActionClicked(btn){
+  if(!btn) return;
+  const cell = btn.closest('td');
+  if(cell){
+    Array.from(cell.querySelectorAll('button.btn')).forEach(b=>b.classList.remove('is-clicked'));
+  }
+  btn.classList.add('is-clicked');
+}
 function renderIncidents(rows){
   const tbody = document.getElementById('incidentTableBody');
   if(!tbody) return;
@@ -1588,11 +1667,11 @@ function renderIncidents(rows){
         <button class="btn btn-approve resolve-btn" data-id="${r.id}" style="background:#22c55e;color:#000">Resolve</button>
       </td>`;
     tbody.appendChild(tr);
-    if(isNew){ showToast('New resident incident reported'); }
   });
   // Attach handle locally
   Array.from(tbody.querySelectorAll('button.handle-btn')).forEach(btn=>{
     btn.addEventListener('click', function(){
+      setActionClicked(this);
       const id = parseInt(this.getAttribute('data-id')||'0');
       if(!id) return;
       fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=handle&report_id=${encodeURIComponent(id)}` })
@@ -1605,6 +1684,7 @@ function renderIncidents(rows){
   // Attach escalate handlers
   Array.from(tbody.querySelectorAll('button.escalate-btn')).forEach(btn=>{
     btn.addEventListener('click', function(){
+      setActionClicked(this);
       const id = parseInt(this.getAttribute('data-id')||'0');
       if(!id) return;
       fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=escalate&report_id=${encodeURIComponent(id)}` })
@@ -1617,6 +1697,7 @@ function renderIncidents(rows){
   // Attach resolve handlers
   Array.from(tbody.querySelectorAll('button.resolve-btn')).forEach(btn=>{
     btn.addEventListener('click', function(){
+      setActionClicked(this);
       const id = parseInt(this.getAttribute('data-id')||'0');
       if(!id) return;
       fetch('guard.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=resolve&report_id=${encodeURIComponent(id)}` })
@@ -1628,6 +1709,7 @@ function renderIncidents(rows){
   });
   Array.from(tbody.querySelectorAll('button.details-btn')).forEach(btn=>{
     btn.addEventListener('click', function(){
+      setActionClicked(this);
       const id = parseInt(this.getAttribute('data-id')||'0');
       if(!id) return;
       fetch(`guard.php?action=incident_details&id=${encodeURIComponent(id)}`).then(r=>r.json()).then(data=>{
@@ -1671,6 +1753,7 @@ document.addEventListener('DOMContentLoaded', function(){
 function showIncidentDetailsModal(report, proofs){
   var m = document.getElementById('incidentDetailsModal');
   if(!m || !report) return;
+  m.classList.remove('closing');
   document.getElementById('incResident').textContent = report.resident_name || '-';
   document.getElementById('incSubject').textContent = report.subject || '-';
   document.getElementById('incAddress').textContent = report.address || '-';
@@ -1698,19 +1781,30 @@ function showIncidentDetailsModal(report, proofs){
 }
 function closeIncidentDetailsModal(){
   var m = document.getElementById('incidentDetailsModal');
-  if (m) { m.style.display = 'none'; }
+  if (!m) return;
+  m.classList.add('closing');
+  setTimeout(function(){
+    m.style.display = 'none';
+    m.classList.remove('closing');
+  }, 200);
 }
 function openProofImage(src){
   var m = document.getElementById('proofImageModal');
   var img = document.getElementById('proofImagePreview');
   if (m && img) {
     img.src = src;
+    m.classList.remove('closing');
     m.style.display = 'flex';
   }
 }
 function closeProofImage(){
   var m = document.getElementById('proofImageModal');
-  if (m) { m.style.display = 'none'; }
+  if (!m) return;
+  m.classList.add('closing');
+  setTimeout(function(){
+    m.style.display = 'none';
+    m.classList.remove('closing');
+  }, 200);
 }
 document.addEventListener('DOMContentLoaded', function(){
   var proofModal = document.getElementById('proofImageModal');
