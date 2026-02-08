@@ -971,7 +971,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                   <button type="button" id="nextMonth">&gt;</button>
                 </div>
                 <table>
-                  <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
+                  <thead><tr><th>Su</th><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th></tr></thead>
                   <tbody id="calendar-body"></tbody>
                 </table>
               </div>
@@ -1233,10 +1233,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     let daysInMonth=32-new Date(year,month,32).getDate();
     monthAndYear.textContent=monthNames[month]+" "+year;
     let date=1;
+    const isPool = (document.getElementById('amenityField')?.value || '') === 'Pool';
     for(let i=0;i<6;i++){
       let row=document.createElement("tr");
-      for(let j=1;j<=7;j++){
-        if(i===0&&j<(firstDay===0?7:firstDay)){row.appendChild(document.createElement("td"));}
+      for(let j=0;j<7;j++){
+        if(i===0&&j<firstDay){row.appendChild(document.createElement("td"));}
         else if(date>daysInMonth){break;}
         else{
           let cell=document.createElement("td");
@@ -1244,6 +1245,13 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           let ds=`${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
           cell.setAttribute('data-date', ds);
           if(ds < minDateStr) { cell.classList.add('disabled'); }
+          if(isPool){
+            const dow = new Date(year,month,date).getDay();
+            if(dow === 0 || dow === 6){
+              cell.classList.add('disabled','weekend-closed');
+              cell.title = 'Community Pool is open Monday – Friday only.';
+            }
+          }
           cell.addEventListener('click',()=>handleDateClick(cell,ds));
           if(date===today.getDate()&&year===today.getFullYear()&&month===today.getMonth()) cell.classList.add('today');
           row.appendChild(cell);date++;
@@ -1300,6 +1308,11 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
         for(const cell of cells){
           const ds=cell.getAttribute('data-date');
           if(!ds) continue;
+          if(cell.classList.contains('weekend-closed')){
+            cell.classList.add('disabled');
+            cell.title = 'Community Pool is open Monday – Friday only.';
+            continue;
+          }
           if(ds < minDateStr){
             cell.classList.add('disabled');
             cell.title = ds < todayStr ? 'Past date — cannot be booked.' : 'Reservations must be made at least 1 day in advance.';
@@ -1338,6 +1351,10 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
 
   async function handleDateClick(cell,dateString){
     if(cell.classList.contains('disabled')){
+      if(cell.classList.contains('weekend-closed')){
+        showStartDateError('Community Pool is open Monday – Friday only.');
+        return;
+      }
       if(cell.classList.contains('fully-booked')){
         showStartDateError('Fully Booked — no time slots available for this date.');
       } else if(dateString && dateString < todayStr){
