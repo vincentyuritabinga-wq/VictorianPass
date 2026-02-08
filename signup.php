@@ -146,11 +146,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $today = new DateTime('today');
       if ($dob > $today) {
         $serverErrors['birthdate'] = 'Birthdate cannot be in the future.';
-      } else {
-        $age = $dob->diff($today)->y;
-        if ($age < 18) {
-          $serverErrors['birthdate'] = 'You must be at least 18 years old to register.';
-        }
       }
     }
   }
@@ -726,7 +721,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
 
           <div style="margin-bottom: 20px;">
-            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">QR Code Rules</h4>
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;">Age-Based Rules (Children must have an adult)</h4>
+            <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
+              <li>Children below 16 cannot reserve amenities without the supervision of their guardians. during the QR scanning phase, All age requirements must be met before entry is granted.</li>
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <h4 style="margin: 0 0 8px 0; font-weight: 600; color: #444; font-size: 1rem;"></h4>QR Code Rules</h4>
             <ul style="padding-left: 20px; list-style-type: disc; margin: 0;">
               <li>QR codes are unique and time-limited.</li>
               <li>Sharing or tampering with codes is prohibited.</li>
@@ -1444,11 +1446,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             } else {
               const today = new Date();
               today.setHours(0,0,0,0);
-              const cutoff = new Date(today);
-              cutoff.setFullYear(cutoff.getFullYear() - 18);
-              const cutoffStr = cutoff.toISOString().split('T')[0];
-              if (val > cutoffStr) {
-                setWarning('birthdate', 'You must be at least 18 years old to register.');
+              const todayStr = today.toISOString().split('T')[0];
+              if (val > todayStr) {
+                setWarning('birthdate', 'Birthdate cannot be in the future.');
                 valid = false;
               } else {
                 setWarning('birthdate', '');
@@ -1612,7 +1612,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if (bd) {
         var d = new Date();
         d.setHours(0,0,0,0);
-        d.setFullYear(d.getFullYear() - 18);
         bd.setAttribute('max', d.toISOString().split('T')[0]);
       }
       if (form) {
@@ -1623,12 +1622,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               e.preventDefault();
               return;
             }
-            var cutoff = new Date();
-            cutoff.setHours(0,0,0,0);
-            cutoff.setFullYear(cutoff.getFullYear() - 18);
-            var cutoffStr = cutoff.toISOString().split('T')[0];
-            if (bd.value > cutoffStr) {
-              setWarning('birthdate', 'You must be at least 18 years old to register.');
+            var today = new Date();
+            today.setHours(0,0,0,0);
+            var todayStr = today.toISOString().split('T')[0];
+            if (bd.value > todayStr) {
+              setWarning('birthdate', 'Birthdate cannot be in the future.');
               e.preventDefault();
               return;
             }

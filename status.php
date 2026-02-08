@@ -55,6 +55,24 @@ function resetPoolPersonsOnCancel($con, $code){
     if ($hasGF) { $s = $con->prepare("UPDATE guest_forms SET persons = 0 WHERE ref_code = ? AND amenity = 'Pool'"); $s->bind_param('s', $code); $s->execute(); $s->close(); }
 }
 
+function calculateAgeYears($birthRaw){
+    if (empty($birthRaw)) return null;
+    try {
+        $dob = new DateTime($birthRaw);
+        $today = new DateTime('today');
+        if ($dob > $today) return null;
+        return $dob->diff($today)->y;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+function requiresGuardianBlock($birthRaw, $isAmenity){
+    if (!$isAmenity) return false;
+    $age = calculateAgeYears($birthRaw);
+    return ($age !== null && $age < 16);
+}
+
 // Ensure scan logging table exists (idempotent)
 if ($con instanceof mysqli) {
   $con->query("CREATE TABLE IF NOT EXISTS entry_scans (
@@ -514,6 +532,11 @@ if ($resGF && $resGF->num_rows > 0) {
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
 
     $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+    $isGuard = (isset($_SESSION['role']) && $_SESSION['role'] === 'guard');
+    if ($isGuard && requiresGuardianBlock($birthRaw, $isAmenity)) {
+        echo json_encode(['success' => false, 'message' => 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.']);
+        exit;
+    }
     $pay = null; $epid = null; $rAmenity = null; $rStart = null; $rEnd = null; $rStartTime = null; $rEndTime = null; $rPersons = null; $rPrice = null; $rDown = null;
     if ($con instanceof mysqli) {
       $stmtP = $con->prepare("SELECT amenity, start_date, end_date, start_time, end_time, persons, price, downpayment, payment_status, entry_pass_id FROM reservations WHERE ref_code = ? LIMIT 1");
@@ -731,6 +754,11 @@ if ($result && $result->num_rows > 0) {
     $sex = !empty($row['ep_sex']) ? $row['ep_sex'] : ($row['user_sex'] ?? '');
     $birthRaw = !empty($row['ep_birthdate']) ? $row['ep_birthdate'] : ($row['user_birthdate'] ?? null);
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
+    $isGuard = (isset($_SESSION['role']) && $_SESSION['role'] === 'guard');
+    if ($isGuard && requiresGuardianBlock($birthRaw, true)) {
+        echo json_encode(['success' => false, 'message' => 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.']);
+        exit;
+    }
     
     $resp = [
         'success' => true,
@@ -836,6 +864,11 @@ if ($res2 && $res2->num_rows > 0) {
     $sex = $row['user_sex'] ?? '';
     $birthRaw = $row['user_birthdate'] ?? null;
     $birthdate = $birthRaw ? date('m/d/y', strtotime($birthRaw)) : '';
+    $isGuard = (isset($_SESSION['role']) && $_SESSION['role'] === 'guard');
+    if ($isGuard && requiresGuardianBlock($birthRaw, true)) {
+        echo json_encode(['success' => false, 'message' => 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.']);
+        exit;
+    }
     $pay = null;
     if ($con instanceof mysqli) {
         $stmtPay = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");

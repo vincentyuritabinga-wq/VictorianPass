@@ -421,6 +421,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
 <title>Victorian Pass | Guard</title>
 <link rel="icon" type="image/png" href="images/logo.svg">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 /* Modern Admin Dashboard CSS (Imported from admin.php) */
 :root {
@@ -559,6 +560,19 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 
 .nav-item:hover img, .nav-item.active img {
     opacity: 1;
+}
+.nav-item i {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: rgba(255,255,255,0.7);
+    transition: var(--transition);
+}
+.nav-item:hover i, .nav-item.active i {
+    color: #fff;
 }
 
 .sidebar-footer {
@@ -818,11 +832,18 @@ body.sidebar-collapsed .sidebar-footer .text-muted-link span { display: none; }
 body.sidebar-collapsed .sidebar-footer .text-muted-link { padding: 10px; width: 100%; }
 
 .sidebar-overlay {
-    display: none;
+    display: block;
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
     z-index: 95;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+.sidebar-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .avatar {
@@ -1105,10 +1126,10 @@ tbody tr { transition: background-color 0.2s ease; }
     <img src="images/logo.svg" alt="VictorianPass logo">
   </div>
   <nav class="nav-list">
-    <div class="nav-item" data-section="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></div>
-    <div class="nav-item active" data-section="expected"><img src="images/dashboard.svg"><span>Scheduled Arrivals</span></div>
-    <div class="nav-item" data-section="entries"><img src="images/dashboard.svg"><span>Today's Entry</span></div>
-    <div class="nav-item" data-section="restricted"><img src="images/dashboard.svg"><span>Incident Reports</span></div>
+    <div class="nav-item" data-section="dashboard"><i class="fa-solid fa-gauge-high"></i><span>Dashboard</span></div>
+    <div class="nav-item active" data-section="expected"><i class="fa-solid fa-calendar-check"></i><span>Scheduled Arrivals</span></div>
+    <div class="nav-item" data-section="entries"><i class="fa-solid fa-right-to-bracket"></i><span>Today's Entry</span></div>
+    <div class="nav-item" data-section="restricted"><i class="fa-solid fa-triangle-exclamation"></i><span>Incident Reports</span></div>
   </nav>
   <div class="sidebar-footer">
     <a href="logout.php" class="text-muted-link">
@@ -1257,21 +1278,22 @@ let toastTimer;
 let notifMap = {};
 let notifDismissed = new Set();
 let lastNotifTotal = 0;
+function isMobile(){
+  return window.matchMedia('(max-width: 900px)').matches;
+}
 try { notifDismissed = new Set(JSON.parse(localStorage.getItem('guardNotifDismissed') || '[]')); } catch(_){}
 function saveNotifDismissed(){ localStorage.setItem('guardNotifDismissed', JSON.stringify(Array.from(notifDismissed))); }
 
 if(sidebarToggle && sidebar && overlay){
-  function isMobile(){
-    return window.matchMedia('(max-width: 900px)').matches;
-  }
   function closeSidebar(){
     sidebar.classList.remove('open');
     overlay.classList.remove('show');
   }
   sidebarToggle.addEventListener('click', function(){
     if(isMobile()){
-      sidebar.classList.add('open');
-      overlay.classList.add('show');
+      const willOpen = !sidebar.classList.contains('open');
+      sidebar.classList.toggle('open', willOpen);
+      overlay.classList.toggle('show', willOpen);
       return;
     }
     document.body.classList.toggle('sidebar-collapsed');
@@ -1304,7 +1326,13 @@ function setActiveSection(sectionKey){
     loadExpected(sv,ev);
   }
 }
-navItems.forEach(item=>{ item.addEventListener('click',()=>{ setActiveSection(item.dataset.section); }); });
+navItems.forEach(item=>{ item.addEventListener('click',()=>{ 
+  setActiveSection(item.dataset.section);
+  if(isMobile() && sidebar && overlay){
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  }
+}); });
 function escapeHtml(value){
   return String(value||'').replace(/[&<>"']/g,function(m){
     return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);

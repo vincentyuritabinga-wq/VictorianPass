@@ -14,6 +14,24 @@ function ensureScannedAtColumns($con) {
 }
 ensureScannedAtColumns($con);
 
+function calculateAgeYears($birthRaw) {
+    if (empty($birthRaw)) return null;
+    try {
+        $dob = new DateTime($birthRaw);
+        $today = new DateTime('today');
+        if ($dob > $today) return null;
+        return $dob->diff($today)->y;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+function requiresGuardianBlock($birthRaw, $isAmenity) {
+    if (!$isAmenity) return false;
+    $age = calculateAgeYears($birthRaw);
+    return ($age !== null && $age < 16);
+}
+
 $code = isset($_GET['code']) ? trim($_GET['code']) : '';
 $error = '';
 if ($code === '') { $error = 'Status code is required.'; }
@@ -37,7 +55,6 @@ $verificationLink = sprintf('%s://%s%s/qr_view.php?code=%s', $scheme, $host, $ba
 // -------------------------------------------------------------------------
 if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_POST['ref_code']) && !empty($_POST['source_table']) && !empty($_POST['source_id'])) {
     if (!$isAuthorizedScanner) {
-        // Silently fail or redirect if not authorized
         header("Location: " . $_SERVER['REQUEST_URI']);
         exit;
     }
@@ -45,15 +62,52 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_
     $tbl = $_POST['source_table'];
     $sid = intval($_POST['source_id']);
     $ref = $_POST['ref_code'];
-    
-    // Security check: only allow known tables
-    if (in_array($tbl, ['guest_forms', 'reservations', 'resident_reservations'])) {
+
+    $blocked = false;
+    if ($con instanceof mysqli) {
+        if ($tbl === 'guest_forms') {
+            $stmt = $con->prepare("SELECT visitor_birthdate, amenity, wants_amenity FROM guest_forms WHERE id = ? AND ref_code = ? LIMIT 1");
+            $stmt->bind_param('is', $sid, $ref);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $birthRaw = $row['visitor_birthdate'] ?? null;
+                $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+                if (requiresGuardianBlock($birthRaw, $isAmenity)) { $blocked = true; }
+            }
+            $stmt->close();
+        } elseif ($tbl === 'reservations') {
+            $stmt = $con->prepare("SELECT r.amenity, u.birthdate AS user_birthdate, e.birthdate AS ep_birthdate FROM reservations r LEFT JOIN users u ON r.user_id = u.id LEFT JOIN entry_passes e ON r.entry_pass_id = e.id WHERE r.id = ? AND r.ref_code = ? LIMIT 1");
+            $stmt->bind_param('is', $sid, $ref);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $birthRaw = !empty($row['ep_birthdate']) ? $row['ep_birthdate'] : ($row['user_birthdate'] ?? null);
+                if (requiresGuardianBlock($birthRaw, true)) { $blocked = true; }
+            }
+            $stmt->close();
+        } elseif ($tbl === 'resident_reservations') {
+            $stmt = $con->prepare("SELECT rr.amenity, u.birthdate AS user_birthdate FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.id = ? AND rr.ref_code = ? LIMIT 1");
+            $stmt->bind_param('is', $sid, $ref);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $birthRaw = $row['user_birthdate'] ?? null;
+                if (requiresGuardianBlock($birthRaw, true)) { $blocked = true; }
+            }
+            $stmt->close();
+        }
+    }
+
+    if ($blocked) {
+        $error = 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.';
+    } elseif (in_array($tbl, ['guest_forms', 'reservations', 'resident_reservations'])) {
         $upStmt = $con->prepare("UPDATE $tbl SET scanned_at = NOW() WHERE id = ? AND ref_code = ?");
         $upStmt->bind_param('is', $sid, $ref);
         $upStmt->execute();
         $upStmt->close();
-        
-        // Reload to show updated status
+        $_SESSION['just_confirmed_ref'] = $ref;
+        $_SESSION['just_confirmed_time'] = time();
         header("Location: " . $_SERVER['REQUEST_URI']);
         exit;
     }
@@ -85,6 +139,9 @@ if (empty($error)) {
             $fullName = trim(implode(' ', array_filter([$row['visitor_first_name']??'', $row['visitor_middle_name']??'', $row['visitor_last_name']??''])));
             $residentName = trim(($row['res_first_name']??'') . ' ' . ($row['res_last_name']??''));
             
+            $birthRaw = $row['visitor_birthdate'] ?? null;
+            $isAmenity = (!empty($row['amenity'])) || (isset($row['wants_amenity']) && intval($row['wants_amenity']) === 1);
+            $guardianBlocked = requiresGuardianBlock($birthRaw, $isAmenity);
             $data = [
                 'id' => $id,
                 'table' => $table,
@@ -95,14 +152,15 @@ if (empty($error)) {
                 'house' => $row['res_house_number'] ?? 'N/A',
                 'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
-                'scanned_at' => $scannedAt
+                'scanned_at' => $scannedAt,
+                'guardian_block' => $guardianBlocked
             ];
         }
     }
 
     // 2. Check RESERVATIONS (Amenity)
     if (!$data) {
-        $stmtRes = $con->prepare("SELECT r.*, r.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM reservations r LEFT JOIN users u ON r.user_id = u.id WHERE r.ref_code = ?");
+        $stmtRes = $con->prepare("SELECT r.*, r.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name, u.birthdate AS user_birthdate, e.birthdate AS ep_birthdate FROM reservations r LEFT JOIN users u ON r.user_id = u.id LEFT JOIN entry_passes e ON r.entry_pass_id = e.id WHERE r.ref_code = ?");
         $stmtRes->bind_param('s', $code);
         $stmtRes->execute();
         $resRes = $stmtRes->get_result();
@@ -159,6 +217,8 @@ if (empty($error)) {
                 $timeRange = date('g:i A', strtotime($startTime));
             }
 
+            $birthRaw = !empty($row['ep_birthdate']) ? $row['ep_birthdate'] : ($row['user_birthdate'] ?? null);
+            $guardianBlocked = requiresGuardianBlock($birthRaw, true);
             $data = [
                 'id' => $id,
                 'table' => $table,
@@ -170,14 +230,15 @@ if (empty($error)) {
                 'time_range' => $timeRange,
                 'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
-                'scanned_at' => $scannedAt
+                'scanned_at' => $scannedAt,
+                'guardian_block' => $guardianBlocked
             ];
         }
     }
     
     // 3. Check RESIDENT RESERVATIONS (Amenity for Resident)
     if (!$data) {
-        $stmtRR = $con->prepare("SELECT rr.*, rr.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
+        $stmtRR = $con->prepare("SELECT rr.*, rr.amenity AS amenity_name, u.house_number AS res_house_number, u.first_name AS res_first_name, u.last_name AS res_last_name, u.birthdate AS user_birthdate FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.ref_code = ?");
         $stmtRR->bind_param('s', $code);
         $stmtRR->execute();
         $resRR = $stmtRR->get_result();
@@ -234,6 +295,8 @@ if (empty($error)) {
                 $timeRange = date('g:i A', strtotime($startTime));
             }
 
+            $birthRaw = $row['user_birthdate'] ?? null;
+            $guardianBlocked = requiresGuardianBlock($birthRaw, true);
             $data = [
                 'id' => $id,
                 'table' => $table,
@@ -245,7 +308,8 @@ if (empty($error)) {
                 'time_range' => $timeRange,
                 'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
-                'scanned_at' => $scannedAt
+                'scanned_at' => $scannedAt,
+                'guardian_block' => $guardianBlocked
             ];
         }
     }
@@ -285,12 +349,24 @@ if (empty($error)) {
 
     // Prepare UI Data
     if ($data) {
-        $s = strtolower($data['status']);
-        
-        // Define UI States
-        if ($s === 'approved') {
+        $justConfirmed = false;
+        if (!empty($_SESSION['just_confirmed_ref']) && $_SESSION['just_confirmed_ref'] === $data['code']) {
+            $age = time() - intval($_SESSION['just_confirmed_time'] ?? 0);
+            if ($age >= 0 && $age < 120) {
+                $justConfirmed = true;
+            }
+            unset($_SESSION['just_confirmed_ref'], $_SESSION['just_confirmed_time']);
+        }
+        if (!empty($data['guardian_block'])) {
+            $data['ui_state'] = 'invalid';
+            $data['ui_title'] = 'GUARDIAN REQUIRED';
+            $data['ui_color'] = '#ef4444';
+            $data['ui_msg'] = 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.';
+        } else {
+            $s = strtolower($data['status']);
+            if ($s === 'approved') {
             $oneTimeTables = ['reservations', 'resident_reservations'];
-            if ($data['scanned_at'] && in_array($data['table'], $oneTimeTables, true)) {
+            if ($data['scanned_at'] && in_array($data['table'], $oneTimeTables, true) && !$justConfirmed) {
                 $data['ui_state'] = 'used';
                 $data['ui_title'] = 'PASS ALREADY USED';
                 $data['ui_color'] = '#f59e0b'; // Orange
@@ -301,21 +377,22 @@ if (empty($error)) {
                 $data['ui_color'] = '#22c55e'; // Green
                 $data['ui_msg'] = 'Access Granted';
             }
-        } elseif ($s === 'expired') {
+            } elseif ($s === 'expired') {
             $data['ui_state'] = 'expired';
             $data['ui_title'] = 'EXPIRED PASS';
             $data['ui_color'] = '#6b7280'; // Gray
             $data['ui_msg'] = 'This pass is no longer valid.';
-        } elseif ($s === 'pending') {
+            } elseif ($s === 'pending') {
             $data['ui_state'] = 'pending';
             $data['ui_title'] = 'PENDING APPROVAL';
             $data['ui_color'] = '#eab308'; // Yellow
             $data['ui_msg'] = 'This pass is awaiting approval.';
-        } else {
+            } else {
             $data['ui_state'] = 'invalid';
             $data['ui_title'] = 'INVALID / DENIED';
             $data['ui_color'] = '#ef4444'; // Red
             $data['ui_msg'] = 'Access Denied.';
+            }
         }
     } else {
         $error = 'Invalid or Unknown QR Code.';

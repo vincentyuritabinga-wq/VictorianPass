@@ -2674,6 +2674,13 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
 .nav-item:hover img, .nav-item.active img {
     opacity: 1;
 }
+.nav-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 1rem;
+    color: inherit;
+    transition: var(--transition);
+}
 
 .sidebar-footer {
     margin-top: auto;
@@ -3693,16 +3700,16 @@ body.modal-open { overflow: hidden; }
     </div>
 
     <nav class="nav-list">
-       <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><img src="images/dashboard.svg"><span>Dashboard</span></a>
-       <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><img src="images/dashboard.svg"><span>Resident Requests</span></a>
-       <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><img src="images/dashboard.svg"><span>Resident's Guest Request</span></a>
-       <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><img src="images/dashboard.svg"><span>Visitor Requests</span></a>
-       <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><img src="images/dashboard.svg"><span>View Reported Incidents</span></a>
-       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><img src="images/dashboard.svg"><span>Residents</span></a>
-       <a href="?page=visitors" class="nav-item <?php echo $currentPage == 'visitors' ? 'active' : ''; ?>" data-page="visitors"><img src="images/dashboard.svg"><span>Visitors</span></a>
-    <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><img src="images/dashboard.svg"><span>Security Guards</span></a>
-    <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><img src="images/dashboard.svg"><span>Archived Requests</span></a>
-    <a href="?page=summary" class="nav-item <?php echo $currentPage == 'summary' ? 'active' : ''; ?>" data-page="summary"><img src="images/dashboard.svg"><span>Summary Report</span></a>
+       <a href="?page=dashboard" class="nav-item <?php echo $currentPage == 'dashboard' ? 'active' : ''; ?>" data-page="dashboard"><i class="fa-solid fa-gauge"></i><span>Dashboard</span></a>
+       <a href="?page=residents" class="nav-item <?php echo $currentPage == 'residents' ? 'active' : ''; ?>" data-page="residents"><i class="fa-solid fa-house-user"></i><span>Residents</span></a>
+       <a href="?page=visitors" class="nav-item <?php echo $currentPage == 'visitors' ? 'active' : ''; ?>" data-page="visitors"><i class="fa-solid fa-user"></i><span>Visitors</span></a>
+       <a href="?page=requests" class="nav-item <?php echo $currentPage == 'requests' ? 'active' : ''; ?>" data-page="requests"><i class="fa-solid fa-clipboard-list"></i><span>Resident Requests</span></a>
+       <a href="?page=resident_guest_forms" class="nav-item <?php echo $currentPage == 'resident_guest_forms' ? 'active' : ''; ?>" data-page="resident_guest_forms"><i class="fa-solid fa-user-plus"></i><span>Resident's Guest Request</span></a>
+       <a href="?page=visitor_requests" class="nav-item <?php echo $currentPage == 'visitor_requests' ? 'active' : ''; ?>" data-page="visitor_requests"><i class="fa-solid fa-clipboard-list"></i><span>Visitor Requests</span></a>
+       <a href="?page=report" class="nav-item <?php echo $currentPage == 'report' ? 'active' : ''; ?>" data-page="report"><i class="fa-solid fa-triangle-exclamation"></i><span>View Reported Incidents</span></a>
+    <a href="?page=security" class="nav-item <?php echo $currentPage == 'security' ? 'active' : ''; ?>" data-page="security"><i class="fa-solid fa-shield-halved"></i><span>Security Guards</span></a>
+    <a href="?page=history" class="nav-item <?php echo $currentPage == 'history' ? 'active' : ''; ?>" data-page="history"><i class="fa-solid fa-box-archive"></i><span>Archived Requests</span></a>
+    <a href="?page=summary" class="nav-item <?php echo $currentPage == 'summary' ? 'active' : ''; ?>" data-page="summary"><i class="fa-solid fa-chart-column"></i><span>Summary Report</span></a>
      </nav>
     <div class="sidebar-footer">
       <a href="?logout=1" class="text-muted-link">
@@ -5449,6 +5456,24 @@ function closeIncidentDetailsModal(){
   if(f){ f.src=''; }
 }
 
+function calcAgeFromBirthdate(birthdateStr){
+  if(!birthdateStr) return '';
+  const d = new Date(birthdateStr);
+  if(isNaN(d)) return '';
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  if (age < 0) age = 0;
+  return age;
+}
+function formatBirthdateWithAge(birthdateStr){
+  if(!birthdateStr) return '';
+  const dateLabel = new Date(birthdateStr).toLocaleDateString();
+  const age = calcAgeFromBirthdate(birthdateStr);
+  return (age !== '' && age !== null && age !== undefined) ? `${dateLabel} (Age ${age})` : dateLabel;
+}
+
 function showVisitorDetails(id, source) {
   // Reset modal
   const contentEl = document.getElementById('visitorDetailsContent');
@@ -5532,7 +5557,7 @@ function showVisitorDetails(id, source) {
               <div class="info-grid">
                 ${fullName ? `<div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${fullName}</span></div>` : ''}
                 <div class="info-row"><span class="info-label">Sex</span><span class="info-value">${details.sex || '-'}</span></div>
-                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${new Date(details.birthdate).toLocaleDateString()}</span></div>` : ''}
+                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${formatBirthdateWithAge(details.birthdate)}</span></div>` : ''}
                 <div class="info-row"><span class="info-label">Contact</span><span class="info-value">${details.contact || '-'}</span></div>
                 ${details.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${details.email}</span></div>` : ''}
                 <div class="info-row"><span class="info-label">Valid ID</span><span class="info-value">${validIdValue}</span></div>
@@ -5568,7 +5593,7 @@ function showVisitorDetails(id, source) {
               <div class="info-grid">
                 ${fullName ? `<div class="info-row"><span class="info-label">Full Name</span><span class="info-value">${fullName}</span></div>` : ''}
                 ${details.sex ? `<div class="info-row"><span class="info-label">Sex</span><span class="info-value">${details.sex}</span></div>` : ''}
-                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${new Date(details.birthdate).toLocaleDateString()}</span></div>` : ''}
+                ${details.birthdate ? `<div class="info-row"><span class="info-label">Birthdate</span><span class="info-value">${formatBirthdateWithAge(details.birthdate)}</span></div>` : ''}
                 ${details.contact ? `<div class="info-row"><span class="info-label">Contact</span><span class="info-value">${details.contact}</span></div>` : ''}
                 ${details.email ? `<div class="info-row"><span class="info-label">Email</span><span class="info-value">${details.email}</span></div>` : ''}
                 ${details.address ? `<div class="info-row"><span class="info-label">Address</span><span class="info-value">${details.address}</span></div>` : ''}
@@ -5982,7 +6007,7 @@ function showUserDetails(userId, expectedType){
             <h4 style="color:#23412e;margin-bottom:10px;">Personal</h4>
             ${fullName?`<p><strong>Name:</strong> ${fullName}</p>`:''}
             ${d.sex?`<p><strong>Sex:</strong> ${d.sex}</p>`:''}
-            ${d.birthdate?`<p><strong>Birthdate:</strong> ${new Date(d.birthdate).toLocaleDateString()}</p>`:''}
+            ${d.birthdate?`<p><strong>Birthdate:</strong> ${formatBirthdateWithAge(d.birthdate)}</p>`:''}
             ${d.email?`<p><strong>Email:</strong> ${d.email}</p>`:''}
             ${d.phone?`<p><strong>Phone:</strong> ${d.phone}</p>`:''}
             ${d.valid_id_path?`<p><strong>Valid ID:</strong> <button type="button" class="btn btn-view" onclick="showIncidentProofModal('${String(d.valid_id_path).replace(/'/g, "\\'")}')"><i class="fa-solid fa-id-card"></i> View ID</button></p>`:''}

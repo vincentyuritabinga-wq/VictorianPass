@@ -1893,7 +1893,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   }
   async function changePersons(val){
     const pcEl=document.getElementById('personCount');
-    let count=parseInt(((pcEl && (pcEl.value||pcEl.textContent))||'1'),10) || 1;
+    let count=parseInt(((pcEl && (pcEl.value||pcEl.textContent))||'0'),10);
+    if(!Number.isFinite(count)){ count = 0; }
     await setPersonsCount(count + val);
   }
   async function changeResidents(delta){
