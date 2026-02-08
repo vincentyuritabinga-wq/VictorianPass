@@ -219,6 +219,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $endDateObj = DateTime::createFromFormat('Y-m-d', $end);
             if (!$startDateObj || !$endDateObj) { throw new Exception('Invalid date range'); }
             $period = new DatePeriod($startDateObj, new DateInterval('P1D'), (clone $endDateObj)->modify('+1 day'));
+            $hasRRRef = false;
+            $hasGFRef = false;
+            $chkRRRef = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'ref_code'"); if ($chkRRRef && $chkRRRef->num_rows>0) { $hasRRRef = true; }
+            $chkGFRef = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'ref_code'"); if ($chkGFRef && $chkGFRef->num_rows>0) { $hasGFRef = true; }
             foreach ($period as $d) {
               $ds = $d->format('Y-m-d');
               if ($pool_booking_type === 'whole_pool') {
@@ -233,16 +237,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $chkR = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'persons'"); if ($chkR && $chkR->num_rows>0) { $hasRPersons = true; }
                 $chkG = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'persons'"); if ($chkG && $chkG->num_rows>0) { $hasGPersons = true; }
                 if ($hasRPersons) {
-                  $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-                  $s2->bind_param('ss', $amenity, $ds);
+                  if ($hasRRRef) {
+                    $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+                    $s2->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+                  } else {
+                    $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                    $s2->bind_param('ss', $amenity, $ds);
+                  }
                   $s2->execute();
                   $r2 = $s2->get_result();
                   $total += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['total']) : 0;
                   $s2->close();
                 }
                 if ($hasGPersons) {
-                  $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-                  $s3->bind_param('ss', $amenity, $ds);
+                  if ($hasGFRef) {
+                    $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+                    $s3->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+                  } else {
+                    $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                    $s3->bind_param('ss', $amenity, $ds);
+                  }
                   $s3->execute();
                   $r3 = $s3->get_result();
                   $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
@@ -262,16 +276,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $chkR = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'persons'"); if ($chkR && $chkR->num_rows>0) { $hasRPersons = true; }
                 $chkG = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'persons'"); if ($chkG && $chkG->num_rows>0) { $hasGPersons = true; }
                 if ($hasRPersons) {
-                  $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-                  $s2->bind_param('ss', $amenity, $ds);
+                  if ($hasRRRef) {
+                    $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+                    $s2->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+                  } else {
+                    $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                    $s2->bind_param('ss', $amenity, $ds);
+                  }
                   $s2->execute();
                   $r2 = $s2->get_result();
                   $total += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['total']) : 0;
                   $s2->close();
                 }
                 if ($hasGPersons) {
-                  $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-                  $s3->bind_param('ss', $amenity, $ds);
+                  if ($hasGFRef) {
+                    $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+                    $s3->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+                  } else {
+                    $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+                    $s3->bind_param('ss', $amenity, $ds);
+                  }
                   $s3->execute();
                   $r3 = $s3->get_result();
                   $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
@@ -551,7 +575,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           ['start' => '16:00:00', 'end' => '18:00:00', 'key' => '16:00'],
         ];
         foreach ($poolSlots as $ps) { $slotBookings[$ps['key']] = 0; }
-        $getPoolTotal = function($ds) use ($con, $amenity) {
+        $hasRRRef = false;
+        $hasGFRef = false;
+        $chkRRRef = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'ref_code'");
+        if ($chkRRRef && $chkRRRef->num_rows > 0) { $hasRRRef = true; }
+        $chkGFRef = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'ref_code'");
+        if ($chkGFRef && $chkGFRef->num_rows > 0) { $hasGFRef = true; }
+        $getPoolTotal = function($ds) use ($con, $amenity, $hasRRRef, $hasGFRef) {
           $total = 0;
           $s1 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date");
           $s1->bind_param('ss', $amenity, $ds);
@@ -566,15 +596,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           $chkG = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'persons'");
           if ($chkG && $chkG->num_rows > 0) { $hasGPersons = true; }
           if ($hasRPersons) {
-            $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-            $s2->bind_param('ss', $amenity, $ds);
+            if ($hasRRRef) {
+              $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+              $s2->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+            } else {
+              $s2 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              $s2->bind_param('ss', $amenity, $ds);
+            }
             $s2->execute();
             $r2 = $s2->get_result();
             $total += ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['total']) : 0;
             $s2->close();
           } else {
-            $c2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-            $c2->bind_param('ss', $amenity, $ds);
+            if ($hasRRRef) {
+              $c2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+              $c2->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+            } else {
+              $c2 = $con->prepare("SELECT COUNT(*) AS c FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              $c2->bind_param('ss', $amenity, $ds);
+            }
             $c2->execute();
             $r2 = $c2->get_result();
             $count = ($r2 && ($rw=$r2->fetch_assoc())) ? intval($rw['c']) : 0;
@@ -582,15 +622,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
             $c2->close();
           }
           if ($hasGPersons) {
-            $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-            $s3->bind_param('ss', $amenity, $ds);
+            if ($hasGFRef) {
+              $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+              $s3->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+            } else {
+              $s3 = $con->prepare("SELECT COALESCE(SUM(persons),0) AS total FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              $s3->bind_param('ss', $amenity, $ds);
+            }
             $s3->execute();
             $r3 = $s3->get_result();
             $total += ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['total']) : 0;
             $s3->close();
           } else {
-            $c3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
-            $c3->bind_param('ss', $amenity, $ds);
+            if ($hasGFRef) {
+              $c3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+              $c3->bind_param('ssss', $amenity, $ds, $amenity, $ds);
+            } else {
+              $c3 = $con->prepare("SELECT COUNT(*) AS c FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date");
+              $c3->bind_param('ss', $amenity, $ds);
+            }
             $c3->execute();
             $r3 = $c3->get_result();
             $countG = ($r3 && ($rw=$r3->fetch_assoc())) ? intval($rw['c']) : 0;
@@ -634,9 +684,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           $hasRt = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
           $hasRe = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
           if ($hasRt && $hasRt->num_rows > 0 && $hasRe && $hasRe->num_rows > 0) {
-            $stmtRR = $con->prepare("SELECT persons, start_time, end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
+            if ($hasRRRef) {
+              $stmtRR = $con->prepare("SELECT persons, start_time, end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+            } else {
+              $stmtRR = $con->prepare("SELECT persons, start_time, end_time FROM resident_reservations WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
+            }
             if ($stmtRR) {
-              $stmtRR->bind_param('ss', $amenity, $targetDate);
+              if ($hasRRRef) {
+                $stmtRR->bind_param('ssss', $amenity, $targetDate, $amenity, $targetDate);
+              } else {
+                $stmtRR->bind_param('ss', $amenity, $targetDate);
+              }
               $stmtRR->execute();
               $resRR = $stmtRR->get_result();
               while ($row = $resRR->fetch_assoc()) {
@@ -656,9 +714,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'booked_times') {
           $hasGt = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
           $hasGe = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
           if ($hasGt && $hasGt->num_rows > 0 && $hasGe && $hasGe->num_rows > 0) {
-            $stmtGF = $con->prepare("SELECT persons, start_time, end_time FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
+            if ($hasGFRef) {
+              $stmtGF = $con->prepare("SELECT persons, start_time, end_time FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL AND ref_code NOT IN (SELECT ref_code FROM reservations WHERE amenity = ? AND (approval_status IS NULL OR approval_status IN ('pending','approved')) AND (status IS NULL OR status NOT IN ('cancelled','deleted','moved_to_history')) AND ? BETWEEN start_date AND end_date AND ref_code IS NOT NULL AND ref_code <> '')");
+            } else {
+              $stmtGF = $con->prepare("SELECT persons, start_time, end_time FROM guest_forms WHERE amenity = ? AND approval_status IN ('pending','approved') AND ? BETWEEN start_date AND end_date AND start_time IS NOT NULL AND end_time IS NOT NULL");
+            }
             if ($stmtGF) {
-              $stmtGF->bind_param('ss', $amenity, $targetDate);
+              if ($hasGFRef) {
+                $stmtGF->bind_param('ssss', $amenity, $targetDate, $amenity, $targetDate);
+              } else {
+                $stmtGF->bind_param('ss', $amenity, $targetDate);
+              }
               $stmtGF->execute();
               $resGF = $stmtGF->get_result();
               while ($row = $resGF->fetch_assoc()) {
@@ -1219,6 +1285,21 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
     return `${parts[1]}/${parts[2]}/${String(parts[0]).slice(-2)}`;
+  }
+  function countWeekdaysInclusive(startStr,endStr){
+    if(!startStr || !endStr) return 0;
+    const s=new Date(startStr);
+    const e=new Date(endStr);
+    if(isNaN(s) || isNaN(e)) return 0;
+    let count=0;
+    const d=new Date(s.getFullYear(),s.getMonth(),s.getDate());
+    const end=new Date(e.getFullYear(),e.getMonth(),e.getDate());
+    while(d<=end){
+      const dow=d.getDay();
+      if(dow!==0 && dow!==6){ count++; }
+      d.setDate(d.getDate()+1);
+    }
+    return count;
   }
 
   async function loadBookedDates(forceRefresh){
@@ -2997,10 +3078,26 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
           const hoursText=hoursVal+' hour'+(hoursVal>1?'s':'');
           timeDisplay=hoursText+(timeDisplay ? ' — '+timeDisplay : '');
         }
+        let durationDisplay='-';
+        if(s && eD){
+          let days=0;
+          if(amenVal==='Pool'){
+            days = countWeekdaysInclusive(s,eD);
+          } else {
+            const sDate=new Date(s);
+            const eDate=new Date(eD);
+            const diff=Math.floor((eDate - sDate)/(1000*60*60*24));
+            days = isNaN(diff) ? 0 : (diff + 1);
+          }
+          if(days > 0){
+            durationDisplay = days + ' day' + (days>1?'s':'');
+          }
+        }
         const summary = [
           ['Amenity', amenVal||'-'],
           ['Start Date', formatDateToMMDDYYYY(s) || '-'],
           ['End Date', formatDateToMMDDYYYY(eD) || '-'],
+          ['Duration', durationDisplay],
           ['Time', timeDisplay || '-'],
           ['Persons', String(personsVal)],
           ['Total Price', priceTxt],
