@@ -230,7 +230,8 @@ $reservationRefs = [];
 $colsToCheck = [
     'booking_for' => "VARCHAR(50) NULL",
     'booked_by_role' => "VARCHAR(50) NULL",
-    'booked_by_name' => "VARCHAR(150) NULL"
+    'booked_by_name' => "VARCHAR(150) NULL",
+    'scanned_at' => "DATETIME NULL"
 ];
 foreach ($colsToCheck as $col => $def) {
     $check = $con->query("SHOW COLUMNS FROM reservations LIKE '$col'");
@@ -247,8 +248,12 @@ if ($con instanceof mysqli) {
     if ($check && $check->num_rows === 0) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN denial_reason TEXT NULL");
     }
+    $check = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'scanned_at'");
+    if ($check && $check->num_rows === 0) {
+        $con->query("ALTER TABLE guest_forms ADD COLUMN scanned_at DATETIME NULL");
+    }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status NOT IN ('deleted','moved_to_history') AND r.approval_status NOT IN ('deleted','moved_to_history') ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, r.scanned_at, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status <> 'deleted' AND r.approval_status <> 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -267,6 +272,12 @@ if ($stmt) {
             $statusVal = 'rejected';
         } elseif ($paymentStatusLower === 'pending_update') {
             $statusVal = 'pending_update';
+        }
+        if (!empty($row['scanned_at'])) {
+            $statusLower = strtolower((string)$statusVal);
+            if (strpos($statusLower, 'moved_to_history') === false && strpos($statusLower, 'denied') === false && strpos($statusLower, 'reject') === false && strpos($statusLower, 'cancel') === false && strpos($statusLower, 'expired') === false) {
+                $statusVal = 'permission_granted';
+            }
         }
         $resTitle = 'Reservation Schedule - ' . ($row['amenity'] ?? 'Amenity');
         if (stripos($statusVal ?? '', 'cancel') !== false) {
@@ -314,7 +325,8 @@ if ($stmt) {
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
             'payment_status' => $row['payment_status'] ?? null,
-            'attempts' => 0
+            'attempts' => 0,
+            'scanned_at' => $row['scanned_at'] ?? null
         ];
     }
     $stmt->close();
@@ -328,7 +340,7 @@ if ($con instanceof mysqli) {
     $chk = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
     $hasGuestEndTime = $chk && $chk->num_rows > 0;
 }
-$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status NOT IN ('deleted','moved_to_history') AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
+$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
 $stmt = $con->prepare($guestAmenitySelect);
 if ($stmt) {
     $stmt->bind_param("i", $userId);
@@ -353,6 +365,12 @@ if ($stmt) {
         }
         $details = trim($dateText . ($timeStr ? ' ' . $timeStr : ''));
         $statusVal = $row['approval_status'] ?? 'pending';
+        if (!empty($row['scanned_at'])) {
+            $statusLower = strtolower((string)$statusVal);
+            if (strpos($statusLower, 'moved_to_history') === false && strpos($statusLower, 'denied') === false && strpos($statusLower, 'reject') === false && strpos($statusLower, 'cancel') === false && strpos($statusLower, 'expired') === false) {
+                $statusVal = 'permission_granted';
+            }
+        }
         $reason = trim((string)($row['denial_reason'] ?? ''));
         $statusLower = strtolower((string)$statusVal);
         if ($reason !== '' && (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'reject') !== false)) {
@@ -378,7 +396,8 @@ if ($stmt) {
             'event_timestamp' => $endTs,
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
-            'payment_status' => null
+            'payment_status' => null,
+            'scanned_at' => $row['scanned_at'] ?? null
         ];
     }
     $stmt->close();
@@ -421,7 +440,7 @@ if ($stmt) {
 }
 
 // 3. Guest Forms
-$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status NOT IN ('deleted','moved_to_history') AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -443,15 +462,31 @@ if ($stmt) {
         if ($reason !== '' && (strpos($statusLower, 'denied') !== false || strpos($statusLower, 'reject') !== false)) {
             $details = 'Reason: ' . $reason;
         }
+        $statusVal = $row['approval_status'] ?? 'pending';
+        if (!empty($row['scanned_at'])) {
+            $statusLower = strtolower((string)$statusVal);
+            if (strpos($statusLower, 'moved_to_history') === false && strpos($statusLower, 'denied') === false && strpos($statusLower, 'reject') === false && strpos($statusLower, 'cancel') === false && strpos($statusLower, 'expired') === false) {
+                $statusVal = 'permission_granted';
+            }
+        }
+        $statusLower = strtolower((string)$statusVal);
+        $statusVal = $row['approval_status'] ?? 'pending';
+        if (!empty($row['scanned_at'])) {
+            $statusLower = strtolower((string)$statusVal);
+            if (strpos($statusLower, 'moved_to_history') === false && strpos($statusLower, 'denied') === false && strpos($statusLower, 'reject') === false && strpos($statusLower, 'cancel') === false && strpos($statusLower, 'expired') === false) {
+                $statusVal = 'permission_granted';
+            }
+        }
         $activities[] = [
             'type' => 'guest_form',
             'title' => $title,
             'details' => $details,
             'guest_name' => $guestName,
-            'status' => $row['approval_status'] ?? 'pending',
+            'status' => $statusVal,
             'date' => $row['created_at'],
             'event_timestamp' => $visitTs,
-            'ref_code' => $row['ref_code'] ?? 'GST'
+            'ref_code' => $row['ref_code'] ?? 'GST',
+            'scanned_at' => $row['scanned_at'] ?? null
         ];
     }
     $stmt->close();
@@ -916,13 +951,13 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($activeActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
+                  if (strpos($s, 'approv')!==false || strpos($s, 'permission')!==false || strpos($s, 'granted')!==false) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
                   elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
-                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Permission Granted' : 'Denied';
                   $isReservation = (($act['type'] ?? '') === 'reservation');
                   $detailsText = (string)($act['details'] ?? '');
                   $reasonText = '';
@@ -947,7 +982,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>" data-scanned-at="<?php echo htmlspecialchars($act['scanned_at'] ?? ''); ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -1000,13 +1035,13 @@ body.account-blocked { overflow: hidden; }
               <?php foreach ($historyActivities as $act):
                   $statusClass = 'status-pending';
                   $s = strtolower($act['status']);
-                  if (strpos($s, 'approv')!==false) $statusClass = 'status-approved';
+                  if (strpos($s, 'approv')!==false || strpos($s, 'permission')!==false || strpos($s, 'granted')!==false || (!empty($act['scanned_at']) && strpos($s, 'moved_to_history')!==false)) $statusClass = 'status-approved';
                   elseif (strpos($s, 'resolved')!==false) $statusClass = 'status-completed';
                   elseif (strpos($s, 'ongoing')!==false) $statusClass = 'status-ongoing';
                   elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
-                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = 'Denied';
+                  if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Permission Granted' : 'Denied';
                   $isReservation = (($act['type'] ?? '') === 'reservation');
                   $detailsText = (string)($act['details'] ?? '');
                   $reasonText = '';
@@ -1031,7 +1066,7 @@ body.account-blocked { overflow: hidden; }
                   }
                   $createdText = date('m/d/y g:i A', strtotime($act['date']));
               ?>
-              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
+              <div class="list-item" data-ref-code="<?php echo htmlspecialchars($act['ref_code']); ?>" data-status="<?php echo htmlspecialchars($act['status']); ?>" data-type="<?php echo htmlspecialchars($act['type']); ?>" data-reserved-by="<?php echo htmlspecialchars($act['reserved_by'] ?? ''); ?>" data-payment-status="<?php echo htmlspecialchars($act['payment_status'] ?? ''); ?>" data-schedule="<?php echo htmlspecialchars($scheduleText); ?>" data-reason="<?php echo htmlspecialchars($reasonText); ?>" data-attempts="<?php echo isset($act['attempts']) ? intval($act['attempts']) : 0; ?>" data-scanned-at="<?php echo htmlspecialchars($act['scanned_at'] ?? ''); ?>"<?php if (($act['type'] ?? '') === 'report') { echo ' data-report-id="' . htmlspecialchars($act['report_id'] ?? '') . '"'; echo ' data-report-subject="' . htmlspecialchars($act['subject'] ?? '') . '"'; echo ' data-report-address="' . htmlspecialchars($act['address'] ?? '') . '"'; echo ' data-report-date="' . htmlspecialchars($act['report_date'] ?? '') . '"'; echo ' data-report-nature="' . htmlspecialchars($act['nature'] ?? '') . '"'; echo ' data-report-other="' . htmlspecialchars($act['other_concern'] ?? '') . '"'; } ?><?php if (($act['type'] ?? '') === 'guest_form') { echo ' data-guest-name="' . htmlspecialchars($act['guest_name'] ?? '') . '"'; } ?>>
                  <div class="item-icon"><i class="fa-solid fa-chevron-right"></i></div>
                  <div class="item-content">
                    <div class="item-row" style="display:flex; justify-content:space-between; margin-bottom:5px;">
@@ -1462,7 +1497,7 @@ body.account-blocked { overflow: hidden; }
   });
   function statusClassFor(s){
     s=(s||'').toLowerCase();
-    if(s.indexOf('approv')!==-1) return 'status-approved';
+    if(s.indexOf('approv')!==-1 || s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1) return 'status-approved';
     if(s.indexOf('resolved')!==-1) return 'status-completed';
     if(s.indexOf('ongoing')!==-1) return 'status-ongoing';
     if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
@@ -1820,8 +1855,10 @@ body.account-blocked { overflow: hidden; }
       prevStatuses[ref]='moved_to_history';
       var badge=li.querySelector('.status-badge');
       if(badge){
-        badge.textContent=fmtLabel('moved_to_history');
-        badge.className='status-badge '+statusClassFor('moved_to_history');
+        var scannedAt=li.getAttribute('data-scanned-at')||'';
+        var hasScan=!!scannedAt;
+        badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+        badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
       }
       var extraEl=li.querySelector('.item-extra');
       if(extraEl){
@@ -2017,20 +2054,23 @@ body.account-blocked { overflow: hidden; }
     var type=(li.getAttribute('data-type')||'').toLowerCase();
     var status=li.getAttribute('data-status')||'';
     var ref=li.getAttribute('data-ref-code')||'';
-    var label=fmtLabel(status);
+    var scannedAt=li.getAttribute('data-scanned-at')||'';
+    var hasScan=!!scannedAt;
+    var effectiveStatus=(hasScan && String(status||'').toLowerCase().indexOf('moved_to_history')!==-1) ? 'permission_granted' : status;
+    var label=fmtLabel(effectiveStatus);
     var reservedBy=li.getAttribute('data-reserved-by')||'';
     var paymentStatus=(li.getAttribute('data-payment-status')||'').toLowerCase();
     var scheduleText=li.getAttribute('data-schedule')||'';
     var reasonText=li.getAttribute('data-reason')||'';
     var statusNote='';
-    var s=status.toLowerCase();
+    var s=String(effectiveStatus||'').toLowerCase();
     var basePath=window.location.pathname.replace(/\/[^\/]*$/,'');
-    var isApproved=s.indexOf('approv')!==-1;
+    var isApproved=s.indexOf('approv')!==-1 || s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1;
     if(isApproved) {
         if(type==='guest_form') statusNote='Guest Request Approved';
         else statusNote='This request is approved. Use this QR pass at the gate.';
     }
-    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
+    else if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1) statusNote='This request was denied. Please contact the subdivision office for details.';
     else if(s.indexOf('cancelled')!==-1) statusNote='This request was cancelled by the user.';
     else if(s.indexOf('pending')!==-1||s===''||s==='new') {
         if(type==='guest_form') statusNote='Wait until the guest is approved. Once approved, a unique QR code will be available in "My Guests" under the guest\'s name.';
@@ -2075,10 +2115,11 @@ body.account-blocked { overflow: hidden; }
     var canCancel=(type==='reservation'||type==='guest_form')&&((s.indexOf('pending')!==-1||s.indexOf('pending_update')!==-1||s===''||s==='new')||paymentStatus==='pending_update');
     var isHistoryPanel=!!li.closest('#panel-history');
     var canCancelReport=(type==='report') && !isHistoryPanel && s.indexOf('cancel')===-1 && s.indexOf('reject')===-1 && s.indexOf('resolved')===-1;
-    var canDelete=isHistoryPanel && (s.indexOf('cancel')!==-1 || s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1 || s.indexOf('expired')!==-1 || s.indexOf('moved_to_history')!==-1);
-    var canMoveHistory=(!isHistoryPanel) && (s.indexOf('denied')!==-1 || s.indexOf('reject')!==-1);
+    var rawStatus=(String(status||'').toLowerCase());
+    var canDelete=isHistoryPanel && (rawStatus.indexOf('cancel')!==-1 || rawStatus.indexOf('denied')!==-1 || rawStatus.indexOf('reject')!==-1 || rawStatus.indexOf('expired')!==-1 || rawStatus.indexOf('moved_to_history')!==-1);
+    var canMoveHistory=(!isHistoryPanel) && (rawStatus.indexOf('denied')!==-1 || rawStatus.indexOf('reject')!==-1 || rawStatus.indexOf('permission')!==-1 || rawStatus.indexOf('granted')!==-1);
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
-    var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1||paymentStatus==='rejected');
+    var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
     var highlightReason=(paymentStatus==='rejected');
     var attempts = parseInt(li.getAttribute('data-attempts')||'0',10);
@@ -2113,7 +2154,7 @@ body.account-blocked { overflow: hidden; }
         html+='<div class="item-extra-info-only">';
       }
       if(showStatusLabel){
-        html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+        html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">'+label+'</span></div>';
       }
     var noteClass='item-extra-note'+((type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts) < 3)?' note-error':'');
     if(statusNote) html+='<div class="'+noteClass+'">'+esc(statusNote)+'</div>';
@@ -2132,7 +2173,7 @@ body.account-blocked { overflow: hidden; }
         if(!rows){
           rows='<div class="schedule-row"><div class="schedule-key">Schedule:</div><div class="schedule-val">'+esc(scheduleText)+'</div></div>';
         }
-        html+='<div class="item-extra-schedule '+statusClassFor(status)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
+        html+='<div class="item-extra-schedule '+statusClassFor(effectiveStatus)+'"><div class="schedule-title">Reservation Schedule</div>'+rows+'</div>';
       }
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       
@@ -2148,6 +2189,9 @@ body.account-blocked { overflow: hidden; }
       }
       if(canCancel && ref){
         html+='<button type="button" class="item-extra-link item-extra-cancel"><i class="fa-solid fa-xmark"></i> '+(type==='guest_form'?'Cancel Request':'Cancel Reservation')+'</button>';
+      }
+      if(canMoveHistory && ref){
+        html+='<button type="button" class="item-extra-link item-extra-move-history"><i class="fa-solid fa-box-archive"></i> Move to History</button>';
       }
       html+='</div>';
       html+='</div></div></div>';
@@ -2993,6 +3037,9 @@ body.account-blocked { overflow: hidden; }
                     if(item.payment_status !== undefined){
                       li.setAttribute('data-payment-status', item.payment_status || '');
                     }
+                    if(item.scanned_at !== undefined){
+                      li.setAttribute('data-scanned-at', item.scanned_at || '');
+                    }
                     if(String(item.type||'').toLowerCase()==='report'){
                       li.setAttribute('data-report-id', item.report_id || '');
                       li.setAttribute('data-report-subject', item.subject || '');
@@ -3023,6 +3070,7 @@ body.account-blocked { overflow: hidden; }
                     var oldStatus = prevStatuses[code];
                     var newStatus = item.status;
                     var newStatusLower = String(newStatus||'').toLowerCase();
+                    var hasScan = !!(item.scanned_at);
                     
                     li.setAttribute('data-status', newStatus);
                     
@@ -3037,8 +3085,13 @@ body.account-blocked { overflow: hidden; }
                             if(titleEl && item.title) titleEl.textContent = item.title;
                             var badge = li.querySelector('.status-badge');
                             if(badge){
-                                badge.textContent = fmtLabel(newStatus);
-                                badge.className = 'status-badge ' + statusClassFor(newStatus);
+                                if(newStatusLower.indexOf('moved_to_history') !== -1){
+                                  badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+                                  badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                                } else {
+                                  badge.textContent = fmtLabel(newStatus);
+                                  badge.className = 'status-badge ' + statusClassFor(newStatus);
+                                }
                             }
                             var noHistoryMsg = historyList.querySelector('div[style*="text-align:center"]');
                             if(noHistoryMsg) noHistoryMsg.remove();
@@ -3065,8 +3118,13 @@ body.account-blocked { overflow: hidden; }
                       
                       var badge = li.querySelector('.status-badge');
                       if(badge){
-                          badge.textContent = fmtLabel(newStatus);
-                          badge.className = 'status-badge ' + statusClassFor(newStatus);
+                          if(newStatusLower.indexOf('moved_to_history') !== -1){
+                            badge.textContent = hasScan ? 'Permission Granted' : 'Denied';
+                            badge.className = 'status-badge ' + statusClassFor(hasScan ? 'permission_granted' : 'denied');
+                          } else {
+                            badge.textContent = fmtLabel(newStatus);
+                            badge.className = 'status-badge ' + statusClassFor(newStatus);
+                          }
                       }
                     }
                     
@@ -3119,8 +3177,10 @@ body.account-blocked { overflow: hidden; }
             var li=activeList.querySelector('.list-item[data-ref-code="'+safeCode+'"]');
             if(!li){
               var s=(String(item.status||'').toLowerCase());
+              var hasScan = !!(item.scanned_at);
               var statusText=(s||'').replace(/[_-]+/g,' ').replace(/\b\w/g,function(m){return m.toUpperCase();});
-              var statusCls=statusClassFor(s||'cancelled');
+              if(s.indexOf('moved_to_history')!==-1) statusText = hasScan ? 'Permission Granted' : 'Denied';
+              var statusCls=statusClassFor((hasScan && s.indexOf('moved_to_history')!==-1) ? 'permission_granted' : (s||'cancelled'));
               var isReservation=(String(item.type||'').toLowerCase()==='reservation');
               var displayTitle=String(item.title||'');
               if(isReservation){
@@ -3140,6 +3200,7 @@ body.account-blocked { overflow: hidden; }
               li.setAttribute('data-ref-code',code);
               li.setAttribute('data-status',item.status||'cancelled');
               li.setAttribute('data-type',item.type||'reservation');
+              if(item.scanned_at!==undefined){ li.setAttribute('data-scanned-at', item.scanned_at || ''); }
               if(item.payment_status!==undefined){ li.setAttribute('data-payment-status', item.payment_status||''); }
               var reservedBy=item.reserved_by||'';
               if(reservedBy){ li.setAttribute('data-reserved-by', reservedBy); }

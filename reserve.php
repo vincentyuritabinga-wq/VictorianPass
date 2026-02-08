@@ -2799,8 +2799,8 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
             rc.style.display='flex';
             document.getElementById('reservationTitle').textContent='Reservation';
             document.getElementById('reservationHint').textContent='Select date, time, and persons';
+            refreshAvailabilityFromServer();
             rc.scrollIntoView({behavior:'smooth',block:'start'});
-            requestAnimationFrame(function(){ refreshAvailabilityFromServer(); });
           }
         }catch(_){}
       }

@@ -37,6 +37,7 @@ $error = '';
 if ($code === '') { $error = 'Status code is required.'; }
 
 $data = null;
+$showConfirmPopup = false;
 $today = date('Y-m-d');
 $now = date('Y-m-d H:i:s');
 
@@ -108,6 +109,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_
         $upStmt->close();
         $_SESSION['just_confirmed_ref'] = $ref;
         $_SESSION['just_confirmed_time'] = time();
+        $_SESSION['confirm_popup'] = 1;
         header("Location: " . $_SERVER['REQUEST_URI']);
         exit;
     }
@@ -357,6 +359,10 @@ if (empty($error)) {
             }
             unset($_SESSION['just_confirmed_ref'], $_SESSION['just_confirmed_time']);
         }
+        $showConfirmPopup = !empty($_SESSION['confirm_popup']);
+        if ($showConfirmPopup) {
+            unset($_SESSION['confirm_popup']);
+        }
         if (!empty($data['guardian_block'])) {
             $data['ui_state'] = 'invalid';
             $data['ui_title'] = 'GUARDIAN REQUIRED';
@@ -365,7 +371,7 @@ if (empty($error)) {
         } else {
             $s = strtolower($data['status']);
             if ($s === 'approved') {
-            $oneTimeTables = ['reservations', 'resident_reservations'];
+            $oneTimeTables = ['guest_forms', 'reservations', 'resident_reservations'];
             if ($data['scanned_at'] && in_array($data['table'], $oneTimeTables, true) && !$justConfirmed) {
                 $data['ui_state'] = 'used';
                 $data['ui_title'] = 'PASS ALREADY USED';
@@ -716,6 +722,13 @@ if (empty($error)) {
     <div class="footer">
         VictorianPass Validation System &copy; <?php echo date('Y'); ?>
     </div>
+    <?php if (!empty($showConfirmPopup)): ?>
+    <script>
+        window.addEventListener('DOMContentLoaded', function(){
+            alert('Confirm entry');
+        });
+    </script>
+    <?php endif; ?>
 
 </body>
 </html>
