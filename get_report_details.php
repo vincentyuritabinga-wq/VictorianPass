@@ -43,13 +43,23 @@ function fmt_dt($d){
 <html>
 <head>
   <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    body {
+      margin: 0;
+      padding: 18px 20px;
+      font-family: 'Poppins', Arial, sans-serif;
+      color: #111827;
+      line-height: 1.5;
+      background: transparent;
+    }
+    * { font-family: 'Poppins', Arial, sans-serif; }
     .details-header { display:flex; align-items:center; gap:10px; padding:10px 0 0 0; }
     .details-header img { width:24px; height:24px; }
-    .title { font-weight:700; color:#23412e; font-size:1.1rem; }
-    .section-title { font-weight:700; color:#23412e; margin:18px 0 10px; }
-    .info-grid { display:flex; flex-direction:column; gap:8px; }
-    .info-row { display:flex; justify-content:space-between; gap:12px; font-size:0.95rem; }
+    .title { font-weight:700; color:#23412e; font-size:1.15rem; }
+    .section-title { font-weight:700; color:#23412e; margin:16px 0 10px; }
+    .info-grid { display:flex; flex-direction:column; gap:8px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; }
+    .info-row { display:flex; justify-content:space-between; gap:12px; font-size:0.93rem; }
     .info-label { color:#6b7280; font-weight:600; }
     .info-value { color:#111827; }
     .timeline { position:relative; margin:10px 0; padding-left:18px; }
@@ -57,13 +67,13 @@ function fmt_dt($d){
     .timeline-item::before { content:''; position:absolute; left:0; top:10px; width:8px; height:8px; border-radius:50%; background:#23412e; }
     .timeline-time { color:#6b7280; font-size:0.85rem; margin-top:2px; }
     .proofs { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    .proofs img { max-width:160px; height:auto; border:1px solid #eee; border-radius:8px; }
+    .proofs img { max-width:160px; height:auto; border:1px solid #e5e7eb; border-radius:10px; }
+    .proofs a { color:#23412e; text-decoration:underline; font-weight:600; }
   </style>
 </head>
 <body>
   <div class="details-header">
     <img src="images/logo.svg" alt="Logo">
-    <div class="title">Incident Report Details</div>
   </div>
 
   
