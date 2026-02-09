@@ -400,59 +400,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
   $res = $con->query($q);
   if ($res) {
     while ($r = $res->fetch_assoc()) {
-      $st = null; $et = null;
-      $stmtT = $con->prepare("SELECT start_time, end_time FROM reservations WHERE ref_code = ? LIMIT 1");
-      if ($stmtT) {
-        $stmtT->bind_param('s', $r['ref_code']);
-        $stmtT->execute();
-        $rt = $stmtT->get_result();
-        if ($rt && ($rw = $rt->fetch_assoc())) { $st = $rw['start_time'] ?? null; $et = $rw['end_time'] ?? null; }
-        $stmtT->close();
-      }
-      if ($st === null && $et === null) {
-        $stmtT2 = $con->prepare("SELECT start_time, end_time FROM resident_reservations WHERE ref_code = ? LIMIT 1");
-        if ($stmtT2) {
-          $stmtT2->bind_param('s', $r['ref_code']);
-          $stmtT2->execute();
-          $rt2 = $stmtT2->get_result();
-          if ($rt2 && ($rw2 = $rt2->fetch_assoc())) { $st = $rw2['start_time'] ?? null; $et = $rw2['end_time'] ?? null; }
-          $stmtT2->close();
-        }
-      }
-      if ($st === null && $et === null) {
-        $stmtCols = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
-        $hasStartCol = $stmtCols && $stmtCols->num_rows > 0;
-        $stmtCols2 = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
-        $hasEndCol = $stmtCols2 && $stmtCols2->num_rows > 0;
-        if ($hasStartCol || $hasEndCol) {
-          $sel = "SELECT " . ($hasStartCol ? "start_time" : "NULL AS start_time") . ", " . ($hasEndCol ? "end_time" : "NULL AS end_time") . " FROM guest_forms WHERE ref_code = ? LIMIT 1";
-          $stmtG = $con->prepare($sel);
-          if ($stmtG) {
-            $stmtG->bind_param('s', $r['ref_code']);
-            $stmtG->execute();
-            $rg = $stmtG->get_result();
-            if ($rg && ($rwG = $rg->fetch_assoc())) { $st = $rwG['start_time'] ?? null; $et = $rwG['end_time'] ?? null; }
-            $stmtG->close();
-          }
-        } else {
-          $stmtV = $con->prepare("SELECT visit_time FROM guest_forms WHERE ref_code = ? LIMIT 1");
-          if ($stmtV) {
-            $stmtV->bind_param('s', $r['ref_code']);
-            $stmtV->execute();
-            $rv = $stmtV->get_result();
-            if ($rv && ($rwV = $rv->fetch_assoc())) { $st = $rwV['visit_time'] ?? null; }
-            $stmtV->close();
-          }
-        }
-      }
       $rows[] = [
         'code' => $r['ref_code'],
         'name' => $r['subject_name'],
         'type' => $r['entry_type'],
         'start_date' => $r['start_date'],
         'end_date' => $r['end_date'],
-        'start_time' => $st,
-        'end_time' => $et,
         'status' => $r['status'],
         'scanned_by' => $r['scanned_by_name'],
         'scanned_at' => $r['scanned_at']
@@ -469,16 +422,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
   $startParam = isset($_GET['start']) ? $_GET['start'] : null;
   $endParam = isset($_GET['end']) ? $_GET['end'] : null;
   $start = $startParam ? date('Y-m-d', strtotime($startParam)) : date('Y-m-d');
-  $end = $endParam ? date('Y-m-d', strtotime($endParam)) : date('Y-m-d', strtotime('+7 day'));
+  $end = $endParam ? date('Y-m-d', strtotime($endParam)) : date('Y-m-d', strtotime('+6 day'));
   $rows = [];
-  $scannedToday = [];
-  $scanRes = $con->query("SELECT DISTINCT ref_code FROM entry_scans WHERE DATE(scanned_at) = CURDATE()");
-  if ($scanRes) {
-    while ($sr = $scanRes->fetch_assoc()) {
-      $code = trim((string)($sr['ref_code'] ?? ''));
-      if ($code !== '') { $scannedToday[$code] = true; }
-    }
-  }
   $normalize = function($v){
     if(!$v) return null;
     $formats = [
@@ -492,91 +437,83 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
     $ts = strtotime($v);
     return $ts ? date('Y-m-d',$ts) : null;
   };
-  $hasGFStart = false; $hasGFEnd = false;
-  $chkGFStart = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'start_time'");
-  if ($chkGFStart && $chkGFStart->num_rows > 0) { $hasGFStart = true; }
-  $chkGFEnd = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
-  if ($chkGFEnd && $chkGFEnd->num_rows > 0) { $hasGFEnd = true; }
+  $hasGFResDate = false;
+  $chkGFResDate = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'reservation_date'");
+  if ($chkGFResDate && $chkGFResDate->num_rows > 0) { $hasGFResDate = true; }
   $hasResDate = false;
   $chkResDate = $con->query("SHOW COLUMNS FROM reservations LIKE 'reservation_date'");
   if ($chkResDate && $chkResDate->num_rows > 0) { $hasResDate = true; }
   $hasRRResDate = false;
   $chkRRResDate = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'reservation_date'");
   if ($chkRRResDate && $chkRRResDate->num_rows > 0) { $hasRRResDate = true; }
+  $hasGFVisitTime = false;
+  $chkGFVisitTime = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'visit_time'");
+  if ($chkGFVisitTime && $chkGFVisitTime->num_rows > 0) { $hasGFVisitTime = true; }
+  $hasResStartTime = false;
+  $chkResStartTime = $con->query("SHOW COLUMNS FROM reservations LIKE 'start_time'");
+  if ($chkResStartTime && $chkResStartTime->num_rows > 0) { $hasResStartTime = true; }
+  $hasResEndTime = false;
+  $chkResEndTime = $con->query("SHOW COLUMNS FROM reservations LIKE 'end_time'");
+  if ($chkResEndTime && $chkResEndTime->num_rows > 0) { $hasResEndTime = true; }
   $hasRRStartTime = false;
   $chkRRStartTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
   if ($chkRRStartTime && $chkRRStartTime->num_rows > 0) { $hasRRStartTime = true; }
   $hasRREndTime = false;
   $chkRREndTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
   if ($chkRREndTime && $chkRREndTime->num_rows > 0) { $hasRREndTime = true; }
-  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, start_date, end_date, TRIM(approval_status) AS approval_status, approval_date, " . ($hasGFStart ? "start_time" : "NULL AS start_time") . ", " . ($hasGFEnd ? "end_time" : "NULL AS end_time") . " FROM guest_forms WHERE LOWER(TRIM(approval_status))='approved'");
+  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date, amenity, " . ($hasGFResDate ? "reservation_date" : "NULL AS reservation_date") . ", " . ($hasGFVisitTime ? "visit_time AS start_time" : "NULL AS start_time") . ", NULL AS end_time, TRIM(approval_status) AS approval_status, approval_date FROM guest_forms WHERE LOWER(TRIM(approval_status)) IN ('approved','permission_granted')");
   if ($resGF) {
     while ($r = $resGF->fetch_assoc()) {
       $nm = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
-      $sd = $normalize($r['visit_date'] ?? '') ?: $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $sd = $normalize($r['visit_date'] ?? '') ?: $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
       $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
-      $code = (string)($r['ref_code'] ?? '');
-      if($code !== '' && isset($scannedToday[$code])) continue;
-      $st = !empty($r['start_time']) ? $r['start_time'] : ( !empty($r['visit_time']) ? (preg_match('/^\d{1,2}:\d{2}$/', $r['visit_time']) ? ($r['visit_time'] . ':00') : $r['visit_time']) : null );
-      $et = !empty($r['end_time']) ? $r['end_time'] : null;
       $rows[] = [
-        'code' => $code,
+        'code' => $r['ref_code'],
         'name' => ($nm !== '' ? $nm : '-'),
         'type' => 'Guest Entry',
+        'amenity' => $r['amenity'] ?? null,
         'start_date' => $sd,
         'end_date' => $ed,
-        'start_time' => $st,
-        'end_time' => $et,
+        'start_time' => $r['start_time'] ?? null,
+        'end_time' => $r['end_time'] ?? null,
         'status' => $r['approval_status']
       ];
     }
   }
-  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, " . ($hasResDate ? "r.reservation_date" : "NULL AS reservation_date") . ", r.start_time, r.end_time, r.approval_date, TRIM(r.approval_status) AS approval_status, TRIM(r.status) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name, gf.start_date AS gf_start_date, gf.end_date AS gf_end_date, gf.visit_date AS gf_visit_date, gf.approval_date AS gf_approval_date, rr.start_date AS rr_start_date, rr.end_date AS rr_end_date, rr.approval_date AS rr_approval_date, " . ($hasRRStartTime ? "rr.start_time" : "NULL AS rr_start_time") . ", " . ($hasRREndTime ? "rr.end_time" : "NULL AS rr_end_time") . " FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code LEFT JOIN resident_reservations rr ON rr.ref_code = r.ref_code WHERE (LOWER(TRIM(r.approval_status))='approved' OR LOWER(TRIM(r.status))='approved')");
+  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, r.amenity, " . ($hasResDate ? "r.reservation_date" : "NULL AS reservation_date") . ", " . ($hasResStartTime ? "r.start_time" : "NULL AS start_time") . ", " . ($hasResEndTime ? "r.end_time" : "NULL AS end_time") . ", r.approval_date, TRIM(COALESCE(r.approval_status, r.status)) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE LOWER(TRIM(COALESCE(r.approval_status, r.status))) IN ('approved','permission_granted')");
   if ($resR) {
     while ($r = $resR->fetch_assoc()) {
-      $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: $normalize($r['rr_start_date'] ?? '') ?: $normalize($r['gf_start_date'] ?? '') ?: $normalize($r['gf_visit_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null) ?: ($r['rr_approval_date'] ? date('Y-m-d', strtotime($r['rr_approval_date'])) : null) ?: ($r['gf_approval_date'] ? date('Y-m-d', strtotime($r['gf_approval_date'])) : null);
-      $ed = $normalize($r['end_date'] ?? '') ?: $normalize($r['rr_end_date'] ?? '') ?: $normalize($r['gf_end_date'] ?? '') ?: $sd;
+      $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
-      $code = (string)($r['ref_code'] ?? '');
-      if($code !== '' && isset($scannedToday[$code])) continue;
-      $approvalRaw = trim((string)($r['approval_status'] ?? ''));
-      $statusRaw = trim((string)($r['status'] ?? ''));
-      $approvalLower = strtolower($approvalRaw);
-      $statusLower = strtolower($statusRaw);
-      $displayStatus = ($approvalLower === 'approved') ? $approvalRaw : (($statusLower === 'approved') ? $statusRaw : ($approvalRaw !== '' ? $approvalRaw : $statusRaw));
       $full = trim(($r['ep_full_name'] ?? '')) ?: trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? '')) ?: trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
       $bookingFor = strtolower(trim($r['booking_for'] ?? ''));
       $accountType = strtolower(trim($r['account_type'] ?? ''));
       $hasGuestRef = !empty($r['guest_ref_code']) || !empty($r['guest_id']);
       $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($r['entry_pass_id']);
-      $st = $r['start_time'] ?? null;
-      if(!$st && !empty($r['rr_start_time'])) { $st = $r['rr_start_time']; }
-      $et = $r['end_time'] ?? null;
-      if(!$et && !empty($r['rr_end_time'])) { $et = $r['rr_end_time']; }
       $rows[] = [
-        'code' => $code,
+        'code' => $r['ref_code'],
         'name' => $full,
         'type' => ($isVisitor ? 'Visitor Reservation' : 'Resident Reservation'),
+        'amenity' => $r['amenity'] ?? null,
         'start_date' => $sd,
         'end_date' => $ed,
-        'start_time' => $st,
-        'end_time' => $et,
-        'status' => $displayStatus
+        'start_time' => $r['start_time'] ?? null,
+        'end_time' => $r['end_time'] ?? null,
+        'status' => $r['status']
       ];
     }
   }
-  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, " . ($hasRRResDate ? "rr.reservation_date" : "NULL AS reservation_date") . ", rr.start_time, rr.end_time, rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(rr.approval_status)='approved'");
+  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, rr.amenity, " . ($hasRRResDate ? "rr.reservation_date" : "NULL AS reservation_date") . ", " . ($hasRRStartTime ? "rr.start_time" : "NULL AS start_time") . ", " . ($hasRREndTime ? "rr.end_time" : "NULL AS end_time") . ", rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(TRIM(rr.approval_status)) IN ('approved','permission_granted')");
   if ($resRR) {
     while ($r = $resRR->fetch_assoc()) {
       $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
       $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
-      $code = (string)($r['ref_code'] ?? '');
-      if($code !== '' && isset($scannedToday[$code])) continue;
       $fullResident = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
       $fullGuest = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
       $bookingFor = strtolower(trim($r['booking_for'] ?? ''));
@@ -585,9 +522,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($r['entry_pass_id']);
       $full = ($isVisitor && $fullGuest !== '') ? $fullGuest : $fullResident;
       $rows[] = [
-        'code' => $code,
+        'code' => $r['ref_code'],
         'name' => $full,
         'type' => ($isVisitor ? 'Visitor Reservation' : 'Resident Reservation'),
+        'amenity' => $r['amenity'] ?? null,
         'start_date' => $sd,
         'end_date' => $ed,
         'start_time' => $r['start_time'] ?? null,
@@ -1382,8 +1320,8 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
       </div>
       <div class="content-row">
       <table id="entryTable">
-        <tr><th>Code</th><th>Name</th><th>Type</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tr id="emptyRow"><td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
+        <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th></tr>
+        <tr id="emptyRow"><td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
       </table>
     </div>
     </div>
@@ -1399,9 +1337,9 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     <div class="panel">
       <h3>Today's Entry (Detailed)</h3>
       <table id="todayEntries" class="history-table">
-        <tr><th>Code</th><th>Name</th><th>Type</th><th>Reservation Schedule</th><th>Status</th><th>Scanned At</th></tr>
+        <tr><th>Code</th><th>Name</th><th>Type</th><th>Dates</th><th>Status</th><th>Scanned By</th><th>Scanned At</th></tr>
         <tbody id="todayEntriesBody">
-          <tr id="todayEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
+          <tr id="todayEmpty"><td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
         </tbody>
       </table>
     </div>
@@ -1417,9 +1355,9 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
         <button class="btn btn-view" id="applyExpected">Custom Range</button>
       </div>
       <table id="expectedTable" class="history-table">
-        <tr><th>Code</th><th>Name</th><th>Type</th><th>Reservation Schedule</th><th>Status</th></tr>
+        <tr><th>Code</th><th>Name</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
         <tbody id="expectedBody">
-          <tr id="expectedEmpty"><td colspan="5" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td></tr>
+          <tr id="expectedEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td></tr>
         </tbody>
       </table>
     </div>
@@ -1524,7 +1462,7 @@ function setActiveSection(sectionKey){
     const s=document.getElementById('expectedStart');
     const e=document.getElementById('expectedEnd');
     const sv=s&&s.value?s.value:formatInputDate(new Date());
-    const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+7*24*60*60*1000));
+    const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+6*24*60*60*1000));
     loadExpected(sv,ev);
   }
 }
@@ -1720,13 +1658,12 @@ function scanCode(){
       showToast('Scan recorded');
       loadDashboardEntries();
       loadTodayEntries();
-      const finalUrl = data && data.first_scan ? `${openUrl}${openUrl.indexOf('?')>=0?'&':'?'}just_scanned=1` : openUrl;
-      const win = window.open(finalUrl,'_blank');
-      if(!win){ window.location.href = finalUrl; }
+      const win = window.open(openUrl,'_blank');
+      if(!win){ window.location.href = openUrl; }
     })
     .catch(_=>{ showToast('Network error','error'); });
 }
-function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); const timeDisplay=(r.start_time&&r.end_time)?`${formatTimeVal(r.start_time)} - ${formatTimeVal(r.end_time)}`:(r.start_time?formatTimeVal(r.start_time):''); const sched=timeDisplay?`${dateDisplay} ${timeDisplay}`:dateDisplay; tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${sched}</td><td>${r.status||'-'}</td>`; tbl.appendChild(tr); }); }
+function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${dateDisplay}</td><td>${r.status||'-'}</td><td>${r.scanned_by||'-'}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
 // Incident listing & escalation
@@ -1817,25 +1754,50 @@ function renderIncidents(rows){
 }
 function loadIncidents(){ fetch('guard.php?action=list_incidents').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderIncidents(data.incidents||[]); } }).catch(_=>{}); }
 document.addEventListener('DOMContentLoaded', function(){ loadIncidents(); setInterval(loadIncidents, 15000); });
-function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); const timeDisplay=(r.start_time&&r.end_time)?`${formatTimeVal(r.start_time)} - ${formatTimeVal(r.end_time)}`:(r.start_time?formatTimeVal(r.start_time):''); const sched = timeDisplay ? `${dateDisplay} ${timeDisplay}` : dateDisplay; const sat=r.scanned_at?formatDateTime(r.scanned_at):''; tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${sched}</td><td>${r.status||'-'}</td><td>${sat}</td>`; tbody.appendChild(tr); }); }
+function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="7" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); const sat=r.scanned_at?formatDateTime(r.scanned_at):''; tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${dateDisplay}</td><td>${r.status||'-'}</td><td>${r.scanned_by||'-'}</td><td>${sat}</td>`; tbody.appendChild(tr); }); }
 function formatMDY(ymd){ try{ const d=new Date(ymd); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; }catch(e){ return ymd; } }
 function formatDateTime(dt){ try{ const d=new Date(dt); const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; }catch(e){ return dt; } }
 function formatDateValue(v){ if(!v) return ''; try{ const d=new Date(v); if(isNaN(d.getTime())) return v; const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); const hasTime=String(v).match(/\d{1,2}:\d{2}/); if(hasTime){ let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; } return `${mm}/${dd}/${yy}`; }catch(e){ return v; } }
-function formatTimeVal(t){ try{ if(!t) return ''; const p=String(t).split(':'); let h=parseInt(p[0]||'0',10); const m=(p[1]||'0').padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${h}:${m} ${ap}`; }catch(e){ return t; } }
 function loadTodayEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderTodayEntries(data.entries||[]); } }).catch(_=>{}); }
-function renderExpected(rows){ const tbody=document.getElementById('expectedBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='expectedEmpty'; tr.innerHTML=`<td colspan="5" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const dateDisplay=(r.start_date&&r.end_date)?`${formatMDY(r.start_date)} → ${formatMDY(r.end_date)}`:(r.start_date?formatMDY(r.start_date):'-'); const timeDisplay=(r.start_time&&r.end_time)?`${formatTimeVal(r.start_time)} - ${formatTimeVal(r.end_time)}`:(r.start_time?formatTimeVal(r.start_time):''); const sched=timeDisplay?`${dateDisplay} ${timeDisplay}`:dateDisplay; const st=String(r.status||'').replace(/[_-]+/g,' '); const sts=st.replace(/\b\w/g,function(m){return m.toUpperCase();}); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${sched}</td><td>${sts}</td>`; tbody.appendChild(tr); }); }
-function formatInputDate(d){ const z=new Date(d); return z.toISOString().slice(0,10); }
-function getRange(){ const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); const sv=s&&s.value?s.value:formatInputDate(new Date()); const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+7*24*60*60*1000)); return {start:sv,end:ev}; }
+function formatTimeValue(t){
+  if(!t) return '';
+  const raw=String(t).trim();
+  const m=raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if(!m) return raw;
+  let h=parseInt(m[1],10);
+  const mi=m[2];
+  const ap=h>=12?'PM':'AM';
+  h=h%12; if(h===0) h=12;
+  return `${h}:${mi} ${ap}`;
+}
+function formatScheduleRow(r){
+  const sd=r.start_date||'';
+  const ed=r.end_date||sd;
+  if(!sd) return '-';
+  const startDateLabel=formatMDY(sd);
+  const endDateLabel=ed?formatMDY(ed):startDateLabel;
+  const st=formatTimeValue(r.start_time||'');
+  const et=formatTimeValue(r.end_time||'');
+  const timeLabel=(st && et) ? `${st} ${et}` : (st || et);
+  const startLabel=startDateLabel + (timeLabel ? ` ${timeLabel}` : '');
+  const endLabel=endDateLabel + (timeLabel ? ` ${timeLabel}` : '');
+  if(ed && ed!==sd){ return `${startLabel}→ ${endLabel}`; }
+  if(timeLabel){ return `${startDateLabel} ${timeLabel}`; }
+  return startDateLabel;
+}
+function renderExpected(rows){ const tbody=document.getElementById('expectedBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='expectedEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r||{}); const st=String(r.status||'').replace(/[_-]+/g,' '); const sts=st.replace(/\b\w/g,function(m){return m.toUpperCase();}); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${r.amenity||'-'}</td><td>${scheduleDisplay}</td><td>${sts}</td>`; tbody.appendChild(tr); }); }
+function formatInputDate(d){ const z=new Date(d); const mm=(z.getMonth()+1).toString().padStart(2,'0'); const dd=z.getDate().toString().padStart(2,'0'); const yyyy=z.getFullYear(); return `${yyyy}-${mm}-${dd}`; }
+function getRange(){ const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); const sv=s&&s.value?s.value:formatInputDate(new Date()); const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+6*24*60*60*1000)); return {start:sv,end:ev}; }
 function loadExpected(start,end){ const rng = start&&end ? {start,end} : getRange(); const url = `guard.php?action=list_expected&start=${encodeURIComponent(rng.start)}&end=${encodeURIComponent(rng.end)}`; fetch(url).then(r=>r.json()).then(data=>{ if(data&&data.success){ renderExpected(data.entries||[]); } }).catch(_=>{}); }
 document.addEventListener('DOMContentLoaded', function(){
   loadTodayEntries();
   loadDashboardEntries();
   refreshNotifications();
   setInterval(refreshNotifications, 60000);
-  const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); if(s&&e){ const today=new Date(); const next=new Date(Date.now()+7*24*60*60*1000); s.value=formatInputDate(today); e.value=formatInputDate(next); }
+  const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); if(s&&e){ const today=new Date(); const next=new Date(Date.now()+6*24*60*60*1000); s.value=formatInputDate(today); e.value=formatInputDate(next); }
   const apply=document.getElementById('applyExpected'); if(apply){ apply.addEventListener('click', function(){ const rng=getRange(); loadExpected(rng.start,rng.end); }); }
   const wk=document.getElementById('weekFromStartBtn'); if(wk){ wk.addEventListener('click', function(){ const base=new Date(); const end=new Date(base.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(base); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
-  const tw=document.getElementById('thisWeekBtn'); if(tw){ tw.addEventListener('click', function(){ const now=new Date(); const start=new Date(now.getTime()); start.setDate(start.getDate()-start.getDay()); const end=new Date(start.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
+  const tw=document.getElementById('thisWeekBtn'); if(tw){ tw.addEventListener('click', function(){ const now=new Date(); const start=new Date(now.getTime()); const day=start.getDay(); const diff=(day===0 ? -6 : 1 - day); start.setDate(start.getDate()+diff); const end=new Date(start.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
   const n30=document.getElementById('next30Btn'); if(n30){ n30.addEventListener('click', function(){ const base=new Date(); const end=new Date(base.getTime()); end.setDate(end.getDate()+29); const sv=formatInputDate(base); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
   if(s&&e){ s.addEventListener('change', function(){ if(!s.value) return; const base=new Date(s.value); const end=new Date(base.getTime()); end.setDate(end.getDate()+6); e.value=formatInputDate(end); }); }
   loadExpected();
