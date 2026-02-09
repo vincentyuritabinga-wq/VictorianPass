@@ -70,6 +70,97 @@ if (isset($_POST['action']) && $_POST['action'] === 'cancel' && isset($_POST['re
   exit;
 }
 
+// Add a proof file to an existing report
+if (isset($_POST['action']) && $_POST['action'] === 'add_proof' && isset($_POST['report_id'])) {
+  $rid = intval($_POST['report_id']);
+  $uid = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
+  if ($rid <= 0 || $uid <= 0) {
+    echo json_encode(['success' => false, 'message' => 'Invalid request']);
+    exit;
+  }
+  $stmtChk = $con->prepare("SELECT id FROM incident_reports WHERE id = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1");
+  $stmtChk->bind_param('ii', $rid, $uid);
+  $stmtChk->execute();
+  $resChk = $stmtChk->get_result();
+  if (!$resChk || $resChk->num_rows === 0) {
+    echo json_encode(['success' => false, 'message' => 'Report not found or not owned']);
+    $stmtChk->close();
+    exit;
+  }
+  $stmtChk->close();
+  if (empty($_FILES['proof']) || !is_array($_FILES['proof']['name'])) {
+    echo json_encode(['success' => false, 'message' => 'No file uploaded']);
+    exit;
+  }
+  $uploadDir = 'uploads/reports/';
+  if (!is_dir($uploadDir)) { mkdir($uploadDir, 0755, true); }
+  $allowedTypes = ['image/jpeg','image/jpg','image/png','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  $names = $_FILES['proof']['name'];
+  $tmps  = $_FILES['proof']['tmp_name'];
+  $types = $_FILES['proof']['type'];
+  $errs  = $_FILES['proof']['error'];
+  $sizes = $_FILES['proof']['size'];
+  $added = [];
+  for ($i = 0; $i < count($names); $i++) {
+    if ($errs[$i] !== UPLOAD_ERR_OK) { continue; }
+    if (!in_array($types[$i], $allowedTypes)) { continue; }
+    if ($sizes[$i] > 5 * 1024 * 1024) { continue; }
+    $ext = pathinfo($names[$i], PATHINFO_EXTENSION);
+    $basename = 'proof_' . $rid . '_' . time() . '_' . bin2hex(random_bytes(3)) . '.' . $ext;
+    $dest = $uploadDir . $basename;
+    if (move_uploaded_file($tmps[$i], $dest)) {
+      $stmtP = $con->prepare("INSERT INTO incident_proofs (report_id, file_path) VALUES (?, ?)");
+      $stmtP->bind_param('is', $rid, $dest);
+      if ($stmtP->execute()) {
+        $added[] = ['id' => $stmtP->insert_id, 'file_path' => $dest];
+      }
+      $stmtP->close();
+    }
+  }
+  echo json_encode(['success' => true, 'added' => $added]);
+  exit;
+}
+
+// Delete a proof file from an existing report
+if (isset($_POST['action']) && $_POST['action'] === 'delete_proof' && isset($_POST['report_id']) && isset($_POST['proof_id'])) {
+  $rid = intval($_POST['report_id']);
+  $pid = intval($_POST['proof_id']);
+  $uid = isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : 0;
+  if ($rid <= 0 || $pid <= 0 || $uid <= 0) {
+    echo json_encode(['success' => false, 'message' => 'Invalid request']);
+    exit;
+  }
+  $stmtChk = $con->prepare("SELECT id FROM incident_reports WHERE id = ? AND (user_id = ? OR user_id IS NULL) LIMIT 1");
+  $stmtChk->bind_param('ii', $rid, $uid);
+  $stmtChk->execute();
+  $resChk = $stmtChk->get_result();
+  if (!$resChk || $resChk->num_rows === 0) {
+    echo json_encode(['success' => false, 'message' => 'Report not found or not owned']);
+    $stmtChk->close();
+    exit;
+  }
+  $stmtChk->close();
+  $stmtP = $con->prepare("SELECT file_path FROM incident_proofs WHERE id = ? AND report_id = ? LIMIT 1");
+  $stmtP->bind_param('ii', $pid, $rid);
+  $stmtP->execute();
+  $resP = $stmtP->get_result();
+  if (!$resP || $resP->num_rows === 0) {
+    echo json_encode(['success' => false, 'message' => 'Proof not found']);
+    $stmtP->close();
+    exit;
+  }
+  $rowP = $resP->fetch_assoc();
+  $file = $rowP['file_path'];
+  $stmtP->close();
+  $stmtDel = $con->prepare("DELETE FROM incident_proofs WHERE id = ? AND report_id = ?");
+  $stmtDel->bind_param('ii', $pid, $rid);
+  $ok = $stmtDel->execute();
+  $stmtDel->close();
+  if ($ok && $file && file_exists($file)) { @unlink($file); }
+  echo json_encode(['success' => (bool)$ok]);
+  exit;
+}
+
 // Inputs
 $complainant = trim($_POST['complainant'] ?? '');
 $subject     = trim($_POST['subject'] ?? '');

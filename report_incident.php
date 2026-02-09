@@ -501,14 +501,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           </div>
 
           <div class="static-group">
-              <label>Attach Proof (Images/Docs)</label>
+              <label>Attach Proof (Images/Docs) <span style="color:#6b7280; font-weight:500;">Optional</span></label>
               <label class="upload-box">
-                  <input type="file" name="proof[]" multiple accept=".jpg,.jpeg,.png,.pdf,.docx" style="display:none;" onchange="updateFileList(this)">
+                  <input type="file" id="proofInput" name="proof[]" multiple accept=".jpg,.jpeg,.png,.pdf,.docx" style="display:none;" onchange="updateFileList(this)">
                   <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
                   <div class="upload-text">Click to upload files</div>
                   <div class="upload-hint">Max 5MB per file (JPG, PNG, PDF, DOCX)</div>
                   <div id="fileList" style="margin-top:10px; font-size:0.85rem; color:#23412e;"></div>
               </label>
+              <div style="margin-top:6px; font-size:0.82rem; color:#6b7280;">Uploading proof is optional.</div>
           </div>
 
           <div class="static-group agreement-group">
@@ -582,20 +583,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 
 <script>
+let selectedProofs = [];
 function updateFileList(input) {
     const list = document.getElementById('fileList');
     list.innerHTML = '';
     if (input.files && input.files.length > 0) {
-        let ul = document.createElement('ul');
-        ul.style.listStyle = 'none';
-        ul.style.padding = '0';
-        for (let i = 0; i < input.files.length; i++) {
-            let li = document.createElement('li');
-            li.textContent = input.files[i].name;
-            ul.appendChild(li);
-        }
-        list.appendChild(ul);
+        selectedProofs = Array.from(input.files);
     }
+    if (selectedProofs.length === 0) { return; }
+    let ul = document.createElement('ul');
+    ul.style.listStyle = 'none';
+    ul.style.padding = '0';
+    selectedProofs.forEach(function(file, idx){
+        let li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.justifyContent = 'space-between';
+        li.style.gap = '10px';
+        li.style.padding = '6px 0';
+        let left = document.createElement('div');
+        left.textContent = file.name;
+        let actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        if (/(\.png|\.jpg|\.jpeg)$/i.test(file.name)) {
+            let viewBtn = document.createElement('button');
+            viewBtn.type = 'button';
+            viewBtn.textContent = 'View';
+            viewBtn.style.border = '1px solid #e5e7eb';
+            viewBtn.style.background = '#f9fafb';
+            viewBtn.style.color = '#111827';
+            viewBtn.style.padding = '4px 8px';
+            viewBtn.style.borderRadius = '6px';
+            viewBtn.style.cursor = 'pointer';
+            viewBtn.onclick = function(){
+                const url = URL.createObjectURL(file);
+                window.open(url, '_blank');
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+            };
+            actions.appendChild(viewBtn);
+        }
+        let removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.style.border = '1px solid #e5e7eb';
+        removeBtn.style.background = '#fee2e2';
+        removeBtn.style.color = '#b91c1c';
+        removeBtn.style.padding = '4px 8px';
+        removeBtn.style.borderRadius = '6px';
+        removeBtn.style.cursor = 'pointer';
+        removeBtn.onclick = function(){
+            selectedProofs = selectedProofs.filter(function(_, i){ return i !== idx; });
+            const dt = new DataTransfer();
+            selectedProofs.forEach(function(f){ dt.items.add(f); });
+            input.files = dt.files;
+            updateFileList(input);
+        };
+        actions.appendChild(removeBtn);
+        li.appendChild(left);
+        li.appendChild(actions);
+        ul.appendChild(li);
+    });
+    list.appendChild(ul);
 }
 
 function openModal(id) {

@@ -498,6 +498,7 @@ if ($residentId > 0) {
                 if ($cres && $cres->num_rows > 0) { $exists = true; }
                 $chk->close();
                 
+                $resp['first_scan'] = !$exists;
                 if (!$exists) {
                     $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                     $sd = date('Y-m-d');
@@ -508,6 +509,10 @@ if ($residentId > 0) {
                     $stmtLog->bind_param('sissssss', $refCode, $gid, $gname, $subject, $etype, $stat, $sd, $ed);
                     @$stmtLog->execute();
                     @$stmtLog->close();
+                }
+                if ($resp['first_scan']) {
+                    $_SESSION['just_confirmed_ref'] = $refCode;
+                    $_SESSION['just_confirmed_time'] = time();
                 }
             }
         }
@@ -674,6 +679,7 @@ if ($resGF && $resGF->num_rows > 0) {
         $cres = $chk->get_result();
         if ($cres && $cres->num_rows > 0) { $exists = true; }
         $chk->close();
+        $resp['first_scan'] = !$exists;
         if (!$exists) {
           $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
           $sd = $resp['start_date'] ? date('Y-m-d', strtotime($resp['start_date'])) : null;
@@ -682,6 +688,12 @@ if ($resGF && $resGF->num_rows > 0) {
           $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
           @$stmtLog->execute();
           @$stmtLog->close();
+        }
+        if ($resp['first_scan'] && strtolower($statusVal) === 'approved') {
+          $stmtScan = $con->prepare("UPDATE reservations SET scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ? AND scanned_at IS NULL");
+          if ($stmtScan) { $stmtScan->bind_param('s', $row['ref_code']); $stmtScan->execute(); $stmtScan->close(); }
+          $_SESSION['just_confirmed_ref'] = $row['ref_code'];
+          $_SESSION['just_confirmed_time'] = time();
         }
         // Auto-archive and mark as permission_granted for valid passes
         if (strtolower($statusVal) === 'approved') {
@@ -847,6 +859,7 @@ if ($result && $result->num_rows > 0) {
         $cres = $chk->get_result();
         if ($cres && $cres->num_rows > 0) { $exists = true; }
         $chk->close();
+        $resp['first_scan'] = !$exists;
         if (!$exists) {
           $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
           $sd = $resp['start_date'] ? date('Y-m-d', strtotime($resp['start_date'])) : null;
@@ -855,6 +868,12 @@ if ($result && $result->num_rows > 0) {
           $stmtLog->bind_param('sissssss', $row['ref_code'], $gid, $gname, $subject, $etype, $stat, $sd, $ed);
           @$stmtLog->execute();
           @$stmtLog->close();
+        }
+        if ($resp['first_scan'] && strtolower($statusVal) === 'approved') {
+          $stmtScan = $con->prepare("UPDATE resident_reservations SET scanned_at = NOW(), updated_at = NOW() WHERE ref_code = ? AND scanned_at IS NULL");
+          if ($stmtScan) { $stmtScan->bind_param('s', $row['ref_code']); $stmtScan->execute(); $stmtScan->close(); }
+          $_SESSION['just_confirmed_ref'] = $row['ref_code'];
+          $_SESSION['just_confirmed_time'] = time();
         }
       }
     }

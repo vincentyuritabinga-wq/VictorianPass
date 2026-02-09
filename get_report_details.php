@@ -19,11 +19,11 @@ if ($con instanceof mysqli) {
     $row = $res->fetch_assoc();
   }
   $stmt->close();
-  $stmtP = $con->prepare("SELECT file_path FROM incident_proofs WHERE report_id = ? ORDER BY uploaded_at ASC");
+  $stmtP = $con->prepare("SELECT id, file_path FROM incident_proofs WHERE report_id = ? ORDER BY uploaded_at ASC");
   $stmtP->bind_param('i', $id);
   $stmtP->execute();
   $resP = $stmtP->get_result();
-  while ($resP && ($p = $resP->fetch_assoc())) { $proofs[] = $p['file_path']; }
+  while ($resP && ($p = $resP->fetch_assoc())) { $proofs[] = $p; }
   $stmtP->close();
 }
 
@@ -101,13 +101,78 @@ function fmt_dt($d){
   <div class="section-title">Submitted Proof</div>
   <div class="proofs">
     <?php foreach ($proofs as $p): ?>
-      <?php if (preg_match('/\.(png|jpg|jpeg)$/i', $p)): ?>
-        <img src="<?php echo htmlspecialchars($p); ?>" alt="Proof">
+      <?php $fp = $p['file_path']; $pid = intval($p['id']); ?>
+      <?php if (preg_match('/\.(png|jpg|jpeg)$/i', $fp)): ?>
+        <div style="display:inline-flex; flex-direction:column; gap:8px; align-items:center; margin:8px;">
+          <img src="<?php echo htmlspecialchars($fp); ?>" alt="Proof">
+          <div style="display:flex; gap:8px;">
+            <a href="<?php echo htmlspecialchars($fp); ?>" target="_blank" style="color:#23412e;text-decoration:underline;">View</a>
+            <button onclick="replaceProof(<?php echo $id; ?>, <?php echo $pid; ?>)" style="border:1px solid #e5e7eb; background:#f3f4f6; color:#111827; padding:6px 10px; border-radius:8px; cursor:pointer;">Replace</button>
+            <button onclick="removeProof(<?php echo $id; ?>, <?php echo $pid; ?>)" style="border:1px solid #e5e7eb; background:#fee2e2; color:#b91c1c; padding:6px 10px; border-radius:8px; cursor:pointer;">Remove</button>
+          </div>
+        </div>
       <?php else: ?>
-        <a href="<?php echo htmlspecialchars($p); ?>" target="_blank" style="color:#23412e;text-decoration:underline;"><?php echo htmlspecialchars(basename($p)); ?></a>
+        <div style="display:flex; align-items:center; gap:10px; margin:8px;">
+          <a href="<?php echo htmlspecialchars($fp); ?>" target="_blank" style="color:#23412e;text-decoration:underline;"><?php echo htmlspecialchars(basename($fp)); ?></a>
+          <button onclick="replaceProof(<?php echo $id; ?>, <?php echo $pid; ?>)" style="border:1px solid #e5e7eb; background:#f3f4f6; color:#111827; padding:6px 10px; border-radius:8px; cursor:pointer;">Replace</button>
+          <button onclick="removeProof(<?php echo $id; ?>, <?php echo $pid; ?>)" style="border:1px solid #e5e7eb; background:#fee2e2; color:#b91c1c; padding:6px 10px; border-radius:8px; cursor:pointer;">Remove</button>
+        </div>
       <?php endif; ?>
     <?php endforeach; ?>
   </div>
   <?php endif; ?>
+  <div class="section-title">Attach Proof</div>
+  <div style="padding:10px;">
+    <input type="file" id="addProofInput" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple style="margin-bottom:8px;">
+    <button onclick="addProofs(<?php echo $id; ?>)" style="border:1px solid #23412e; background:#23412e; color:#fff; padding:8px 14px; border-radius:8px; cursor:pointer;">Upload</button>
+    <div style="margin-top:8px; font-size:0.85rem; color:#6b7280;">Uploading proof is optional. You can add, replace, or remove files anytime.</div>
+  </div>
+  <script>
+    function addProofs(reportId){
+      var input = document.getElementById('addProofInput');
+      if(!input || !input.files || input.files.length===0){ alert('Select files to upload.'); return; }
+      var fd = new FormData();
+      fd.append('action','add_proof');
+      fd.append('report_id', String(reportId));
+      for(var i=0;i<input.files.length;i++){ fd.append('proof[]', input.files[i]); }
+      fetch('submit_report.php',{ method:'POST', body: fd })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(!d || !d.success){ alert(d && d.message ? d.message : 'Upload failed'); return; }
+          location.reload();
+        })
+        .catch(function(){ alert('Upload failed'); });
+    }
+    function removeProof(reportId, proofId){
+      var body = new URLSearchParams({ action:'delete_proof', report_id:String(reportId), proof_id:String(proofId) });
+      fetch('submit_report.php',{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(!d || !d.success){ alert('Remove failed'); return; } location.reload(); })
+        .catch(function(){ alert('Remove failed'); });
+    }
+    function replaceProof(reportId, proofId){
+      var tmp = document.createElement('input');
+      tmp.type = 'file';
+      tmp.accept = '.jpg,.jpeg,.png,.pdf,.doc,.docx';
+      tmp.onchange = function(){
+        if(!tmp.files || tmp.files.length===0) return;
+        var fd = new FormData();
+        fd.append('action','add_proof');
+        fd.append('report_id', String(reportId));
+        fd.append('proof[]', tmp.files[0]);
+        fetch('submit_report.php',{ method:'POST', body: fd })
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            if(!d || !d.success){ alert(d && d.message ? d.message : 'Replace failed'); return; }
+            var body = new URLSearchParams({ action:'delete_proof', report_id:String(reportId), proof_id:String(proofId) });
+            return fetch('submit_report.php',{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body });
+          })
+          .then(function(r){ if(!r) return; return r.json(); })
+          .then(function(d2){ location.reload(); })
+          .catch(function(){ alert('Replace failed'); });
+      };
+      tmp.click();
+    }
+  </script>
 </body>
 </html>

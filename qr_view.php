@@ -370,6 +370,9 @@ if (empty($error)) {
             }
             unset($_SESSION['just_confirmed_ref'], $_SESSION['just_confirmed_time']);
         }
+        if (isset($_GET['just_scanned']) && $_GET['just_scanned'] === '1') {
+            $justConfirmed = true;
+        }
         $showConfirmPopup = !empty($_SESSION['confirm_popup']);
         if ($showConfirmPopup) {
             unset($_SESSION['confirm_popup']);
@@ -381,13 +384,13 @@ if (empty($error)) {
             $data['ui_msg'] = 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.';
         } else {
             $s = strtolower($data['status']);
-            if ($s === 'approved') {
+            if ($s === 'approved' || $s === 'permission_granted') {
             $oneTimeTables = ['guest_forms', 'reservations', 'resident_reservations'];
             if ($data['scanned_at'] && in_array($data['table'], $oneTimeTables, true) && !$justConfirmed) {
                 $data['ui_state'] = 'used';
                 $data['ui_title'] = 'PASS ALREADY USED';
                 $data['ui_color'] = '#f59e0b'; // Orange
-                $data['ui_msg'] = 'This pass has already been scanned.';
+                $data['ui_msg'] = 'QR pass already scanned.';
             } else {
                 $data['ui_state'] = 'valid';
                 $data['ui_title'] = 'VALID ENTRY PASS';

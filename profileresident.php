@@ -432,7 +432,7 @@ if ($stmt) {
     while ($row = $res->fetch_assoc()) {
         $activities[] = [
             'type' => 'report',
-            'title' => 'Report - ' . ($row['nature'] ?? 'Incident'),
+            'title' => 'Report Incident - ' . ($row['nature'] ?? 'Incident'),
             'details' => '',
             'report_id' => $row['id'] ?? null,
             'subject' => $row['subject'] ?? '',
@@ -973,6 +973,7 @@ body.account-blocked { overflow: hidden; }
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'permission_granted') !== false) $displayStatus = 'Access Granted';
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
+                  if ($s === 'new') $displayStatus = 'Filed';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
                   if ($pay === 'rejected' && $att >= 3) {
@@ -1064,6 +1065,7 @@ body.account-blocked { overflow: hidden; }
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'permission_granted') !== false) $displayStatus = 'Access Granted';
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
+                  if ($s === 'new') $displayStatus = 'Filed';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
                   if ($pay === 'rejected' && $att >= 3) {
@@ -1556,6 +1558,7 @@ body.account-blocked { overflow: hidden; }
     s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
     if(s.indexOf('access granted')!==-1 || s.indexOf('permission granted')!==-1) return 'Access Granted';
     if(s.indexOf('moved to history')!==-1) return 'Denied';
+    if(s === 'new') return 'Filed';
     return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
   var notifCountEl=document.getElementById('notifCount');
