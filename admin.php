@@ -1348,12 +1348,7 @@ function renderVerifyReceiptsCard($con){
                     $existingReason = trim((string)($row['denial_reason'] ?? ''));
                     $readonlyAttr = ($ps === 'pending_update') ? " readonly" : "";
                     $valueAttr = ($ps === 'pending_update' ? " value='" . htmlspecialchars($existingReason, ENT_QUOTES) . "'" : "");
-                    echo "<span class='reason-input-wrap'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                    if ($ps === 'pending_update') {
-                      echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                    }
-                    echo "</span>";
+                    echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                     echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                     echo "</form>";
                   } else {
@@ -1363,12 +1358,7 @@ function renderVerifyReceiptsCard($con){
                     $existingReason = trim((string)($row['denial_reason'] ?? ''));
                     $readonlyAttr = ($ps === 'pending_update') ? " readonly" : "";
                     $valueAttr = ($ps === 'pending_update' ? " value=\'' . htmlspecialchars($existingReason, ENT_QUOTES) . '\'" : "");
-                    echo '<span class="reason-input-wrap">';
-                    echo '<input type="text" name="denial_reason" class="denial-reason" placeholder="Reason" required maxlength="255"' . $readonlyAttr . $valueAttr . '>';
-                    if ($ps === 'pending_update') {
-                      echo '<button type="button" class="edit-reason-btn" onclick="window.toggleReasonEdit(this)"><i class="fa-solid fa-pencil"></i></button>';
-                    }
-                    echo '</span>';
+                    echo '<input type="hidden" name="denial_reason" class="denial-reason"' . $valueAttr . '>';
                     echo '<button type="submit" class="btn btn-reject" onclick="return openDenyModal(this.closest(\'form\'))"><i class="fa-solid fa-xmark"></i> Reject</button>';
                     echo '</form>';
                   }
@@ -4613,16 +4603,8 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                         echo "<input type='hidden' name='action' value='deny_request'>";
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                        $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                         $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
-                        $wrapStyle = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
-                        echo "<span class='reason-input-wrap'$wrapStyle>";
-                        echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                        if ($payStatusLower === 'pending_update') {
-                          echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                        }
-                        echo "</span>";
+                        echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                         echo "</form>";
                       } else {
@@ -4630,16 +4612,8 @@ body.modal-open { overflow: hidden; }
                         echo "<input type='hidden' name='reservation_id' value='" . intval($resIdMatch) . "'>";
                         echo "<input type='hidden' name='action' value='reject_receipt'>";
                         echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                        $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                         $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($denialReasonVal ?? '')), ENT_QUOTES) . "'" : "");
-                        $wrapStyle2 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
-                        echo "<span class='reason-input-wrap'$wrapStyle2>";
-                        echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
-                        echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                        if ($payStatusLower === 'pending_update') {
-                          echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                        }
-                        echo "</span>";
+                        echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                         echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                         echo "</form>";
                       }
@@ -4657,7 +4631,7 @@ body.modal-open { overflow: hidden; }
                   echo "<input type='hidden' name='reservation_id' value='" . $req['id'] . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='resident_guest_forms'>";
-                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'>";
+                  echo "<input type='hidden' name='denial_reason' class='denial-reason'>";
                   echo "<button type='submit' class='btn " . ($disabled ? "btn-disabled" : "btn-reject") . "' " . ($disabled ? "disabled title='Verify payment receipt first'" : "") . " onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                   echo "</form>";
                   } elseif ($approval_status == 'denied' || $approval_status == 'cancelled') {
@@ -5240,14 +5214,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                   echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                   echo "<input type='hidden' name='action' value='deny_request'>";
                   echo "<input type='hidden' name='redirect_page' value='requests'>";
-                  $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                   $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                  echo "<span class='reason-input-wrap'>";
-                  echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                  if ($payStatusLower === 'pending_update') {
-                    echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                  }
-                  echo "</span>";
+                  echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                   echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                   echo "</form>";
                 } else if ($payStatusLower !== 'rejected') {
@@ -5269,16 +5237,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
-                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      $wrapStyle3 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
-                      echo "<span class='reason-input-wrap'$wrapStyle3>";
-                      echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                      if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                      }
-                      echo "</span>";
+                      echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                       echo "</form>";
                     } else {
@@ -5286,16 +5246,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='requests'>";
-                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      $wrapStyle4 = ($payStatusLower === 'pending_update') ? " style='background:#fee2e2;color:#991b1b;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;margin:6px 0;'" : "";
-                      echo "<span class='reason-input-wrap'$wrapStyle4>";
-                      echo "<span style='white-space:nowrap;font-weight:600;'>Reason:</span>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' style='flex:1;min-width:0;' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                      if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' style='margin-left:auto' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                      }
-                      echo "</span>";
+                      echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
                     }
@@ -5480,14 +5432,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                     echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                     echo "<input type='hidden' name='action' value='deny_request'>";
                     echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                    $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                     $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                    echo "<span class='reason-input-wrap'>";
-                    echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                    if ($payStatusLower === 'pending_update') {
-                      echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                    }
-                    echo "</span>";
+                    echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                     echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                     echo "</form>";
                   }
@@ -5512,14 +5458,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='deny_request'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      echo "<span class='reason-input-wrap'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                      if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                      }
-                      echo "</span>";
+                      echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Deny</button>";
                       echo "</form>";
                     } else {
@@ -5527,14 +5467,8 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                       echo "<input type='hidden' name='reservation_id' value='" . intval($rr['id']) . "'>";
                       echo "<input type='hidden' name='action' value='reject_receipt'>";
                       echo "<input type='hidden' name='redirect_page' value='visitor_requests'>";
-                      $readonlyAttr = ($payStatusLower === 'pending_update') ? " readonly" : "";
                       $valueAttr = ($payStatusLower === 'pending_update' ? " value='" . htmlspecialchars(trim((string)($rr['denial_reason'] ?? '')), ENT_QUOTES) . "'" : "");
-                      echo "<span class='reason-input-wrap'>";
-                      echo "<input type='text' name='denial_reason' class='denial-reason' placeholder='Reason' required maxlength='255'".$readonlyAttr.$valueAttr.">";
-                      if ($payStatusLower === 'pending_update') {
-                        echo "<button type='button' class='edit-reason-btn' onclick='window.toggleReasonEdit(this)'><i class='fa-solid fa-pencil'></i></button>";
-                      }
-                      echo "</span>";
+                      echo "<input type='hidden' name='denial_reason' class='denial-reason'".$valueAttr.">";
                       echo "<button type='submit' class='btn btn-reject' onclick='return openDenyModal(this.closest(\"form\"))'><i class='fa-solid fa-xmark'></i> Reject</button>";
                       echo "</form>";
                     }
