@@ -546,7 +546,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         });
       }
       if(input){ input.addEventListener('change', update); }
-      if(refInput){ refInput.addEventListener('input', update); }
+      if(refInput){
+        refInput.addEventListener('input', function(){
+          const cleaned = (refInput.value || '').replace(/\D+/g, '').slice(0, 13);
+          if (refInput.value !== cleaned) { refInput.value = cleaned; }
+          update();
+        });
+      }
       if(removeBtn){ removeBtn.addEventListener('click', function(){ input.value=''; update(); }); }
       if(form){
         form.addEventListener('submit', function(e){
