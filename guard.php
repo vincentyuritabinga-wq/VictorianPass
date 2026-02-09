@@ -471,6 +471,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
   $start = $startParam ? date('Y-m-d', strtotime($startParam)) : date('Y-m-d');
   $end = $endParam ? date('Y-m-d', strtotime($endParam)) : date('Y-m-d', strtotime('+7 day'));
   $rows = [];
+  $scannedToday = [];
+  $scanRes = $con->query("SELECT DISTINCT ref_code FROM entry_scans WHERE DATE(scanned_at) = CURDATE()");
+  if ($scanRes) {
+    while ($sr = $scanRes->fetch_assoc()) {
+      $code = trim((string)($sr['ref_code'] ?? ''));
+      if ($code !== '') { $scannedToday[$code] = true; }
+    }
+  }
   $normalize = function($v){
     if(!$v) return null;
     $formats = [
@@ -489,6 +497,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
   if ($chkGFStart && $chkGFStart->num_rows > 0) { $hasGFStart = true; }
   $chkGFEnd = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
   if ($chkGFEnd && $chkGFEnd->num_rows > 0) { $hasGFEnd = true; }
+  $hasResDate = false;
+  $chkResDate = $con->query("SHOW COLUMNS FROM reservations LIKE 'reservation_date'");
+  if ($chkResDate && $chkResDate->num_rows > 0) { $hasResDate = true; }
+  $hasRRResDate = false;
+  $chkRRResDate = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'reservation_date'");
+  if ($chkRRResDate && $chkRRResDate->num_rows > 0) { $hasRRResDate = true; }
+  $hasRRStartTime = false;
+  $chkRRStartTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'start_time'");
+  if ($chkRRStartTime && $chkRRStartTime->num_rows > 0) { $hasRRStartTime = true; }
+  $hasRREndTime = false;
+  $chkRREndTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
+  if ($chkRREndTime && $chkRREndTime->num_rows > 0) { $hasRREndTime = true; }
   $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, start_date, end_date, TRIM(approval_status) AS approval_status, approval_date, " . ($hasGFStart ? "start_time" : "NULL AS start_time") . ", " . ($hasGFEnd ? "end_time" : "NULL AS end_time") . " FROM guest_forms WHERE LOWER(TRIM(approval_status))='approved'");
   if ($resGF) {
     while ($r = $resGF->fetch_assoc()) {
@@ -497,10 +517,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
+      $code = (string)($r['ref_code'] ?? '');
+      if($code !== '' && isset($scannedToday[$code])) continue;
       $st = !empty($r['start_time']) ? $r['start_time'] : ( !empty($r['visit_time']) ? (preg_match('/^\d{1,2}:\d{2}$/', $r['visit_time']) ? ($r['visit_time'] . ':00') : $r['visit_time']) : null );
       $et = !empty($r['end_time']) ? $r['end_time'] : null;
       $rows[] = [
-        'code' => $r['ref_code'],
+        'code' => $code,
         'name' => ($nm !== '' ? $nm : '-'),
         'type' => 'Guest Entry',
         'start_date' => $sd,
@@ -511,37 +533,50 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       ];
     }
   }
-  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, r.start_time, r.end_time, r.approval_date, TRIM(COALESCE(r.approval_status, r.status)) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE LOWER(TRIM(COALESCE(r.approval_status, r.status)))='approved'");
+  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, " . ($hasResDate ? "r.reservation_date" : "NULL AS reservation_date") . ", r.start_time, r.end_time, r.approval_date, TRIM(r.approval_status) AS approval_status, TRIM(r.status) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name, gf.start_date AS gf_start_date, gf.end_date AS gf_end_date, gf.visit_date AS gf_visit_date, gf.approval_date AS gf_approval_date, rr.start_date AS rr_start_date, rr.end_date AS rr_end_date, rr.approval_date AS rr_approval_date, " . ($hasRRStartTime ? "rr.start_time" : "NULL AS rr_start_time") . ", " . ($hasRREndTime ? "rr.end_time" : "NULL AS rr_end_time") . " FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code LEFT JOIN resident_reservations rr ON rr.ref_code = r.ref_code WHERE (LOWER(TRIM(r.approval_status))='approved' OR LOWER(TRIM(r.status))='approved')");
   if ($resR) {
     while ($r = $resR->fetch_assoc()) {
-      $sd = $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
-      $ed = $normalize($r['end_date'] ?? '') ?: $sd;
+      $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: $normalize($r['rr_start_date'] ?? '') ?: $normalize($r['gf_start_date'] ?? '') ?: $normalize($r['gf_visit_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null) ?: ($r['rr_approval_date'] ? date('Y-m-d', strtotime($r['rr_approval_date'])) : null) ?: ($r['gf_approval_date'] ? date('Y-m-d', strtotime($r['gf_approval_date'])) : null);
+      $ed = $normalize($r['end_date'] ?? '') ?: $normalize($r['rr_end_date'] ?? '') ?: $normalize($r['gf_end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
+      $code = (string)($r['ref_code'] ?? '');
+      if($code !== '' && isset($scannedToday[$code])) continue;
+      $approvalRaw = trim((string)($r['approval_status'] ?? ''));
+      $statusRaw = trim((string)($r['status'] ?? ''));
+      $approvalLower = strtolower($approvalRaw);
+      $statusLower = strtolower($statusRaw);
+      $displayStatus = ($approvalLower === 'approved') ? $approvalRaw : (($statusLower === 'approved') ? $statusRaw : ($approvalRaw !== '' ? $approvalRaw : $statusRaw));
       $full = trim(($r['ep_full_name'] ?? '')) ?: trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? '')) ?: trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
       $bookingFor = strtolower(trim($r['booking_for'] ?? ''));
       $accountType = strtolower(trim($r['account_type'] ?? ''));
       $hasGuestRef = !empty($r['guest_ref_code']) || !empty($r['guest_id']);
       $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($r['entry_pass_id']);
+      $st = $r['start_time'] ?? null;
+      if(!$st && !empty($r['rr_start_time'])) { $st = $r['rr_start_time']; }
+      $et = $r['end_time'] ?? null;
+      if(!$et && !empty($r['rr_end_time'])) { $et = $r['rr_end_time']; }
       $rows[] = [
-        'code' => $r['ref_code'],
+        'code' => $code,
         'name' => $full,
         'type' => ($isVisitor ? 'Visitor Reservation' : 'Resident Reservation'),
         'start_date' => $sd,
         'end_date' => $ed,
-        'start_time' => $r['start_time'] ?? null,
-        'end_time' => $r['end_time'] ?? null,
-        'status' => $r['status']
+        'start_time' => $st,
+        'end_time' => $et,
+        'status' => $displayStatus
       ];
     }
   }
-  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, rr.start_time, rr.end_time, rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(rr.approval_status)='approved'");
+  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, " . ($hasRRResDate ? "rr.reservation_date" : "NULL AS reservation_date") . ", rr.start_time, rr.end_time, rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(rr.approval_status)='approved'");
   if ($resRR) {
     while ($r = $resRR->fetch_assoc()) {
-      $sd = $normalize($r['start_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
+      $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
       $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
+      $code = (string)($r['ref_code'] ?? '');
+      if($code !== '' && isset($scannedToday[$code])) continue;
       $fullResident = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
       $fullGuest = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
       $bookingFor = strtolower(trim($r['booking_for'] ?? ''));
@@ -550,7 +585,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($r['entry_pass_id']);
       $full = ($isVisitor && $fullGuest !== '') ? $fullGuest : $fullResident;
       $rows[] = [
-        'code' => $r['ref_code'],
+        'code' => $code,
         'name' => $full,
         'type' => ($isVisitor ? 'Visitor Reservation' : 'Resident Reservation'),
         'start_date' => $sd,

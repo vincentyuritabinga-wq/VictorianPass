@@ -2081,7 +2081,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         html+='<div class="item-extra-info-only">';
     }
     
-    if(showStatusLabel){
+    var lowerLabel=String(label||'').toLowerCase();
+    if(showStatusLabel && lowerLabel !== 'pending' && lowerLabel !== 'approved'){
       html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">'+label+'</span></div>';
     }
     var noteClass='item-extra-note'+((type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts) < 3)?' note-error':'');

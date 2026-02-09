@@ -2283,7 +2283,8 @@ body.account-blocked { overflow: hidden; }
         html+='<div class="item-extra-body">';
         html+='<div class="item-extra-info-only">';
       }
-      if(showStatusLabel){
+      var lowerLabel=String(label||'').toLowerCase();
+      if(showStatusLabel && lowerLabel !== 'pending' && lowerLabel !== 'approved'){
         html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">'+label+'</span></div>';
       }
     var noteClass='item-extra-note'+((type==='reservation' && paymentStatus==='rejected' && (isNaN(attempts)?0:attempts) < 3)?' note-error':'');
@@ -2333,7 +2334,10 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-title">Incident Status</div>';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      var lowerLabel=String(label||'').toLowerCase();
+      if(lowerLabel !== 'pending' && lowerLabel !== 'approved'){
+        html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      }
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       html+='</div>';
       var reportSubject = li.getAttribute('data-report-subject') || '';
@@ -2379,7 +2383,10 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-title">Request Details</div>';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      var lowerLabel=String(label||'').toLowerCase();
+      if(lowerLabel !== 'pending' && lowerLabel !== 'approved'){
+        html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(status)+'">'+label+'</span></div>';
+      }
       if(statusNote) html+='<div class="item-extra-note">'+esc(statusNote)+'</div>';
       if(summaryText) html+='<div class="item-extra-summary">'+esc(summaryText)+'</div>';
       html+='</div></div></div>';
