@@ -592,21 +592,15 @@ function getPendingRequestsCount($con) {
 
 function getPendingResidentRequestsCountNew($con) {
     $q = "
-      SELECT COUNT(*) AS c FROM (
-        SELECT COALESCE(NULLIF(r.ref_code,''), CONCAT('res-', r.id)) AS code
-        FROM reservations r
-        LEFT JOIN users u ON r.user_id = u.id
-        WHERE r.approval_status = 'pending'
-          AND (u.user_type = 'resident' OR u.user_type IS NULL)
-        UNION
-        SELECT COALESCE(NULLIF(rr.ref_code,''), CONCAT('rr-', rr.id)) AS code
-        FROM resident_reservations rr
-        WHERE rr.approval_status = 'pending'
-        UNION
-        SELECT COALESCE(NULLIF(gf.ref_code,''), CONCAT('gf-', gf.id)) AS code
-        FROM guest_forms gf
-        WHERE gf.approval_status = 'pending'
-      ) t
+      SELECT COUNT(DISTINCT COALESCE(NULLIF(r.ref_code,''), CONCAT('res-', r.id))) AS c
+      FROM reservations r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)
+        AND r.amenity IS NOT NULL
+        AND u.user_type = 'resident'
+        AND (r.booking_for IS NULL OR r.booking_for = 'resident')
+        AND (r.approval_status IS NULL OR TRIM(LOWER(r.approval_status)) IN ('', 'pending'))
+        AND (r.status IS NULL OR TRIM(LOWER(r.status)) IN ('', 'pending'))
     ";
     if ($r = $con->query($q)) { if ($row = $r->fetch_assoc()) { return intval($row['c']); } }
     return 0;
@@ -617,7 +611,9 @@ function getPendingVisitorRequestsCountNew($con) {
       SELECT COUNT(DISTINCT COALESCE(NULLIF(r.ref_code,''), CONCAT('res-', r.id))) AS c
       FROM reservations r
       JOIN users u ON r.user_id = u.id
-      WHERE r.approval_status = 'pending' AND u.user_type = 'visitor'
+      WHERE (r.approval_status IS NULL OR TRIM(LOWER(r.approval_status)) IN ('', 'pending'))
+        AND (r.status IS NULL OR TRIM(LOWER(r.status)) IN ('', 'pending'))
+        AND u.user_type = 'visitor'
     ";
     if ($r = $con->query($q)) { if ($row = $r->fetch_assoc()) { return intval($row['c']); } }
     return 0;
@@ -945,13 +941,17 @@ function getMonthlyResidentAmenityCounts($con, $start, $end){
             WHERE r.amenity IS NOT NULL AND r.amenity <> ''
               AND (r.entry_pass_id IS NULL OR r.entry_pass_id = 0)
               AND (u.user_type = 'resident' OR u.user_type IS NULL)
-              AND r.created_at BETWEEN ? AND ?
+              AND LOWER(TRIM(COALESCE(r.approval_status, r.status))) = 'approved'
+              AND (r.status IS NULL OR LOWER(TRIM(r.status)) NOT IN ('cancelled','deleted','moved_to_history'))
+              AND (r.approval_status IS NULL OR LOWER(TRIM(r.approval_status)) NOT IN ('cancelled','denied','deleted','moved_to_history'))
+              AND COALESCE(r.approval_date, r.created_at) BETWEEN ? AND ?
             GROUP BY r.amenity
             UNION ALL
             SELECT rr.amenity, COUNT(*) AS cnt
             FROM resident_reservations rr
             WHERE rr.amenity IS NOT NULL AND rr.amenity <> ''
-              AND rr.created_at BETWEEN ? AND ?
+              AND LOWER(TRIM(rr.approval_status)) = 'approved'
+              AND COALESCE(rr.approval_date, rr.created_at) BETWEEN ? AND ?
             GROUP BY rr.amenity
           ) x
           GROUP BY amenity
@@ -975,7 +975,10 @@ function getMonthlyVisitorAmenityCounts($con, $start, $end){
           LEFT JOIN users u ON r.user_id = u.id
           WHERE r.amenity IS NOT NULL AND r.amenity <> ''
             AND ((r.entry_pass_id IS NOT NULL AND r.entry_pass_id <> 0) OR u.user_type = 'visitor' OR r.account_type = 'visitor')
-            AND r.created_at BETWEEN ? AND ?
+            AND LOWER(TRIM(COALESCE(r.approval_status, r.status))) = 'approved'
+            AND (r.status IS NULL OR LOWER(TRIM(r.status)) NOT IN ('cancelled','deleted','moved_to_history'))
+            AND (r.approval_status IS NULL OR LOWER(TRIM(r.approval_status)) NOT IN ('cancelled','denied','deleted','moved_to_history'))
+            AND COALESCE(r.approval_date, r.created_at) BETWEEN ? AND ?
           GROUP BY r.amenity
           ORDER BY total DESC, r.amenity ASC";
   $stmt = $con->prepare($sql);
@@ -996,19 +999,24 @@ function getMonthlyMostRequestedAmenities($con, $start, $end){
             SELECT r.amenity, COUNT(*) AS cnt
             FROM reservations r
             WHERE r.amenity IS NOT NULL AND r.amenity <> ''
-              AND r.created_at BETWEEN ? AND ?
+              AND LOWER(TRIM(COALESCE(r.approval_status, r.status))) = 'approved'
+              AND (r.status IS NULL OR LOWER(TRIM(r.status)) NOT IN ('cancelled','deleted','moved_to_history'))
+              AND (r.approval_status IS NULL OR LOWER(TRIM(r.approval_status)) NOT IN ('cancelled','denied','deleted','moved_to_history'))
+              AND COALESCE(r.approval_date, r.created_at) BETWEEN ? AND ?
             GROUP BY r.amenity
             UNION ALL
             SELECT rr.amenity, COUNT(*) AS cnt
             FROM resident_reservations rr
             WHERE rr.amenity IS NOT NULL AND rr.amenity <> ''
-              AND rr.created_at BETWEEN ? AND ?
+              AND LOWER(TRIM(rr.approval_status)) = 'approved'
+              AND COALESCE(rr.approval_date, rr.created_at) BETWEEN ? AND ?
             GROUP BY rr.amenity
             UNION ALL
             SELECT gf.amenity, COUNT(*) AS cnt
             FROM guest_forms gf
             WHERE gf.amenity IS NOT NULL AND gf.amenity <> ''
-              AND gf.created_at BETWEEN ? AND ?
+              AND LOWER(TRIM(gf.approval_status)) = 'approved'
+              AND COALESCE(gf.approval_date, gf.created_at) BETWEEN ? AND ?
             GROUP BY gf.amenity
           ) x
           GROUP BY amenity
@@ -1055,6 +1063,7 @@ function getMonthlyIncidentReports($con, $start, $end){
           FROM incident_reports ir
           LEFT JOIN users u ON ir.user_id = u.id
           WHERE ir.created_at BETWEEN ? AND ?
+            AND (ir.status IS NULL OR LOWER(TRIM(ir.status)) NOT IN ('cancelled','rejected'))
           ORDER BY ir.created_at ASC";
   $stmt = $con->prepare($sql);
   if ($stmt) {
@@ -1070,11 +1079,22 @@ function getMonthlyIncidentReports($con, $start, $end){
 function getMonthlyPaymentTransactions($con, $start, $end){
   $rows = [];
   if (!($con instanceof mysqli)) return $rows;
+  $hasPoolType = false;
+  $chk = $con->query("SHOW COLUMNS FROM reservations LIKE 'pool_booking_type'");
+  if ($chk && $chk->num_rows > 0) { $hasPoolType = true; }
+  $poolCol = $hasPoolType ? "r.pool_booking_type" : "'' AS pool_booking_type";
   $sql = "SELECT r.ref_code, r.gcash_reference_number, r.payment_status, r.receipt_uploaded_at, r.created_at,
-                 r.account_type, r.entry_pass_id, u.user_type
+                 r.account_type, r.entry_pass_id, u.user_type, r.amenity, r.persons, r.price, ".$poolCol.",
+                 u.first_name, u.middle_name, u.last_name,
+                 ep.full_name AS ep_full_name, ep.middle_name AS ep_middle_name, ep.last_name AS ep_last_name,
+                 gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name, gf.resident_user_id
           FROM reservations r
           LEFT JOIN users u ON r.user_id = u.id
+          LEFT JOIN entry_passes ep ON r.entry_pass_id = ep.id
+          LEFT JOIN guest_forms gf ON gf.ref_code = r.ref_code
           WHERE (r.receipt_path IS NOT NULL OR r.payment_status IN ('submitted','verified','rejected','pending_update','pending'))
+            AND (r.status IS NULL OR LOWER(TRIM(r.status)) NOT IN ('cancelled','deleted','moved_to_history'))
+            AND (r.approval_status IS NULL OR LOWER(TRIM(r.approval_status)) NOT IN ('cancelled','denied','deleted','moved_to_history'))
             AND COALESCE(r.receipt_uploaded_at, r.created_at) BETWEEN ? AND ?
           ORDER BY COALESCE(r.receipt_uploaded_at, r.created_at) ASC";
   $stmt = $con->prepare($sql);
@@ -2463,111 +2483,220 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
   $m = normalizeMonthValue($_GET['month']);
   $report = getMonthlySummaryData($con, $m);
   $monthLabel = $report['label'];
-  $rows = [];
-  $rows[] = ["1-Month Summary Report - $monthLabel"];
-  $rows[] = [""];
-  $rows[] = ["Resident Amenity Reservations (by type)"];
-  $rows[] = ["Amenity","Total"];
-  if (!empty($report['resident_amenities'])) {
-    foreach ($report['resident_amenities'] as $r) { $rows[] = [$r['amenity'], $r['total']]; }
-  } else {
-    $rows[] = ["No resident amenity reservations", "0"];
-  }
-  $rows[] = [""];
-  $rows[] = ["Visitor Amenity Reservations (by type)"];
-  $rows[] = ["Amenity","Total"];
-  if (!empty($report['visitor_amenities'])) {
-    foreach ($report['visitor_amenities'] as $r) { $rows[] = [$r['amenity'], $r['total']]; }
-  } else {
-    $rows[] = ["No visitor amenity reservations", "0"];
-  }
-  $rows[] = [""];
-  $rows[] = ["Most Requested Amenities (Total Reservations)"];
-  $rows[] = ["Amenity","Total"];
-  if (!empty($report['most_requested'])) {
-    foreach ($report['most_requested'] as $r) { $rows[] = [$r['amenity'], $r['total']]; }
-  } else {
-    $rows[] = ["No amenity reservations", "0"];
-  }
-  $rows[] = [""];
-  $rows[] = ["Approved Guest Requests"];
-  $rows[] = ["Ref Code","Resident","Guest","Dates","Amenity","Approved At"];
-  if (!empty($report['approved_guest_requests'])) {
-    foreach ($report['approved_guest_requests'] as $r) {
-      $resident = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
-      if ($resident === '') { $resident = '-'; }
-      $guest = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
-      if ($guest === '') { $guest = '-'; }
-      $sd = $r['start_date'] ?? ($r['visit_date'] ?? '');
-      $ed = $r['end_date'] ?? '';
-      $dateLabel = $sd;
-      if ($ed && $ed !== $sd) { $dateLabel = $sd . ' to ' . $ed; }
-      $approvedAt = $r['approval_date'] ?? $r['created_at'] ?? '';
-      $rows[] = [$r['ref_code'] ?? '', $resident, $guest, $dateLabel, $r['amenity'] ?? '', $approvedAt];
+  $colName = function($i){ $s=''; $i=intval($i); while($i>=0){ $s=chr(($i%26)+65).$s; $i=intval($i/26)-1; } return $s; };
+  $amenityOrder = ['Pool','Clubhouse','Basketball Court','Tennis Court'];
+  $mapCounts = function($rows) use ($amenityOrder){
+    $map = [];
+    foreach ($amenityOrder as $a) { $map[$a] = 0; }
+    if (!empty($rows)) {
+      foreach ($rows as $r) {
+        $a = $r['amenity'] ?? '';
+        if ($a === '') continue;
+        if (!isset($map[$a])) { $map[$a] = 0; }
+        $map[$a] += intval($r['total'] ?? 0);
+      }
     }
-  } else {
-    $rows[] = ["No approved guest requests", "", "", "", "", ""];
-  }
-  $rows[] = [""];
-  $rows[] = ["Reported Incidents"];
-  $rows[] = ["Report ID","Resident","Details","Status","Date Added"];
-  if (!empty($report['incident_reports'])) {
-    foreach ($report['incident_reports'] as $r) {
-      $resident = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
-      if ($resident === '') { $resident = $r['complainant'] ?? '-'; }
-      $details = $r['nature'] ?? '';
-      if ($details === '') { $details = $r['other_concern'] ?? ''; }
-      $rows[] = ["IR-".intval($r['id']), $resident, $details, $r['status'] ?? '', $r['created_at'] ?? ''];
-    }
-  } else {
-    $rows[] = ["No incident reports", "", "", "", ""];
-  }
-  $rows[] = [""];
-  $rows[] = ["Payment Transactions Activity"];
-  $rows[] = ["Ref Code","User Type","GCash Reference Number","Status","Date Added"];
+    $list = [];
+    foreach ($map as $a => $t) { $list[] = ['amenity' => $a, 'total' => $t]; }
+    return $list;
+  };
+  $residentList = $mapCounts($report['resident_amenities'] ?? []);
+  $visitorList = $mapCounts($report['visitor_amenities'] ?? []);
+  $cards = $report['cards'] ?? [];
+  $residentTotal = intval($cards['resident_amenity_total'] ?? 0);
+  $visitorTotal = intval($cards['visitor_amenity_total'] ?? 0);
+  $totalAmenity = $residentTotal + $visitorTotal;
+  $paymentTotal = intval($cards['payment_transactions_total'] ?? 0);
+  $totalRevenue = 0.0;
   if (!empty($report['payment_transactions'])) {
     foreach ($report['payment_transactions'] as $r) {
-      $type = $r['account_type'] ?? ($r['user_type'] ?? '');
-      if (!$type && !empty($r['entry_pass_id'])) { $type = 'visitor'; }
-      if ($type === '') { $type = 'unknown'; }
-      $date = $r['receipt_uploaded_at'] ?? $r['created_at'] ?? '';
-      $rows[] = [$r['ref_code'] ?? '', ucfirst(strtolower($type)), $r['gcash_reference_number'] ?? '', $r['payment_status'] ?? '', $date];
+      $ps = strtolower($r['payment_status'] ?? '');
+      if ($ps === 'verified') { $totalRevenue += floatval($r['price'] ?? 0); }
+    }
+  }
+  $grid = [];
+  $colOffset = 2;
+  $mergeCells = [];
+  $setCell = function($r, $c, $v, $s = 0) use (&$grid, $colOffset){
+    if (!isset($grid[$r])) { $grid[$r] = []; }
+    $grid[$r][$c + $colOffset] = ['v' => $v, 's' => $s];
+  };
+  $merge = function($r1, $c1, $r2, $c2) use (&$mergeCells, $colName, $colOffset){
+    $mergeCells[] = $colName($c1 + $colOffset - 1).$r1.':'.$colName($c2 + $colOffset - 1).$r2;
+  };
+  $row = 1;
+  $setCell($row, 4, 'VICTORIAN HEIGHTS SUBDIVISION', 1);
+  $row++;
+  $setCell($row, 4, 'Victorianpass: Monthly Summary Report', 2);
+  $row++;
+  $setCell($row, 4, 'For the month of '.$monthLabel, 2);
+  $row++;
+  $setCell($row, 8, 'Date', 8);
+  $setCell($row, 9, date('m/d/Y'), 9);
+  $row += 2;
+  $setCell($row, 1, 'Victorianpass Amenity Reservation Data', 3); $merge($row, 1, $row, 9);
+  $row++;
+  $setCell($row, 1, 'Resident', 3); $merge($row, 1, $row, 4);
+  $setCell($row, 6, 'Visitor', 3); $merge($row, 6, $row, 9);
+  $row++;
+  $setCell($row, 1, 'Amenity', 4);
+  $setCell($row, 2, 'Total', 4);
+  $setCell($row, 6, 'Amenity', 4);
+  $setCell($row, 7, 'Total', 4);
+  $row++;
+  $maxAmenityRows = max(count($residentList), count($visitorList));
+  for ($i = 0; $i < $maxAmenityRows; $i++) {
+    $rRow = $row + $i;
+    $rAmen = $residentList[$i]['amenity'] ?? '';
+    $rTot = $residentList[$i]['total'] ?? 0;
+    $vAmen = $visitorList[$i]['amenity'] ?? '';
+    $vTot = $visitorList[$i]['total'] ?? 0;
+    $setCell($rRow, 1, $rAmen, 5);
+    $setCell($rRow, 2, $rTot, 7);
+    $setCell($rRow, 6, $vAmen, 5);
+    $setCell($rRow, 7, $vTot, 7);
+  }
+  $row = $row + $maxAmenityRows + 1;
+  $setCell($row, 1, 'Overall Summary', 3); $merge($row, 1, $row, 9);
+  $row++;
+  $setCell($row, 1, 'Metric', 4);
+  $setCell($row, 2, 'Total', 4);
+  $metrics = [
+    ['Resident Amenity Reservations', $residentTotal],
+    ['Visitor Amenity Reservations', $visitorTotal],
+    ['Total Amenity Reservations', $totalAmenity],
+    ['Payment Transactions', $paymentTotal],
+    ['Total Revenue (Verified)', number_format($totalRevenue, 2, '.', '')]
+  ];
+  foreach ($metrics as $mRow) {
+    $row++;
+    $setCell($row, 1, $mRow[0], 5);
+    $setCell($row, 2, $mRow[1], 7);
+  }
+  $row += 2;
+  $setCell($row, 1, 'Most Requested Amenities', 3); $merge($row, 1, $row, 9);
+  $row++;
+  $setCell($row, 1, 'Amenity', 4);
+  $setCell($row, 2, 'Total', 4);
+  $mostRows = $report['most_requested'] ?? [];
+  if (!empty($mostRows)) {
+    foreach ($mostRows as $r) {
+      $row++;
+      $setCell($row, 1, $r['amenity'] ?? '', 5);
+      $setCell($row, 2, $r['total'] ?? 0, 7);
     }
   } else {
-    $rows[] = ["No payment transactions", "", "", "", ""];
+    $row++;
+    $setCell($row, 1, 'No amenity reservations', 5);
+    $setCell($row, 2, '0', 7);
   }
-  $rows[] = [""];
-  $rows[] = ["Guard Scheduled Arrivals (Admin Approved)"];
-  $rows[] = ["Code","Name","Type","Dates","Amenity","Status"];
-  if (!empty($report['scheduled_arrivals'])) {
-    foreach ($report['scheduled_arrivals'] as $r) {
-      $sd = $r['start_date'] ?? '';
-      $ed = $r['end_date'] ?? '';
-      $dateLabel = $sd;
-      if ($ed && $ed !== $sd) { $dateLabel = $sd . ' to ' . $ed; }
-      $rows[] = [$r['code'] ?? '', $r['name'] ?? '', $r['type'] ?? '', $dateLabel, $r['amenity'] ?? '', $r['status'] ?? ''];
+  $row += 2;
+  $setCell($row, 1, 'Transaction Data', 3); $merge($row, 1, $row, 9);
+  $row++;
+  $headers = ['Ref No.','Name','User Type','Amenity','Package','Pax','GCash Ref No.','Price','Date'];
+  foreach ($headers as $i => $h) { $setCell($row, $i + 1, $h, 4); }
+  $totalSales = 0.0;
+  if (!empty($report['payment_transactions'])) {
+    foreach ($report['payment_transactions'] as $r) {
+      $row++;
+      $userType = '';
+      $name = '';
+      if (!empty($r['resident_user_id'])) {
+        $userType = 'Resident Guest';
+        $name = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
+      } else {
+        $isVisitor = (!empty($r['entry_pass_id']) || strtolower($r['account_type'] ?? '') === 'visitor' || strtolower($r['user_type'] ?? '') === 'visitor');
+        if ($isVisitor) {
+          $userType = 'Visitor';
+          $name = trim(($r['ep_full_name'] ?? '').' '.($r['ep_middle_name'] ?? '').' '.($r['ep_last_name'] ?? ''));
+          if ($name === '') {
+            $name = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
+          }
+        } else {
+          $userType = 'Resident';
+          $name = trim(($r['first_name'] ?? '').' '.($r['middle_name'] ?? '').' '.($r['last_name'] ?? ''));
+        }
+      }
+      if ($name === '') { $name = '-'; }
+      if ($userType === '') { $userType = 'Unknown'; }
+      $amenity = $r['amenity'] ?? '';
+      $poolType = strtolower($r['pool_booking_type'] ?? '');
+      $package = '-';
+      if ($amenity === 'Pool') { $package = ($poolType === 'whole_pool') ? 'Whole' : 'Shared'; }
+      $pax = $r['persons'] ?? '';
+      $price = isset($r['price']) ? number_format(floatval($r['price']), 2, '.', '') : '';
+      $totalSales += floatval($r['price'] ?? 0);
+      $dateRaw = $r['receipt_uploaded_at'] ?? $r['created_at'] ?? '';
+      $date = $dateRaw ? date('m/d/Y', strtotime($dateRaw)) : '';
+      $setCell($row, 1, $r['ref_code'] ?? '', 5);
+      $setCell($row, 2, $name, 5);
+      $setCell($row, 3, $userType, 5);
+      $setCell($row, 4, $amenity, 5);
+      $setCell($row, 5, $package, 5);
+      $setCell($row, 6, $pax, 7);
+      $setCell($row, 7, $r['gcash_reference_number'] ?? '', 5);
+      $setCell($row, 8, $price, 7);
+      $setCell($row, 9, $date, 5);
     }
+    $row++;
+    $setCell($row, 7, 'Total Sales', 6);
+    $setCell($row, 8, number_format($totalSales, 2, '.', ''), 7);
   } else {
-    $rows[] = ["No scheduled arrivals", "", "", "", "", ""];
+    $row++;
+    $setCell($row, 1, 'No payment transactions', 5);
   }
+  $maxRow = 0;
+  foreach ($grid as $r => $cols) { if ($r > $maxRow) { $maxRow = $r; } }
   if (!class_exists('ZipArchive')) {
-    $mkRow = function($cells) {
+    $styleId = function($s){
+      $s = intval($s);
+      if ($s === 1) return 'sTitle';
+      if ($s === 2) return 'sCenterBold';
+      if ($s === 3) return 'sSection';
+      if ($s === 4) return 'sHeader';
+      if ($s === 5) return 'sCell';
+      if ($s === 6) return 'sCellBold';
+      if ($s === 7) return 'sCellCenter';
+      if ($s === 8) return 'sRightBold';
+      if ($s === 9) return 'sRight';
+      return '';
+    };
+    $mkRow = function($rowIndex, $maxCol) use (&$grid, $styleId) {
       $out = '<Row>';
-      foreach ($cells as $c) {
-        $safe = htmlspecialchars((string)$c, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $out .= '<Cell><Data ss:Type="String">'.$safe.'</Data></Cell>';
+      for ($c = 1; $c <= $maxCol; $c++) {
+        $val = isset($grid[$rowIndex][$c]) ? $grid[$rowIndex][$c]['v'] : '';
+        $sid = isset($grid[$rowIndex][$c]) ? $styleId($grid[$rowIndex][$c]['s'] ?? 0) : '';
+        $safe = htmlspecialchars((string)$val, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $styleAttr = $sid !== '' ? ' ss:StyleID="'.$sid.'"' : '';
+        $out .= '<Cell'.$styleAttr.'><Data ss:Type="String">'.$safe.'</Data></Cell>';
       }
       $out .= '</Row>';
       return $out;
     };
+    $styles = '<Styles>'
+      .'<Style ss:ID="sTitle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1" ss:Size="16"/><Interior ss:Color="#DAF2D0" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sCenterBold"><Alignment ss:Horizontal="Center"/><Font ss:Bold="1"/></Style>'
+      .'<Style ss:ID="sSection"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1"/><Interior ss:Color="#DAF2D0" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sHeader"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:Bold="1"/><Interior ss:Color="#DAF2D0" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sCell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sCellBold"><Font ss:Bold="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sCellCenter"><Alignment ss:Horizontal="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      .'<Style ss:ID="sRightBold"><Alignment ss:Horizontal="Right"/><Font ss:Bold="1"/></Style>'
+      .'<Style ss:ID="sRight"><Alignment ss:Horizontal="Right"/></Style>'
+      .'</Styles>';
     $xml = '<?xml version="1.0"?>' .
            '<?mso-application progid="Excel.Sheet"?>' .
            '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' .
            'xmlns:o="urn:schemas-microsoft-com:office:office" ' .
            'xmlns:x="urn:schemas-microsoft-com:office:excel" ' .
            'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' .
+           $styles .
            '<Worksheet ss:Name="Summary"><Table>';
-    foreach ($rows as $r) { $xml .= $mkRow($r); }
+    for ($i = 0; $i < 11; $i++) {
+      $w = [20,20,140,100,120,120,90,70,140,90,90][$i];
+      $xml .= '<Column ss:Width="'.$w.'"/>';
+    }
+    for ($r = 1; $r <= $maxRow; $r++) { $xml .= $mkRow($r, 11); }
     $xml .= '</Table></Worksheet></Workbook>';
     $fname = 'Monthly_Summary_'.$m.'.xls';
     header('Content-Type: application/vnd.ms-excel');
@@ -2575,26 +2704,105 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
     echo $xml;
     exit;
   }
-  $colName = function($i){ $s=''; $i=intval($i); while($i>=0){ $s=chr(($i%26)+65).$s; $i=intval($i/26)-1; } return $s; };
   $xmlRows = [];
-  $makeRow = function($cells, $rowIndex) use ($colName){
-    $i = 0; $xml = '<row r="'.$rowIndex.'">';
-    foreach ($cells as $c) {
-      $ref = $colName($i) . $rowIndex;
-      $safe = htmlspecialchars((string)$c, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-      $xml .= '<c r="'.$ref.'" t="inlineStr"><is><t>'.$safe.'</t></is></c>';
-      $i++;
+  for ($r = 1; $r <= $maxRow; $r++) {
+    if (!isset($grid[$r])) continue;
+    ksort($grid[$r]);
+    $xml = '<row r="'.$r.'">';
+    foreach ($grid[$r] as $c => $cell) {
+      $ref = $colName($c - 1) . $r;
+      $safe = htmlspecialchars((string)$cell['v'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+      $sAttr = isset($cell['s']) && intval($cell['s']) > 0 ? ' s="'.intval($cell['s']).'"' : '';
+      $xml .= '<c r="'.$ref.'" t="inlineStr"'.$sAttr.'><is><t>'.$safe.'</t></is></c>';
     }
     $xml .= '</row>';
-    return $xml;
-  };
-  $idx = 1;
-  foreach ($rows as $r) { $xmlRows[] = $makeRow($r, $idx++); }
-  $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'.implode('', $xmlRows).'</sheetData></worksheet>';
+    $xmlRows[] = $xml;
+  }
+  $colsXml = '<cols>';
+  $widths = [5,5,20,14,16,16,12,10,20,12,12];
+  for ($i = 1; $i <= 11; $i++) {
+    $w = $widths[$i - 1] ?? 12;
+    $colsXml .= '<col min="'.$i.'" max="'.$i.'" width="'.$w.'" customWidth="1"/>';
+  }
+  $colsXml .= '</cols>';
+  $mergeXml = '';
+  if (!empty($mergeCells)) {
+    $mergeXml = '<mergeCells count="'.count($mergeCells).'">';
+    foreach ($mergeCells as $mRef) { $mergeXml .= '<mergeCell ref="'.$mRef.'"/>'; }
+    $mergeXml .= '</mergeCells>';
+  }
+  $logoPath = __DIR__ . '/images/logo.svg';
+  $hasLogo = false;
+  $logoData = '';
+  if (is_file($logoPath)) {
+    $logoData = file_get_contents($logoPath);
+    if ($logoData !== false && $logoData !== '') { $hasLogo = true; }
+  }
+  $drawingTag = '';
+  if ($hasLogo) { $drawingTag = '<drawing r:id="rId1"/>'; }
+  $sheetNs = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  if ($hasLogo) { $sheetNs .= ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'; }
+  $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet '.$sheetNs.'>'.$colsXml.'<sheetData>'.implode('', $xmlRows).'</sheetData>'.$mergeXml.$drawingTag.'</worksheet>';
+  $drawingXml = '';
+  $drawingRels = '';
+  $sheetRels = '';
+  if ($hasLogo) {
+    $drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      .'<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+      .'<xdr:oneCellAnchor>'
+      .'<xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>'
+      .'<xdr:ext cx="2286000" cy="914400"/>'
+      .'<xdr:pic>'
+      .'<xdr:nvPicPr><xdr:cNvPr id="1" name="Logo"/><xdr:cNvPicPr/></xdr:nvPicPr>'
+      .'<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+      .'<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
+      .'</xdr:pic>'
+      .'<xdr:clientData/>'
+      .'</xdr:oneCellAnchor>'
+      .'</xdr:wsDr>';
+    $drawingRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.svg"/></Relationships>';
+    $sheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>';
+  }
+  $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    .'<fonts count="3">'
+    .'<font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
+    .'<font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
+    .'<font><b/><sz val="16"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>'
+    .'</fonts>'
+    .'<fills count="3">'
+    .'<fill><patternFill patternType="none"/></fill>'
+    .'<fill><patternFill patternType="gray125"/></fill>'
+    .'<fill><patternFill patternType="solid"><fgColor rgb="FFDAF2D0"/><bgColor indexed="64"/></patternFill></fill>'
+    .'</fills>'
+    .'<borders count="2">'
+    .'<border><left/><right/><top/><bottom/><diagonal/></border>'
+    .'<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border>'
+    .'</borders>'
+    .'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    .'<cellXfs count="10">'
+    .'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    .'<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+    .'<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
+    .'<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+    .'<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+    .'<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>'
+    .'<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>'
+    .'<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
+    .'<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>'
+    .'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="right"/></xf>'
+    .'</cellXfs>'
+    .'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    .'</styleSheet>';
   $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="Summary" sheetId="1" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>';
   $relsRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
-  $workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
-  $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>';
+  $workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+  $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>';
+  if ($hasLogo) {
+    $contentTypes .= '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>';
+    $contentTypes .= '<Default Extension="svg" ContentType="image/svg+xml"/>';
+  }
+  $contentTypes .= '</Types>';
   $zip = new ZipArchive();
   $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
   $zip->open($tmp, ZipArchive::OVERWRITE);
@@ -2602,7 +2810,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_monthly_report' && iss
   $zip->addFromString('_rels/.rels', $relsRels);
   $zip->addFromString('xl/workbook.xml', $workbookXml);
   $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
+  $zip->addFromString('xl/styles.xml', $stylesXml);
   $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+  if ($hasLogo) {
+    $zip->addFromString('xl/drawings/drawing1.xml', $drawingXml);
+    $zip->addFromString('xl/drawings/_rels/drawing1.xml.rels', $drawingRels);
+    $zip->addFromString('xl/worksheets/_rels/sheet1.xml.rels', $sheetRels);
+    $zip->addFromString('xl/media/image1.svg', $logoData);
+  }
   $zip->close();
   $fname = 'Monthly_Summary_'.$m.'.xlsx';
   header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

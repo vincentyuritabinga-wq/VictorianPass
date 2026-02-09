@@ -126,6 +126,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_incidents') {
         FROM incident_reports ir
         LEFT JOIN users u ON ir.user_id = u.id
         WHERE COALESCE(ir.escalated_to_admin,0) = 0
+          AND (ir.status IS NULL OR LOWER(TRIM(ir.status)) <> 'cancelled')
         ORDER BY ir.created_at DESC";
   $res = $con->query($q);
   if ($res) {
@@ -268,7 +269,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_notifications') {
   ensureNotificationsTable($con);
   $items = [];
   $incidentCount = 0;
-  $ir = $con->query("SELECT id, status, created_at, UNIX_TIMESTAMP(created_at) AS epoch FROM incident_reports WHERE COALESCE(escalated_to_admin,0) = 0 ORDER BY created_at DESC LIMIT 12");
+  $ir = $con->query("SELECT id, status, created_at, UNIX_TIMESTAMP(created_at) AS epoch FROM incident_reports WHERE COALESCE(escalated_to_admin,0) = 0 AND (status IS NULL OR LOWER(TRIM(status)) <> 'cancelled') ORDER BY created_at DESC LIMIT 12");
   if ($ir) {
     while ($row = $ir->fetch_assoc()) {
       $items[] = [
