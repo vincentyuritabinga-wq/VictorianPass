@@ -462,7 +462,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
   $hasRREndTime = false;
   $chkRREndTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
   if ($chkRREndTime && $chkRREndTime->num_rows > 0) { $hasRREndTime = true; }
-  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date, amenity, " . ($hasGFResDate ? "reservation_date" : "NULL AS reservation_date") . ", " . ($hasGFVisitTime ? "visit_time AS start_time" : "NULL AS start_time") . ", NULL AS end_time, TRIM(approval_status) AS approval_status, approval_date FROM guest_forms WHERE LOWER(TRIM(approval_status)) IN ('approved','permission_granted')");
+  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date, amenity, " . ($hasGFResDate ? "reservation_date" : "NULL AS reservation_date") . ", " . ($hasGFVisitTime ? "visit_time AS start_time" : "NULL AS start_time") . ", NULL AS end_time, TRIM(approval_status) AS approval_status, approval_date FROM guest_forms WHERE LOWER(TRIM(approval_status))='approved'");
   if ($resGF) {
     while ($r = $resGF->fetch_assoc()) {
       $nm = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
@@ -483,7 +483,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       ];
     }
   }
-  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, r.amenity, " . ($hasResDate ? "r.reservation_date" : "NULL AS reservation_date") . ", " . ($hasResStartTime ? "r.start_time" : "NULL AS start_time") . ", " . ($hasResEndTime ? "r.end_time" : "NULL AS end_time") . ", r.approval_date, TRIM(COALESCE(r.approval_status, r.status)) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE LOWER(TRIM(COALESCE(r.approval_status, r.status))) IN ('approved','permission_granted')");
+  $resR = $con->query("SELECT r.ref_code, r.start_date, r.end_date, r.amenity, " . ($hasResDate ? "r.reservation_date" : "NULL AS reservation_date") . ", " . ($hasResStartTime ? "r.start_time" : "NULL AS start_time") . ", " . ($hasResEndTime ? "r.end_time" : "NULL AS end_time") . ", r.approval_date, TRIM(COALESCE(r.approval_status, r.status)) AS status, r.entry_pass_id, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, e.full_name AS ep_full_name, u.first_name, u.middle_name, u.last_name, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN entry_passes e ON r.entry_pass_id = e.id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE LOWER(TRIM(COALESCE(r.approval_status, r.status)))='approved'");
   if ($resR) {
     while ($r = $resR->fetch_assoc()) {
       $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
@@ -508,7 +508,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       ];
     }
   }
-  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, rr.amenity, " . ($hasRRResDate ? "rr.reservation_date" : "NULL AS reservation_date") . ", " . ($hasRRStartTime ? "rr.start_time" : "NULL AS start_time") . ", " . ($hasRREndTime ? "rr.end_time" : "NULL AS end_time") . ", rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(TRIM(rr.approval_status)) IN ('approved','permission_granted')");
+  $resRR = $con->query("SELECT rr.ref_code, rr.start_date, rr.end_date, rr.amenity, " . ($hasRRResDate ? "rr.reservation_date" : "NULL AS reservation_date") . ", " . ($hasRRStartTime ? "rr.start_time" : "NULL AS start_time") . ", " . ($hasRREndTime ? "rr.end_time" : "NULL AS end_time") . ", rr.approval_date, rr.approval_status, u.first_name, u.middle_name, u.last_name, r2.booking_for, r2.account_type, r2.guest_id, r2.guest_ref_code, r2.entry_pass_id, gf2.visitor_first_name, gf2.visitor_middle_name, gf2.visitor_last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id LEFT JOIN reservations r2 ON rr.ref_code = r2.ref_code LEFT JOIN guest_forms gf2 ON rr.ref_code = gf2.ref_code WHERE LOWER(TRIM(rr.approval_status))='approved'");
   if ($resRR) {
     while ($r = $resRR->fetch_assoc()) {
       $sd = $normalize($r['start_date'] ?? '') ?: $normalize($r['reservation_date'] ?? '') ?: ($r['approval_date'] ? date('Y-m-d', strtotime($r['approval_date'])) : null);
