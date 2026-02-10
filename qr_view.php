@@ -550,8 +550,8 @@ if (empty($error)) {
             text-align: center;
         }
         .btn-confirm {
-            background: #23412e;
-            color: #fff;
+            background: #d4af37;
+            color: #1f2937;
             width: 100%;
             padding: 15px;
             border: none;
@@ -560,7 +560,17 @@ if (empty($error)) {
             font-size: 1rem;
             cursor: pointer;
             text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(35, 65, 46, 0.3);
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.35);
+        }
+        .btn-confirm:active,
+        .btn-confirm.is-clicked {
+            background: #b8892e;
+            box-shadow: 0 2px 8px rgba(184, 137, 46, 0.5);
+            transform: translateY(1px);
+        }
+        .btn-confirm:focus-visible {
+            outline: 2px solid #f5d76e;
+            outline-offset: 2px;
         }
         .btn-confirm:disabled {
             background: #444;
@@ -769,6 +779,17 @@ if (empty($error)) {
         });
     </script>
     <?php endif; ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            document.querySelectorAll('.btn-confirm').forEach(function(btn){
+                if (btn.getAttribute('type') !== 'submit') { return; }
+                btn.addEventListener('click', function(){
+                    if (btn.disabled) { return; }
+                    btn.classList.add('is-clicked');
+                });
+            });
+        });
+    </script>
 
 </body>
 </html>
