@@ -944,6 +944,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     if(before) return before+' <span class="notif-reason">'+reason+'</span>';
     return '<span class="notif-reason">'+reason+'</span>';
   }
+  function formatNotifDisplay(message){
+    var formatted=formatNotifMessage(message||'');
+    var cleaned=String(formatted).replace(/Code:\s*[A-Z0-9\-]+/ig,'').replace(/\s+•\s*$/,'').replace(/\s{2,}/g,' ').trim();
+    return cleaned;
+  }
   function extractNotifCode(message){
     var m=String(message||'').match(/Code:\s*([A-Z0-9\-]+)/i);
     return m && m[1] ? m[1].toUpperCase() : '';
@@ -991,7 +996,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     for(var i=0;i<items.length;i++){
       var it=items[i]||{};
       var title=String(it.title||'').replace(/[<>]/g,'');
-      var message=formatNotifMessage(it.message||'');
+      var message=formatNotifDisplay(it.message||'');
       var time=formatNotifDateTime(it.created_at||it.time||'');
       html+='<div class="notif-popup-item"><div class="notif-popup-title">'+title+'</div><div class="notif-popup-sub">'+message+(time?' • '+time:'')+'</div></div>';
     }
@@ -1015,9 +1020,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         var code=String(it.code||'').replace(/[<>]/g,'');
         var title=String(it.title||'').replace(/[<>]/g,'');
         var status=String(it.status||'').replace(/[<>]/g,'');
-        var message=formatNotifMessage(it.message||'');
+        var message=formatNotifDisplay(it.message||'');
         var time=formatNotifDateTime(it.created_at||it.time||'');
-        var subText=message || ('Code: '+code+' • '+status);
+        var subText=message || status;
         html+='<div class="notif-item" data-code="'+code+'"><div class="notif-item-main"><div class="notif-item-title">'+title+'</div><div class="notif-item-sub">'+subText+'</div>';
         if(time) html+='<div class="notif-item-time">'+time+'</div>';
         html+='</div></div>';

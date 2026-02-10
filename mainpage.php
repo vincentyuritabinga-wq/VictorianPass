@@ -298,7 +298,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <span class="line"></span>
       </div>
 
-      <p class="tagline">Every home has a Story. Starts Your in a Place Worth Remembering</p>
+      <p class="tagline">Every home has a story — start yours in a place worth remembering.</p>
 
       <div class="action-buttons" style="margin-top: 30px; gap:15px; flex-wrap:wrap;">
         <?php if (!$isLoggedIn): ?>
@@ -338,7 +338,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <h2 class="section-title">About Us</h2>
     <div class="section-divider"></div>
     <div class="section-body">
-      <p>Victorian Heights subdivision is a gated residence that offers accessibility located at Dahlia Fairview, BRGY. Sauyo, Quezon City. It is a residential development by Swire Land Corporation that provides accessibility and exclusivity with a gated community with 222 houses and an estimated 2,220 residents, making it secure against harm and vulnerability. Furthermore, beautifully designed houses that cater to thousands of residents live within reach of convenience and service while getting the experience of peace in a suburban community .</p>
+      <p>Victorian Heights Subdivision is a gated residential community located along Dahlia, Fairview, Brgy. Sauyo, Quezon City. Developed by Swire Land Corporation, it offers both accessibility and exclusivity within a secure environment. The subdivision consists of 222 houses with an estimated population of about 2,220 residents, providing a safe and well-protected living space. In addition, the community features thoughtfully designed homes that allow residents to enjoy convenient access to essential services while experiencing peace and comfort in a suburban setting.
+
+</p>
       <img src="images/about subd.jpg" alt="Victorian Heights Subdivision" class="about-subdivision-photo">
     </div>
   </section>
@@ -350,22 +352,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <div class="amenity-card">
         <img src="images/communitypool.png" alt="Community Pool">
         <h3 class="title">Community Pool</h3>
-        <p class="desc">Relax and enjoy the pool with convenient reservation options.</p>
+        <p class="desc">Relax and enjoy the pool with easy and convenient reservation options.</p>
       </div>
       <div class="amenity-card">
         <img src="images/clubhouse.png" alt="Clubhouse">
         <h3 class="title">Clubhouse</h3>
-        <p class="desc">Host gatherings and events in the subdivision clubhouse.</p>
+        <p class="desc">A perfect venue for gatherings, celebrations, and community events within the subdivision.</p>
       </div>
       <div class="amenity-card">
         <img src="images/basketballcourt.png" alt="Basketball Court">
         <h3 class="title">Basketball Court</h3>
-        <p class="desc">Play and practice on our outdoor basketball court.</p>
+        <p class="desc">Our outdoor basketball court provides residents a space for recreation, sports, and fitness activities.</p>
       </div>
       <div class="amenity-card">
         <img src="images/tenniscourt.png" alt="Tennis Court">
         <h3 class="title">Tennis Court</h3>
-        <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
+        <p class="desc">Our tennis court offers residents a dedicated space for sports, recreation, and friendly matches.</p>
       </div>
     </div>
   </section>
@@ -379,17 +381,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <div class="about-card">
           <img src="images/as1.png" alt="Community Life">
           <h3>What You'll Find in Victorian Heights Subdivision?</h3>
-          <p>VictorianPass supports a connected and well-managed community. Residents enjoy secure living, convenient services, and organized processes that bring comfort, safety, and a sense of belonging.</p>
+          <p>At Victorian Heights, life is secure, convenient, and truly connected. With Victorian Pass, residents enjoy hassle-free access to amenities, streamlined services, and a community that’s organized for comfort, safety, and a genuine sense of belonging.</p>
         </div>
         <div class="about-card">
           <img src="images/as2.png" alt="Quick Response">
           <h3>Quick response</h3>
-          <p>QR-based entry and reservation workflows enable fast approvals and real-time updates for residents, visitors, and guards, streamlining actions for better control and safer operations.</p>
+          <p> QR-based entry and reservation systems allow fast approvals and real-time updates for residents, visitors, and security personnel, making processes smoother, safer, and easier to manage.</p>
         </div>
         <div class="about-card">
           <img src="images/as3.png" alt="A Shelter">
           <h3>A Shelter</h3>
-          <p>A welcoming, secure environment designed to offer comfort and confidence to every resident, with systems that protect and organize daily community life.</p>
+          <p>A safe and welcoming space that provides comfort and peace of mind for every resident, with systems in place to protect and organize daily community life.</p>
         </div>
       </div>
     </div>

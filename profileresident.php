@@ -1648,7 +1648,7 @@ body.account-blocked { overflow: hidden; }
     for(var i=0;i<items.length;i++){
       var it=items[i]||{};
       var title=String(it.title||'').replace(/[<>]/g,'');
-      var message=formatNotifMessage(it.message||'');
+      var message=formatNotifDisplay(it.message||'');
       var time=formatNotifDateTime(it.created_at||'');
       var t=String(it.type||'').toLowerCase();
       var subCls='notif-popup-sub'+(t==='error'?' notif-error':'');
@@ -2504,6 +2504,11 @@ body.account-blocked { overflow: hidden; }
     if(before) return before+' <span class="notif-reason">'+reason+'</span>';
     return '<span class="notif-reason">'+reason+'</span>';
   }
+  function formatNotifDisplay(message){
+    var formatted=formatNotifMessage(message||'');
+    var cleaned=String(formatted).replace(/Code:\s*[A-Z0-9\-]+/ig,'').replace(/\s+•\s*$/,'').replace(/\s{2,}/g,' ').trim();
+    return cleaned;
+  }
   function extractNotifCode(message){
     var m=String(message||'').match(/Code:\s*([A-Z0-9\-]+)/i);
     return m && m[1] ? m[1].toUpperCase() : '';
@@ -2555,7 +2560,7 @@ body.account-blocked { overflow: hidden; }
       for(var i=0;i<notifItems.length;i++){
         var it=notifItems[i]||{};
         var title=String(it.title||'').replace(/[<>]/g,'');
-        var message=formatNotifMessage(it.message||'');
+        var message=formatNotifDisplay(it.message||'');
         var time=formatNotifDateTime(it.created_at||'');
         var t=String(it.type||'').toLowerCase();
         var subCls='notif-item-sub'+(t==='error'?' notif-error':'');

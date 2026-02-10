@@ -914,7 +914,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <div class="info">
                 <div class="title-block">
                   <div class="name">Community Pool</div>
-                  <div class="amenity-short">Relax and enjoy the pool with convenient reservation options.</div>
+                  <div class="amenity-short">Relax and enjoy the pool with easy and convenient reservation options.</div>
                 </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
@@ -930,7 +930,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <div class="info">
                 <div class="title-block">
                   <div class="name">Clubhouse</div>
-                  <div class="amenity-short">Host gatherings and events in the subdivision clubhouse.</div>
+                  <div class="amenity-short">A perfect venue for gatherings, celebrations, and community events within the subdivision.</div>
                 </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
@@ -946,7 +946,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <div class="info">
                 <div class="title-block">
                   <div class="name">Basketball Court</div>
-                  <div class="amenity-short">Play and practice on our outdoor basketball court.</div>
+                  <div class="amenity-short">Our outdoor basketball court provides residents a space for recreation, sports, and fitness activities.</div>
                 </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
@@ -962,7 +962,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
               <div class="info">
                 <div class="title-block">
                   <div class="name">Tennis Court</div>
-                  <div class="amenity-short">Reserve time to enjoy a game at the tennis court.</div>
+                  <div class="amenity-short">Our tennis court offers residents a dedicated space for sports, recreation, and friendly matches.</div>
                 </div>
                 <div class="meta">
                   <button type="button" class="btn-link" data-action="view-desc">View Details</button>
@@ -1194,7 +1194,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                         <div id="dpAmountText" class="price-amount">₱0</div>
                       </div>
                       <input type="hidden" name="downpayment" id="downpaymentInput" value="">
-                      <small class="dp-info" style="display:block;margin-top:8px;padding:10px 12px;border-radius:10px;background:#f0faf2;border:1.5px solid #cfe6d4;color:#23412e;font-weight:600;">This is a partial payment (50%) of the total price. The remaining balance is paid onsite at the admin office.</small>
+                      <small class="dp-info" style="display:block;margin-top:8px;padding:10px 12px;border-radius:10px;background:#f0faf2;border:1.5px solid #cfe6d4;color:#23412e;font-weight:600;">This is a partial payment of 50% of the total price. The remaining balance can be paid onsite at the administration office.</small>
                       <small class="nonrefundable">Downpayment is non-refundable.</small>
                     </div>
                     <div id="submitWrap" class="res-item" style="margin-top:12px; display:none; gap:8px; align-items:center; flex-wrap:wrap;">
