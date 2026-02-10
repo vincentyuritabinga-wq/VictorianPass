@@ -1273,6 +1273,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
   const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth()+1).padStart(2,'0')}-${String(minDate.getDate()).padStart(2,'0')}`;
   const currentUserType="<?php echo isset($_SESSION['user_type']) ? htmlspecialchars($_SESSION['user_type'], ENT_QUOTES) : ''; ?>";
   let selectedStart=null,selectedEnd=null;
+  let endDateRangeError=false;
   let bookedDates=new Set();
   let availabilityCache=new Map();
   let availabilityToken=0;
@@ -1517,8 +1518,9 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     }
     function setEnd(ds){
       const sVal=document.getElementById('startDateInput').value||'';
-      if(sVal && ds < sVal){ showDateError('End date cannot be earlier than start date.'); return false; }
-      if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); return false; } }
+      if(sVal && ds < sVal){ endDateRangeError=false; showDateError('End date cannot be earlier than start date.'); return false; }
+      if(sVal){ const sD=new Date(sVal); const eD=new Date(ds); const diff=Math.floor((eD - sD)/(1000*60*60*24)); if(diff>6){ endDateRangeError=true; showDateError('Cannot book more than 1 week.'); return false; } }
+      endDateRangeError=false;
       selectedEnd=ds;
       document.getElementById('endDate').textContent=formatDateToMMDDYYYY(selectedEnd);
       document.getElementById('endDateInput').value=selectedEnd;
@@ -1569,7 +1571,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     document.getElementById('startDate').textContent='--';
     document.getElementById('startDateInput').value='';
     const single = document.getElementById('singleDayToggle')?.checked;
-    if(single){ selectedEnd=null; document.getElementById('endDate').textContent='--'; document.getElementById('endDateInput').value=''; }
+    if(single){ selectedEnd=null; document.getElementById('endDate').textContent='--'; document.getElementById('endDateInput').value=''; endDateRangeError=false; }
     document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
     evaluateCalendarAvailability();
     computeAvailability();
@@ -1585,6 +1587,7 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     selectedEnd=null;
     document.getElementById('endDate').textContent='--';
     document.getElementById('endDateInput').value='';
+    endDateRangeError=false;
     document.querySelectorAll('.calendar td').forEach(td=>{ td.classList.remove('active'); td.classList.remove('active-start'); td.classList.remove('active-end'); });
     evaluateCalendarAvailability();
     computeAvailability();
@@ -2789,17 +2792,23 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
     const hours=parseInt(document.getElementById('hoursInput')?.value||'0');
     if(!amen){ if(force||isDirty('amenityField')) setFieldWarning('amenityField','Please select an amenity.'); } else { setFieldWarning('amenityField',''); }
     if(!s){ if(force||isDirty('startDateInput')) showStartDateError('Start date is required.'); } else { showStartDateError(''); }
-    if(!eD){ if(force||isDirty('endDateInput')) showDateError('End date is required.'); }
+    if(!eD){
+      if(force||isDirty('endDateInput')){
+        if(endDateRangeError){ showDateError('Cannot book more than 1 week.'); }
+        else { showDateError('End date is required.'); }
+      }
+    }
     else {
       const sDVal=s; const eDVal=eD;
       if(sDVal){
         if(sDVal < minDateStr || eDVal < minDateStr){
           showStartDateError('Reservations must be made at least 1 day in advance.');
+          endDateRangeError=false;
           showDateError('');
         } else {
-          const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ showDateError('Cannot book more than 1 week.'); } else { showDateError(''); }
+          const sDate=new Date(sDVal); const eDate=new Date(eDVal); const diff=Math.floor((eDate - sDate)/(1000*60*60*24)); if(diff>6){ endDateRangeError=true; showDateError('Cannot book more than 1 week.'); } else { endDateRangeError=false; showDateError(''); }
         }
-      } else { showDateError(''); }
+      } else { endDateRangeError=false; showDateError(''); }
     }
     if(amen!=='Pool'){
       if(!st){ if(force||isDirty('startTimeInput')) setFieldWarning('startTimeInput','Start time is required.'); } else { setFieldWarning('startTimeInput',''); }
