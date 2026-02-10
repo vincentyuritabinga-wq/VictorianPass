@@ -6083,7 +6083,7 @@ function showVisitorDetails(id, source) {
             <div>
               <div class="section-title">${sectionTitle}</div>
               <div class="info-grid">
-                ${details.ref_code ? `<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${details.ref_code}</span></div>` : ''}
+                ${details.ref_code ? `<div class="info-row"><span class="info-label">Reference Code</span><span class="info-value">${details.ref_code}</span></div>` : ''}
                 ${details.amenity && details.amenity !== 'Guest Entry' ? `<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${details.amenity}</span></div>` : ''}
                 ${visitDateVal ? `<div class="info-row"><span class="info-label">Date</span><span class="info-value">${new Date(visitDateVal).toLocaleDateString()}${visitEndDateVal ? ' - ' + new Date(visitEndDateVal).toLocaleDateString() : ''}</span></div>` : ''}
                 ${(visitStartTimeVal || visitEndTimeVal) ? `<div class="info-row"><span class="info-label">Time</span><span class="info-value">${fmtTime(visitStartTimeVal)}${visitEndTimeVal ? ' - ' + fmtTime(visitEndTimeVal) : ''}</span></div>` : ''}
@@ -6192,15 +6192,10 @@ function showReservationDetails(reservationId, expectedType){
       const denialReason = (d.denial_reason||'').toString().trim();
       const showDenial = denialReason && (payStatus === 'rejected' || payStatus === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
       const waitNote = payStatus === 'rejected' ? ((att>=3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.') : '';
-      const receiptButton = (receiptPath && payStatus==='verified') ? (
-        `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, '${redirectPage}')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
-      ) : '';
       const receiptHtml = (receiptPath && payStatus==='verified') ? (
         `<div class="details-section" style="animation: fadeIn 0.5s ease;">
           <h4>Proof of Payment</h4>
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
-          <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
-          ${receiptButton}
         </div>`
       ) : '';
       const denialHtml = '';
@@ -6224,7 +6219,7 @@ function showReservationDetails(reservationId, expectedType){
           </div>` : ''}
           <div class="section-title">Reservation Details</div>
           <div class="info-grid">
-            ${d.ref_code?`<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
+            ${d.ref_code?`<div class="info-row"><span class="info-label">Reference Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
             ${d.amenity?`<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${d.amenity}</span></div>`:''}
             ${reservedBy?`<div class="info-row"><span class="info-label">Reserved By</span><span class="info-value">${reservedBy}</span></div>`:''}
             ${d.start_date?`<div class="info-row"><span class="info-label">Start Date</span><span class="info-value">${new Date(d.start_date).toLocaleDateString()}</span></div>`:''}
@@ -6338,15 +6333,10 @@ function showResidentReservationDetails(rrId){
       const att = parseInt(d.receipt_attempts||0, 10);
       const showDenial = denialReason && (ps === 'rejected' || ps === 'pending_update' || approvalStatus.includes('denied') || approvalStatus.includes('reject'));
       const waitNote = ps === 'rejected' ? ((att>=3) ? 'Denied — Max Attempts Reached. Payment rejected 3 times. No further uploads allowed.' : 'Wait for the updated proof.') : '';
-      const receiptButton = (receiptPath && ps==='verified') ? (
-        `<button type="button" class="btn btn-receipt" onclick="openReceiptModal('${receiptPath}', 0, 'resident_guest_forms')">${isPdf ? '<i class="fa-solid fa-file"></i> Open Receipt (PDF)' : '<i class="fa-solid fa-file"></i> Open Receipt'}</button>`
-      ) : '';
       const receiptHtml = (receiptPath && ps==='verified') ? (
         `<div class="details-section" style="animation: fadeIn 0.5s ease;">
           <h4>Proof of Payment</h4>
           ${isPdf ? `<a href="${receiptPath}" target="_blank" style="color:#23412e;font-weight:600;">Open uploaded proof (PDF)</a>` : `<a href="${receiptPath}" target="_blank"><img src="${receiptPath}" alt="Uploaded proof of payment" style="max-width:100%; height:auto; border-radius:8px; cursor:pointer;"></a>`}
-          <a href="${receiptPath}" download style="display:block; margin-top:10px; color:#23412e;">Download Receipt</a>
-          ${receiptButton}
         </div>`
       ) : '';
       const denialHtml = showDenial ? (
@@ -6375,7 +6365,7 @@ function showResidentReservationDetails(rrId){
             </div>` : ''}
             <div class="section-title">Reservation Details</div>
             <div class="info-grid">
-              ${d.ref_code?`<div class="info-row"><span class="info-label">Status Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
+              ${d.ref_code?`<div class="info-row"><span class="info-label">Reference Code</span><span class="info-value">${d.ref_code}</span></div>`:''}
               ${d.amenity?`<div class="info-row"><span class="info-label">Amenity</span><span class="info-value">${d.amenity}</span></div>`:''}
               ${reservedBy?`<div class="info-row"><span class="info-label">Reserved By</span><span class="info-value">${reservedBy}</span></div>`:''}
               ${d.start_date?`<div class="info-row"><span class="info-label">Start Date</span><span class="info-value">${new Date(d.start_date).toLocaleDateString()}</span></div>`:''}
