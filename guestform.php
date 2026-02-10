@@ -46,7 +46,7 @@ if (strlen($pClean) === 11 && strpos($pClean, '09') === 0) {
 
 $guestRows = [];
 if ($con instanceof mysqli) {
-  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? ORDER BY created_at DESC");
+  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' ORDER BY created_at DESC");
   if ($stmtG) {
     $stmtG->bind_param('i', $userId);
     $stmtG->execute();

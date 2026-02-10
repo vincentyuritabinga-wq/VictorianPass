@@ -1553,7 +1553,7 @@ function getResidentVisitorRequests($con) {
               LEFT JOIN reservations r ON r.ref_code = gf.ref_code
               LEFT JOIN users u ON gf.resident_user_id = u.id
               WHERE gf.resident_user_id IS NOT NULL
-              AND (gf.approval_status IS NULL OR (gf.approval_status != 'cancelled' AND gf.approval_status != 'completed'))
+              AND (gf.approval_status IS NULL OR (gf.approval_status NOT IN ('cancelled','completed','deleted','moved_to_history','permission_granted')))
               ORDER BY gf.created_at DESC";
     $res = $con->query($query);
     return ($res && $res->num_rows > 0) ? $res : false;
@@ -4856,11 +4856,15 @@ body.modal-open { overflow: hidden; }
                       echo "<button type='submit' class='btn btn-remove'><i class='fa-solid fa-trash'></i> Delete</button>";
                       echo "</form>";
                   } else {
-                      $approvedBy = !empty($req['approved_by']) ? "by Admin" : "";
-                      if ($approval_status === 'approved' && !empty($req['ref_code'])) {
-                        echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                      if ($approval_status === 'deleted') {
+                        echo "<span class='muted'>Deleted by Resident</span>";
+                      } else {
+                        $approvedBy = !empty($req['approved_by']) ? "by Admin" : "";
+                        if ($approval_status === 'approved' && !empty($req['ref_code'])) {
+                          echo "<a class='btn btn-qr' href='qr_view.php?code=" . urlencode($req['ref_code']) . "' target='_blank' style='margin-right:6px;'><i class='fa-solid fa-qrcode'></i> View QR</a>";
+                        }
+                        echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                       }
-                      echo "<span class='muted'>" . ucfirst($approval_status) . " $approvedBy</span>";
                   }
                   }
                   }
@@ -5751,7 +5755,7 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
           $hasArchived = false;
           
           // 1. Archived Guest Forms
-          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history', 'permission_granted') ORDER BY gf.updated_at DESC, gf.created_at DESC");
+          $gf = $con->query("SELECT gf.*, gf.visitor_first_name, gf.visitor_last_name, gf.updated_at FROM guest_forms gf WHERE gf.approval_status IN ('cancelled', 'completed', 'moved_to_history', 'permission_granted','deleted') ORDER BY gf.updated_at DESC, gf.created_at DESC");
           if ($gf) {
             while ($row = $gf->fetch_assoc()) {
                $hasArchived = true;
@@ -5759,6 +5763,9 @@ window.addEventListener('click', function(e){ var m=document.getElementById('rec
                if ($rawStatus === 'permission_granted') {
                  $statusLabel = 'Access Granted';
                  $badgeClass = 'badge-approved';
+               } elseif ($rawStatus === 'deleted') {
+                 $statusLabel = 'Deleted by Resident';
+                 $badgeClass = 'badge-rejected';
                } else {
                  $status = $rawStatus;
                  $badgeClass = ($status === 'completed' || $status === 'approved') ? 'badge-approved' : 'badge-rejected';

@@ -104,17 +104,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_
         $error = 'Guardian required: Approved for entry once accompanied by a guardian for amenity reservations.';
     } elseif (in_array($tbl, ['guest_forms', 'reservations', 'resident_reservations'])) {
         if ($tbl === 'guest_forms') {
-            $upStmt = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt = $con->prepare("UPDATE guest_forms SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history','deleted'))");
             $upStmt->bind_param('is', $sid, $ref);
             $upStmt->execute();
             $upStmt->close();
         } elseif ($tbl === 'reservations') {
-            $upStmt = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (status IS NULL OR status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt = $con->prepare("UPDATE reservations SET approval_status='permission_granted', status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (status IS NULL OR status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history','deleted'))");
             $upStmt->bind_param('is', $sid, $ref);
             $upStmt->execute();
             $upStmt->close();
         } elseif ($tbl === 'resident_reservations') {
-            $upStmt = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history'))");
+            $upStmt = $con->prepare("UPDATE resident_reservations SET approval_status='permission_granted', scanned_at = NOW(), updated_at = NOW() WHERE id = ? AND ref_code = ? AND (approval_status IS NULL OR approval_status NOT IN ('permission_granted','cancelled','denied','expired','moved_to_history','deleted'))");
             $upStmt->bind_param('is', $sid, $ref);
             $upStmt->execute();
             $upStmt->close();
@@ -229,7 +229,6 @@ if (empty($error)) {
             } elseif (!empty($startTime)) {
                 $timeRange = date('g:i A', strtotime($startTime));
             }
-
             $birthRaw = !empty($row['ep_birthdate']) ? $row['ep_birthdate'] : ($row['user_birthdate'] ?? null);
             $guardianBlocked = requiresGuardianBlock($birthRaw, true);
             $data = [
@@ -240,7 +239,8 @@ if (empty($error)) {
                 'name' => $fullName,
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
                 'validity_label' => $validityLabel,
-                'time_range' => $timeRange,
+                'schedule_date' => $validityLabel,
+                'schedule_time' => $timeRange,
                 'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt,
@@ -307,7 +307,6 @@ if (empty($error)) {
             } elseif (!empty($startTime)) {
                 $timeRange = date('g:i A', strtotime($startTime));
             }
-
             $birthRaw = $row['user_birthdate'] ?? null;
             $guardianBlocked = requiresGuardianBlock($birthRaw, true);
             $data = [
@@ -318,7 +317,8 @@ if (empty($error)) {
                 'name' => $fullName,
                 'amenity' => $row['amenity_name'] ?? 'Unknown',
                 'validity_label' => $validityLabel,
-                'time_range' => $timeRange,
+                'schedule_date' => $validityLabel,
+                'schedule_time' => $timeRange,
                 'pax' => isset($row['persons']) && $row['persons'] !== null ? (int)$row['persons'] : 1,
                 'status' => $statusVal,
                 'scanned_at' => $scannedAt,
@@ -397,6 +397,11 @@ if (empty($error)) {
                 $data['ui_color'] = '#22c55e'; // Green
                 $data['ui_msg'] = 'Access Granted';
             }
+            } elseif ($s === 'deleted') {
+            $data['ui_state'] = 'invalid';
+            $data['ui_title'] = 'PASS REVOKED';
+            $data['ui_color'] = '#ef4444';
+            $data['ui_msg'] = 'This guest pass has been revoked.';
             } elseif ($s === 'expired') {
             $data['ui_state'] = 'expired';
             $data['ui_title'] = 'EXPIRED PASS';
@@ -676,13 +681,6 @@ if (empty($error)) {
                     <span class="value"><?php echo htmlspecialchars($data['code']); ?></span>
                 </div>
                 
-                <?php if (isset($data['type_label']) && $data['type_label'] === 'Amenity' && !empty($data['validity_label'])): ?>
-                <div class="detail-row">
-                    <span class="label">Validity</span>
-                    <span class="value"><?php echo htmlspecialchars($data['validity_label']); ?></span>
-                </div>
-                <?php endif; ?>
-
                 <?php if (!empty($data['amenity'])): ?>
                 <div class="detail-row">
                     <span class="label">Amenity</span>
@@ -690,10 +688,24 @@ if (empty($error)) {
                 </div>
                 <?php endif; ?>
 
-                <?php if (!empty($data['time_range'])): ?>
+                <?php if (!empty($data['schedule_date'])): ?>
                 <div class="detail-row">
-                    <span class="label">Time</span>
-                    <span class="value"><?php echo htmlspecialchars($data['time_range']); ?></span>
+                    <span class="label">Reservation Date</span>
+                    <span class="value"><?php echo htmlspecialchars($data['schedule_date']); ?></span>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($data['schedule_time'])): ?>
+                <div class="detail-row">
+                    <span class="label">Reservation Time</span>
+                    <span class="value"><?php echo htmlspecialchars($data['schedule_time']); ?></span>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($data['scanned_at'])): ?>
+                <div class="detail-row">
+                    <span class="label">Scanned At</span>
+                    <span class="value"><?php echo htmlspecialchars(date('m/d/y g:i A', strtotime($data['scanned_at']))); ?></span>
                 </div>
                 <?php endif; ?>
 
@@ -730,6 +742,20 @@ if (empty($error)) {
                     <!-- Optional: Link to go home or something -->
                 <?php endif; ?>
             </div>
+            
+            <?php if (isset($data['type_label']) && $data['type_label'] === 'Amenity' && !empty($data['validity_label'])): ?>
+            <div class="details-section" style="margin-top:18px;">
+                <div class="details-title">Validity</div>
+                <div class="detail-row">
+                    <span class="label">Valid Dates</span>
+                    <span class="value"><?php echo htmlspecialchars($data['validity_label']); ?></span>
+                </div>
+                <div class="detail-row" style="border-bottom:none;">
+                    <span class="label">Reminder</span>
+                    <span class="value">QR code will expire once the reservation schedule ends. If your reservation is expired, this QR code can no longer be used.</span>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 

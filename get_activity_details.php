@@ -488,7 +488,7 @@ if (!$data) {
         $stClass = 'st-pending';
         $stLabel = 'Pending Review';
         $s = strtolower($data['status']);
-        if(strpos($s, 'approv')!==false) { $stClass = 'st-approved'; $stLabel = 'Approved'; }
+        if(strpos($s, 'approv')!==false || strpos($s, 'permission')!==false || strpos($s, 'granted')!==false) { $stClass = 'st-approved'; $stLabel = 'Approved'; }
         else if(strpos($s, 'denied')!==false || strpos($s, 'reject')!==false) { $stClass = 'st-denied'; $stLabel = 'Denied'; }
         else if(strpos($s, 'cancel')!==false) { $stClass = 'st-denied'; $stLabel = 'Cancelled'; }
         else if(strpos($s, 'expire')!==false) { $stClass = 'st-expired'; $stLabel = 'Expired'; }

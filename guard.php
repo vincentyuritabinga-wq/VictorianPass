@@ -462,7 +462,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
   $hasRREndTime = false;
   $chkRREndTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
   if ($chkRREndTime && $chkRREndTime->num_rows > 0) { $hasRREndTime = true; }
-  $resGF = $con->query("SELECT ref_code, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date, amenity, " . ($hasGFResDate ? "reservation_date" : "NULL AS reservation_date") . ", " . ($hasGFVisitTime ? "visit_time AS start_time" : "NULL AS start_time") . ", NULL AS end_time, TRIM(approval_status) AS approval_status, approval_date FROM guest_forms WHERE LOWER(TRIM(approval_status))='approved'");
+  $resGF = $con->query("SELECT gf.ref_code, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name, gf.visit_date, gf.start_date, gf.end_date, gf.amenity, " . ($hasGFResDate ? "gf.reservation_date" : "NULL AS reservation_date") . ", " . ($hasGFVisitTime ? "gf.visit_time AS start_time" : "NULL AS start_time") . ", NULL AS end_time, TRIM(gf.approval_status) AS approval_status, gf.approval_date, u.first_name AS res_first_name, u.middle_name AS res_middle_name, u.last_name AS res_last_name FROM guest_forms gf LEFT JOIN users u ON gf.resident_user_id = u.id WHERE LOWER(TRIM(gf.approval_status))='approved'");
   if ($resGF) {
     while ($r = $resGF->fetch_assoc()) {
       $nm = trim(($r['visitor_first_name'] ?? '').' '.($r['visitor_middle_name'] ?? '').' '.($r['visitor_last_name'] ?? ''));
@@ -470,9 +470,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_expected') {
       $ed = $normalize($r['end_date'] ?? '') ?: $sd;
       if(!$sd) continue;
       if($ed < $start || $sd > $end) continue;
+      $addedBy = trim(($r['res_first_name'] ?? '').' '.($r['res_middle_name'] ?? '').' '.($r['res_last_name'] ?? ''));
       $rows[] = [
         'code' => $r['ref_code'],
         'name' => ($nm !== '' ? $nm : '-'),
+        'added_by' => ($addedBy !== '' ? $addedBy : '-'),
         'type' => 'Guest Entry',
         'amenity' => $r['amenity'] ?? null,
         'start_date' => $sd,
@@ -1355,10 +1357,18 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
         <input type="date" id="expectedEnd">
         <button class="btn btn-view" id="applyExpected">Custom Range</button>
       </div>
+      <div style="margin:6px 30px 8px; font-weight:600; color:#2c3e50;">Amenity Reservation</div>
       <table id="expectedTable" class="history-table">
         <tr><th>Code</th><th>Name</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
         <tbody id="expectedBody">
           <tr id="expectedEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td></tr>
+        </tbody>
+      </table>
+      <div style="margin:16px 30px 8px; font-weight:600; color:#2c3e50;">Guest Entries</div>
+      <table id="expectedGuestTable" class="history-table">
+        <tr><th>Code</th><th>Added By</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+        <tbody id="expectedGuestBody">
+          <tr id="expectedGuestEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No guest entries in selected range</td></tr>
         </tbody>
       </table>
     </div>
@@ -1786,7 +1796,47 @@ function formatScheduleRow(r){
   if(timeLabel){ return `${startDateLabel} ${timeLabel}`; }
   return startDateLabel;
 }
-function renderExpected(rows){ const tbody=document.getElementById('expectedBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='expectedEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r||{}); const st=String(r.status||'').replace(/[_-]+/g,' '); const sts=st.replace(/\b\w/g,function(m){return m.toUpperCase();}); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${r.amenity||'-'}</td><td>${scheduleDisplay}</td><td>${sts}</td>`; tbody.appendChild(tr); }); }
+function renderExpected(rows){
+  const tbody=document.getElementById('expectedBody'); if(!tbody) return;
+  const guestBody=document.getElementById('expectedGuestBody');
+  tbody.innerHTML='';
+  if(guestBody) guestBody.innerHTML='';
+  const list=Array.isArray(rows)?rows:[];
+  const guestRows=[];
+  const otherRows=[];
+  list.forEach(r=>{ if(String(r.type||'').toLowerCase()==='guest entry'){ guestRows.push(r); } else { otherRows.push(r); } });
+  if(otherRows.length===0){
+    const tr=document.createElement('tr');
+    tr.id='expectedEmpty';
+    tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td>`;
+    tbody.appendChild(tr);
+  } else {
+    otherRows.forEach(r=>{
+      const tr=document.createElement('tr');
+      const scheduleDisplay=formatScheduleRow(r||{});
+      const st=String(r.status||'').replace(/[_-]+/g,' ');
+      const sts=st.replace(/\b\w/g,function(m){return m.toUpperCase();});
+      tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.name||'-'}</td><td>${r.type||'-'}</td><td>${r.amenity||'-'}</td><td>${scheduleDisplay}</td><td>${sts}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  if(!guestBody) return;
+  if(guestRows.length===0){
+    const tr=document.createElement('tr');
+    tr.id='expectedGuestEmpty';
+    tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No guest entries in selected range</td>`;
+    guestBody.appendChild(tr);
+    return;
+  }
+  guestRows.forEach(r=>{
+    const tr=document.createElement('tr');
+    const st=String(r.status||'').replace(/[_-]+/g,' ');
+    const sts=st.replace(/\b\w/g,function(m){return m.toUpperCase();});
+    const addedBy=r.added_by||'-';
+    tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedBy}</td><td>${r.type||'-'}</td><td>${r.amenity||'-'}</td><td>-</td><td>${sts}</td>`;
+    guestBody.appendChild(tr);
+  });
+}
 function formatInputDate(d){ const z=new Date(d); const mm=(z.getMonth()+1).toString().padStart(2,'0'); const dd=z.getDate().toString().padStart(2,'0'); const yyyy=z.getFullYear(); return `${yyyy}-${mm}-${dd}`; }
 function getRange(){ const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); const sv=s&&s.value?s.value:formatInputDate(new Date()); const ev=e&&e.value?e.value:formatInputDate(new Date(Date.now()+6*24*60*60*1000)); return {start:sv,end:ev}; }
 function loadExpected(start,end){ const rng = start&&end ? {start,end} : getRange(); const url = `guard.php?action=list_expected&start=${encodeURIComponent(rng.start)}&end=${encodeURIComponent(rng.end)}`; fetch(url).then(r=>r.json()).then(data=>{ if(data&&data.success){ renderExpected(data.entries||[]); } }).catch(_=>{}); }
@@ -1797,9 +1847,9 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(refreshNotifications, 60000);
   const s=document.getElementById('expectedStart'); const e=document.getElementById('expectedEnd'); if(s&&e){ const today=new Date(); const next=new Date(Date.now()+6*24*60*60*1000); s.value=formatInputDate(today); e.value=formatInputDate(next); }
   const apply=document.getElementById('applyExpected'); if(apply){ apply.addEventListener('click', function(){ const rng=getRange(); loadExpected(rng.start,rng.end); }); }
-  const wk=document.getElementById('weekFromStartBtn'); if(wk){ wk.addEventListener('click', function(){ const base=new Date(); const end=new Date(base.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(base); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
-  const tw=document.getElementById('thisWeekBtn'); if(tw){ tw.addEventListener('click', function(){ const now=new Date(); const start=new Date(now.getTime()); const day=start.getDay(); const diff=(day===0 ? -6 : 1 - day); start.setDate(start.getDate()+diff); const end=new Date(start.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
-  const n30=document.getElementById('next30Btn'); if(n30){ n30.addEventListener('click', function(){ const base=new Date(); const end=new Date(base.getTime()); end.setDate(end.getDate()+29); const sv=formatInputDate(base); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
+  const wk=document.getElementById('weekFromStartBtn'); if(wk){ wk.addEventListener('click', function(){ const today=new Date(); const day=today.getDay(); const daysToSunday=(7-day)%7; const thisWeekEnd=new Date(today.getTime()); thisWeekEnd.setDate(thisWeekEnd.getDate()+daysToSunday); const start=new Date(thisWeekEnd.getTime()); start.setDate(start.getDate()+1); const end=new Date(start.getTime()); end.setDate(end.getDate()+6); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
+  const tw=document.getElementById('thisWeekBtn'); if(tw){ tw.addEventListener('click', function(){ const today=new Date(); const day=today.getDay(); const daysToSunday=(7-day)%7; const start=new Date(today.getTime()); const end=new Date(today.getTime()); end.setDate(end.getDate()+daysToSunday); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
+  const n30=document.getElementById('next30Btn'); if(n30){ n30.addEventListener('click', function(){ const today=new Date(); const day=today.getDay(); const daysToSunday=(7-day)%7; const thisWeekEnd=new Date(today.getTime()); thisWeekEnd.setDate(thisWeekEnd.getDate()+daysToSunday); const start=new Date(thisWeekEnd.getTime()); start.setDate(start.getDate()+1+7); const end=new Date(start.getTime()); end.setDate(end.getDate()+29); const sv=formatInputDate(start); const ev=formatInputDate(end); const sIn=document.getElementById('expectedStart'); const eIn=document.getElementById('expectedEnd'); if(sIn) sIn.value=sv; if(eIn) eIn.value=ev; loadExpected(sv,ev); }); }
   if(s&&e){ s.addEventListener('change', function(){ if(!s.value) return; const base=new Date(s.value); const end=new Date(base.getTime()); end.setDate(end.getDate()+6); e.value=formatInputDate(end); }); }
   loadExpected();
   const inp = document.getElementById('scanCode');

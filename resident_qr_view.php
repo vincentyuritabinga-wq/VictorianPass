@@ -39,7 +39,10 @@ if ($con instanceof mysqli) {
         // Resident Personal QR Codes and Approved Guest QR Passes are permanently valid once approved.
         // Removed date-based expiry checks for guest passes.
 
-        if (($guest['approval_status'] ?? 'pending') !== 'approved') {
+        $gStatus = strtolower(trim($guest['approval_status'] ?? 'pending'));
+        if ($gStatus === 'deleted') {
+            $statusBadge = '<span class="badge disabled">Guest Pass Revoked</span>';
+        } elseif ($gStatus !== 'approved') {
             $statusBadge = '<span class="badge disabled">Not Approved</span>';
         } else {
             $statusBadge = '<span class="badge active">Valid Guest</span>';

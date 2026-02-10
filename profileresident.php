@@ -257,7 +257,7 @@ if ($con instanceof mysqli) {
         $con->query("ALTER TABLE guest_forms ADD COLUMN scanned_at DATETIME NULL");
     }
 }
-$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, r.scanned_at, r.receipt_attempts, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status <> 'deleted' AND r.approval_status <> 'deleted' ORDER BY r.created_at DESC");
+$stmt = $con->prepare("SELECT 'reservation' as type, r.amenity, r.start_date, r.start_time, r.end_time, r.status, r.approval_status, r.payment_status, r.denial_reason, r.created_at, r.updated_at, r.ref_code, r.booking_for, r.booked_by_role, r.booked_by_name, r.scanned_at, r.receipt_attempts, gf.id AS gf_id, gf.visitor_first_name, gf.visitor_middle_name, gf.visitor_last_name FROM reservations r LEFT JOIN guest_forms gf ON r.ref_code = gf.ref_code WHERE r.user_id = ? AND r.status <> 'deleted' AND r.approval_status <> 'deleted' ORDER BY r.created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -325,12 +325,16 @@ if ($stmt) {
         if ($isDenied && $reason !== '') {
             $details = trim($details . ' Reason: ' . $reason);
         }
+        $actionDate = $row['created_at'];
+        if ((strpos($statusLower, 'cancel') !== false || strpos($statusLower, 'moved_to_history') !== false || strpos($statusLower, 'deleted') !== false) && !empty($row['updated_at'])) {
+            $actionDate = $row['updated_at'];
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
             'details' => $details,
             'status' => $statusVal ?? 'pending',
-            'date' => $row['created_at'],
+            'date' => $actionDate,
             'event_timestamp' => $eTime ? $eTime : strtotime($start . ' 23:59:59'),
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
@@ -350,7 +354,7 @@ if ($con instanceof mysqli) {
     $chk = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'end_time'");
     $hasGuestEndTime = $chk && $chk->num_rows > 0;
 }
-$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
+$guestAmenitySelect = "SELECT visitor_first_name, visitor_middle_name, visitor_last_name, amenity, start_date, end_date, " . ($hasGuestStartTime ? "start_time" : "NULL as start_time") . ", " . ($hasGuestEndTime ? "end_time" : "NULL as end_time") . ", approval_status, denial_reason, created_at, updated_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' AND (wants_amenity = 1 OR amenity IS NOT NULL OR start_date IS NOT NULL OR end_date IS NOT NULL) ORDER BY created_at DESC";
 $stmt = $con->prepare($guestAmenitySelect);
 if ($stmt) {
     $stmt->bind_param("i", $userId);
@@ -397,12 +401,16 @@ if ($stmt) {
         $guestName = trim(implode(' ', $guestNameParts));
         $reservedBy = $guestName !== '' ? 'Booked for: ' . $guestName : '';
         $endTs = $end ? strtotime($end . ' 23:59:59') : ($start ? strtotime($start . ' 23:59:59') : time());
+        $actionDate = $row['created_at'];
+        if ((strpos($statusLower, 'cancel') !== false || strpos($statusLower, 'moved_to_history') !== false || strpos($statusLower, 'deleted') !== false) && !empty($row['updated_at'])) {
+            $actionDate = $row['updated_at'];
+        }
         $activities[] = [
             'type' => 'reservation',
             'title' => $resTitle,
             'details' => $details,
             'status' => $statusVal,
-            'date' => $row['created_at'],
+            'date' => $actionDate,
             'event_timestamp' => $endTs,
             'ref_code' => $refCodeVal,
             'reserved_by' => $reservedBy,
@@ -450,7 +458,7 @@ if ($stmt) {
 }
 
 // 3. Guest Forms
-$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
+$stmt = $con->prepare("SELECT 'guest_form' as type, visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, visit_time, approval_status, denial_reason, created_at, updated_at, ref_code, scanned_at FROM guest_forms WHERE resident_user_id = ? AND (wants_amenity IS NULL OR wants_amenity = 0) AND amenity IS NULL AND start_date IS NULL AND end_date IS NULL ORDER BY created_at DESC");
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -479,13 +487,9 @@ if ($stmt) {
                 $statusVal = 'permission_granted';
             }
         }
-        $statusLower = strtolower((string)$statusVal);
-        $statusVal = $row['approval_status'] ?? 'pending';
-        if (!empty($row['scanned_at'])) {
-            $statusLower = strtolower((string)$statusVal);
-            if (strpos($statusLower, 'moved_to_history') === false && strpos($statusLower, 'denied') === false && strpos($statusLower, 'reject') === false && strpos($statusLower, 'cancel') === false && strpos($statusLower, 'expired') === false) {
-                $statusVal = 'permission_granted';
-            }
+        $actionDate = $row['created_at'];
+        if ((strpos($statusLower, 'cancel') !== false || strpos($statusLower, 'moved_to_history') !== false || strpos($statusLower, 'deleted') !== false) && !empty($row['updated_at'])) {
+            $actionDate = $row['updated_at'];
         }
         $activities[] = [
             'type' => 'guest_form',
@@ -493,7 +497,7 @@ if ($stmt) {
             'details' => $details,
             'guest_name' => $guestName,
             'status' => $statusVal,
-            'date' => $row['created_at'],
+            'date' => $actionDate,
             'event_timestamp' => $visitTs,
             'ref_code' => $row['ref_code'] ?? 'GST',
             'scanned_at' => $row['scanned_at'] ?? null
@@ -512,11 +516,9 @@ $historyActivities = [];
 
 foreach ($activities as $act) {
     $s = strtolower($act['status']);
-    if (strpos($s, 'deleted') !== false) continue;
-
     $isHistory = false;
 
-    if (strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
+    if (strpos($s, 'deleted') !== false || strpos($s, 'cancel') !== false || strpos($s, 'complete') !== false || strpos($s, 'finish') !== false || strpos($s, 'moved_to_history') !== false) {
         $isHistory = true;
     }
 
@@ -538,6 +540,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt->execute();
             $stmt->close();
         }
+    }
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_guest') {
+    header('Content-Type: application/json');
+    $code = trim($_POST['code'] ?? '');
+    if ($code === '' || !($con instanceof mysqli)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid request.']);
+        exit;
+    }
+    $stmt = $con->prepare("SELECT id FROM guest_forms WHERE ref_code = ? AND resident_user_id = ? LIMIT 1");
+    if (!$stmt) {
+        echo json_encode(['success' => false, 'message' => 'Server error.']);
+        exit;
+    }
+    $stmt->bind_param('si', $code, $userId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $stmt->close();
+    if (!$res || $res->num_rows === 0) {
+        echo json_encode(['success' => false, 'message' => 'Guest not found.']);
+        exit;
+    }
+    $row = $res->fetch_assoc();
+    $guestId = intval($row['id']);
+    $stmtU = $con->prepare("UPDATE guest_forms SET approval_status='deleted', qr_path=NULL, scanned_at=NULL, updated_at=NOW() WHERE id = ?");
+    if ($stmtU) {
+        $stmtU->bind_param('i', $guestId);
+        $stmtU->execute();
+        $stmtU->close();
+    }
+    $stmtR = $con->prepare("UPDATE reservations SET approval_status='deleted', status='deleted', updated_at=NOW() WHERE ref_code = ?");
+    if ($stmtR) {
+        $stmtR->bind_param('s', $code);
+        $stmtR->execute();
+        $stmtR->close();
+    }
+    $stmtRR = $con->prepare("UPDATE resident_reservations SET approval_status='deleted', updated_at=NOW() WHERE ref_code = ?");
+    if ($stmtRR) {
+        $stmtRR->bind_param('s', $code);
+        $stmtRR->execute();
+        $stmtRR->close();
     }
     echo json_encode(['success' => true]);
     exit;
@@ -1059,12 +1105,13 @@ body.account-blocked { overflow: hidden; }
                   $s = strtolower($act['status']);
                   if (strpos($s, 'permission')!==false || strpos($s, 'granted')!==false || (!empty($act['scanned_at']) && strpos($s, 'moved_to_history')!==false)) $statusClass = 'status-access-granted';
                   elseif (strpos($s, 'approv')!==false || strpos($s, 'resolved')!==false || strpos($s, 'ongoing')!==false) $statusClass = 'status-approved';
-                  elseif (strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
+                  elseif (strpos($s, 'deleted')!==false || strpos($s, 'denied')!==false || strpos($s, 'reject')!==false || strpos($s, 'moved_to_history')!==false) $statusClass = 'status-denied';
                   elseif (strpos($s, 'cancel')!==false) $statusClass = 'status-cancelled';
                   elseif (strpos($s, 'expired')!==false) $statusClass = 'status-denied';
                   $displayStatus = ucwords(str_replace('_',' ', (string)$act['status']));
                   if (strpos($s, 'permission_granted') !== false) $displayStatus = 'Access Granted';
                   if (strpos($s, 'moved_to_history') !== false) $displayStatus = !empty($act['scanned_at']) ? 'Access Granted' : 'Denied';
+                  if (strpos($s, 'deleted') !== false) $displayStatus = 'Deleted';
                   if ($s === 'new') $displayStatus = 'Filed';
                   $att = isset($act['attempts']) ? intval($act['attempts']) : 0;
                   $pay = strtolower((string)($act['payment_status'] ?? ''));
@@ -1261,6 +1308,7 @@ body.account-blocked { overflow: hidden; }
                       <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Email</th>
                       <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Added</th>
                       <th style="text-align:center;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Entry Pass</th>
+                      <th style="text-align:center;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1290,6 +1338,14 @@ body.account-blocked { overflow: hidden; }
                                   data-resident="<?php echo htmlspecialchars($fullName); ?>"
                                   style="padding:6px 12px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;">
                             View Pass
+                          </button>
+                        </td>
+                        <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;text-align:center;">
+                          <button type="button" class="btn-delete-guest"
+                                  data-ref="<?php echo htmlspecialchars($refCode); ?>"
+                                  data-name="<?php echo htmlspecialchars($guestName); ?>"
+                                  style="padding:6px 12px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;">
+                            Delete
                           </button>
                         </td>
                       </tr>
@@ -1523,6 +1579,14 @@ body.account-blocked { overflow: hidden; }
           var resident = e.target.getAttribute('data-resident');
           openGuestPassModal(ref, name, resident);
       }
+      if(e.target.classList.contains('btn-delete-guest')){
+          var refDel = e.target.getAttribute('data-ref');
+          var nameDel = e.target.getAttribute('data-name') || '';
+          var row = e.target.closest('tr');
+          if(refDel && row){
+            openDeleteGuestModal(row, refDel, nameDel);
+          }
+      }
   });
 
   var searchInput=document.getElementById('requestSearch');
@@ -1548,7 +1612,7 @@ body.account-blocked { overflow: hidden; }
     if(s.indexOf('permission')!==-1 || s.indexOf('granted')!==-1) return 'status-access-granted';
     if(s.indexOf('approv')!==-1) return 'status-approved';
     if(s.indexOf('resolved')!==-1||s.indexOf('ongoing')!==-1) return 'status-ongoing';
-    if(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
+    if(s.indexOf('deleted')!==-1||s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||s.indexOf('moved_to_history')!==-1) return 'status-denied';
     if(s.indexOf('cancel')!==-1) return 'status-cancelled';
     if(s.indexOf('expired')!==-1) return 'status-denied';
     if(s.indexOf('complete')!==-1) return 'status-completed';
@@ -1558,6 +1622,7 @@ body.account-blocked { overflow: hidden; }
     s=String(s||'').replace(/[_-]+/g,' ').toLowerCase();
     if(s.indexOf('access granted')!==-1 || s.indexOf('permission granted')!==-1) return 'Access Granted';
     if(s.indexOf('moved to history')!==-1) return 'Denied';
+    if(s.indexOf('deleted')!==-1) return 'Deleted';
     if(s === 'new') return 'Filed';
     return s.replace(/\b\w/g,function(m){ return m.toUpperCase(); });
   }
@@ -1716,6 +1781,24 @@ body.account-blocked { overflow: hidden; }
     if(btnKeep) btnKeep.textContent = 'Keep Request';
     if(btnConfirm) btnConfirm.textContent = 'Confirm Delete';
     
+    cancelModal.style.display='flex';
+  }
+
+  function openDeleteGuestModal(row, ref, name){
+    if(!cancelModal) return;
+    cancelModalRef=ref;
+    cancelModalLi=row;
+    modalAction = 'delete_guest';
+    var h3 = cancelModal.querySelector('h3');
+    var pBody = cancelModal.querySelector('.cancel-modal-body p:first-child');
+    var pNote = cancelModal.querySelector('.cancel-modal-note');
+    var btnKeep = cancelModal.querySelector('.cancel-modal-keep');
+    var btnConfirm = cancelModal.querySelector('.cancel-modal-confirm');
+    if(h3) h3.textContent = 'Delete Guest';
+    if(pBody) pBody.textContent = 'Are you sure you want to remove this guest? The guest pass will be revoked.';
+    if(pNote) pNote.style.display = 'none';
+    if(btnKeep) btnKeep.textContent = 'Keep Guest';
+    if(btnConfirm) btnConfirm.textContent = 'Confirm Delete';
     cancelModal.style.display='flex';
   }
 
@@ -1989,6 +2072,38 @@ body.account-blocked { overflow: hidden; }
        // alert('Network error. Please try again.');
     });
   }
+
+  function performDeleteGuest(){
+    var ref=cancelModalRef;
+    var row=cancelModalLi;
+    if(!ref||!row){
+      closeCancelModalResident();
+      return;
+    }
+    fetch('profileresident.php',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({action:'delete_guest',code:ref})
+    }).then(function(r){return r.json();}).then(function(data){
+      if(!data||!data.success){
+        alert(data && data.message ? data.message : 'Unable to delete guest.');
+        return;
+      }
+      var tbody=row.closest('tbody');
+      row.remove();
+      if(tbody){
+        var remaining=tbody.querySelectorAll('tr');
+        if(remaining.length===0){
+          var tr=document.createElement('tr');
+          tr.innerHTML='<td colspan="6" style="text-align:center;color:#6b6b6b;padding:10px 0;">No saved guests.</td>';
+          tbody.appendChild(tr);
+        }
+      }
+      closeCancelModalResident();
+    })["catch"](function(){
+      alert('Network error. Please try again.');
+    });
+  }
   
   if(cancelModalKeep){
     cancelModalKeep.addEventListener('click',function(){
@@ -2004,6 +2119,8 @@ body.account-blocked { overflow: hidden; }
     cancelModalConfirm.addEventListener('click',function(){
       if(modalAction === 'delete'){
         performDeleteResident();
+      } else if(modalAction === 'delete_guest'){
+        performDeleteGuest();
       } else if(modalAction === 'cancel_report'){
         performCancelReport();
       } else {
@@ -2218,6 +2335,7 @@ body.account-blocked { overflow: hidden; }
     var canUpdateProof=(type==='reservation' && paymentStatus==='rejected' && s.indexOf('cancel')===-1);
     var isRejectedReason=(s.indexOf('denied')!==-1||s.indexOf('reject')!==-1||paymentStatus==='rejected');
     var showStatusLabel=!isRejectedReason;
+    if(s.indexOf('deleted')!==-1) showStatusLabel=false;
     var highlightReason=(paymentStatus==='rejected');
     if (type==='reservation' && paymentStatus==='rejected') {
       var att = isNaN(attempts)?0:attempts;
@@ -2238,7 +2356,6 @@ body.account-blocked { overflow: hidden; }
       html+='<div class="item-extra-section">';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">Access Granted</span></div>';
       html+='<div class="item-extra-note">'+esc('Access granted. Your QR entry pass has already been scanned by the guard.')+'</div>';
       html+='<div class="item-actions">';
       if(ref){
