@@ -231,7 +231,8 @@ $colsToCheck = [
     'booking_for' => "VARCHAR(50) NULL",
     'booked_by_role' => "VARCHAR(50) NULL",
     'booked_by_name' => "VARCHAR(150) NULL",
-    'scanned_at' => "DATETIME NULL"
+    'scanned_at' => "DATETIME NULL",
+    'updated_at' => "DATETIME NULL"
 ];
 foreach ($colsToCheck as $col => $def) {
     $check = $con->query("SHOW COLUMNS FROM reservations LIKE '$col'");
