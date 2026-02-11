@@ -1,6 +1,28 @@
 <?php
+$staffInactivityLimit = 2700;
+ini_set('session.gc_maxlifetime', (string)$staffInactivityLimit);
 session_start();
 include 'connect.php';
+
+$now = time();
+$last = intval($_SESSION['staff_last_activity'] ?? 0);
+$timeout = intval($_SESSION['staff_session_timeout'] ?? $staffInactivityLimit);
+if ($last > 0 && $timeout > 0 && ($now - $last) > $timeout) {
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
+    session_destroy();
+    header("Location: login.php");
+    exit;
+}
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
+    $_SESSION['staff_last_activity'] = $now;
+    if (!isset($_SESSION['staff_session_timeout'])) {
+        $_SESSION['staff_session_timeout'] = $staffInactivityLimit;
+    }
+}
 
 function admin_status_link($code){ $scheme=(isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']==='on')?'https':'http'; $host=$_SERVER['HTTP_HOST']??'localhost'; $basePath=rtrim(dirname($_SERVER['SCRIPT_NAME']??'/VictorianPass'),'/'); return $scheme.'://'.$host.$basePath.'/qr_view.php?code='.urlencode($code); }
 function admin_send_email($to,$subject,$body){

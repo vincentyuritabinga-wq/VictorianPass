@@ -1,4 +1,6 @@
 <?php
+$staffInactivityLimit = 2700;
+ini_set('session.gc_maxlifetime', (string)$staffInactivityLimit);
 session_start();
 include("connect.php");  
 
@@ -8,8 +10,16 @@ $loginSuccessMessage = '';
 $loginRedirect = '';
 $prefillEmail = '';
 $cooldownRemaining = 0;
+$staffSessionActive = false;
+$activeRole = strtolower(trim($_SESSION['role'] ?? ''));
+$activeAdminRole = strtolower(trim($_SESSION['admin_role'] ?? ''));
+if (in_array($activeRole, ['admin', 'guard'], true) || in_array($activeAdminRole, ['admin', 'guard'], true) || isset($_SESSION['admin_id'])) {
+    $staffSessionActive = true;
+    $loginError = 'already_logged_in';
+    $loginErrorMessage = 'You are already logged in. Please log out before signing in to another account.';
+}
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !$staffSessionActive) {
     if (isset($_POST['vp_account']) && isset($_POST['password'])) {
         $email = trim($_POST['vp_account']);
         $password = trim($_POST['password']);
@@ -46,9 +56,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['staff_id'] = $row['id'];
 
                 if ($row['role'] === "admin") {
+                    session_regenerate_id(true);
+                    $_SESSION['staff_last_activity'] = time();
+                    $_SESSION['staff_session_timeout'] = $staffInactivityLimit;
                     $loginSuccessMessage = 'Login successful!';
                     $loginRedirect = 'admin.php';
                 } elseif ($row['role'] === "guard") {
+                    session_regenerate_id(true);
+                    $_SESSION['staff_last_activity'] = time();
+                    $_SESSION['staff_session_timeout'] = $staffInactivityLimit;
                     $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
                     $stmtLog = $con->prepare("INSERT INTO login_history (staff_id) VALUES (?)");
                     $stmtLog->bind_param('i', $_SESSION['staff_id']);
@@ -543,11 +559,11 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
 
         <form action="login.php" method="POST">
           <label for="vp_account">Email</label>
-          <input type="email" id="vp_account" name="vp_account" placeholder="Email*" required value="<?php echo htmlspecialchars($prefillEmail, ENT_QUOTES); ?>">
+          <input type="email" id="vp_account" name="vp_account" placeholder="Email*" required value="<?php echo htmlspecialchars($prefillEmail, ENT_QUOTES); ?>" <?php echo $staffSessionActive ? 'disabled' : ''; ?>>
 
           <label for="password">Password</label>
           <div class="password-field">
-            <input type="password" id="password" name="password" placeholder="Password*" required>
+            <input type="password" id="password" name="password" placeholder="Password*" required <?php echo $staffSessionActive ? 'disabled' : ''; ?>>
             <span class="toggle-password" onclick="togglePassword('password', this)">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-eye"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </span>
@@ -557,7 +573,7 @@ $cooldownRemaining = isset($_SESSION['login_cooldown_until']) ? max(0, intval($_
             <a href="forgot_password.php" id="forgotLink">Forgot Password?</a>
           </div>
 
-          <button type="submit" class="btn-login" id="btnLogin">Login</button>
+          <button type="submit" class="btn-login" id="btnLogin" <?php echo $staffSessionActive ? 'disabled' : ''; ?>>Login</button>
           <div id="cooldownInfo" style="text-align:center;margin-top:8px;font-size:0.9rem;color:#c0392b;"></div>
         </form>
 
