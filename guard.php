@@ -1491,8 +1491,8 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
       </div>
       <div class="content-row">
       <table id="entryTable">
-        <tr><th>Code</th><th>Added By</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tr id="emptyRow"><td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
+        <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+        <tr id="emptyRow"><td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
       </table>
     </div>
     </div>
@@ -1508,9 +1508,9 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     <div class="panel">
       <h3>Today's Entry (Detailed)</h3>
       <table id="todayEntries" class="history-table">
-        <tr><th>Code</th><th>Added By</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+        <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
         <tbody id="todayEntriesBody">
-          <tr id="todayEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
+          <tr id="todayEmpty"><td colspan="5" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
         </tbody>
       </table>
     </div>
@@ -1929,7 +1929,7 @@ function scanCode(){
 const scanQrBtn = document.getElementById('scanQrBtn');
 if(scanQrBtn){ scanQrBtn.addEventListener('click', startQrScanner); }
 window.addEventListener('beforeunload', stopQrScanner);
-function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbl.appendChild(tr); }); }
+function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
 // Incident listing & escalation
@@ -2029,7 +2029,7 @@ function formatEntryStatus(s){
   const cleaned=raw.replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
   return cleaned.replace(/\b\w/g,function(m){return m.toUpperCase();});
 }
-function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbody.appendChild(tr); }); }
+function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="5" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbody.appendChild(tr); }); }
 function formatMDY(ymd){ try{ const d=new Date(ymd); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; }catch(e){ return ymd; } }
 function formatDateTime(dt){ try{ const d=new Date(dt); const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; }catch(e){ return dt; } }
 function formatDateValue(v){ if(!v) return ''; try{ const d=new Date(v); if(isNaN(d.getTime())) return v; const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); const hasTime=String(v).match(/\d{1,2}:\d{2}/); if(hasTime){ let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; } return `${mm}/${dd}/${yy}`; }catch(e){ return v; } }
