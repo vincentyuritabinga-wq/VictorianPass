@@ -1063,8 +1063,17 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div class="res-label"><small>Start Date</small></div>
                     <div class="date-line"><p id="startDate">--</p><button type="button" class="clear-date" id="clearStartBtn" title="Clear start date">Clear</button></div>
                     <input type="hidden" name="startDate" id="startDateInput">
-                    <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div id="startDateError" class="time-error" style="display:none;"></div>
+                  </div>
+                    <div class="res-item date-item" id="endDateGroup">
+                    <div class="res-label"><small>End Date</small></div>
+                    <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
+                    <input type="hidden" name="endDate" id="endDateInput">
+                    <div id="dateError" class="time-error" style="display:none;"></div>
+                    <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
+                    <div id="timeError" class="time-error" style="display:none;"></div>
+                  <div class="date-extra">
+                    <input type="time" name="startTime" id="startTimeInput" min="08:00" max="23:00" style="display:none;">
                     <div class="res-label" id="hoursLabel" style="margin-top:8px; display:none;"><small>Number of Hours</small></div>
                     <div class="counter" id="hoursCounter" style="display:none;">
                       <button type="button" onclick="changeHours(-1)">-</button>
@@ -1082,13 +1091,6 @@ if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident' && is
                     <div id="selectedTimeNote" class="selected-time-note" style="display:none;">Note: This is the available time for the Community Pool. Please leave by closing time.</div>
                     <div id="availabilityNotice" class="avail-notice" style="display:none;"></div>
                   </div>
-                    <div class="res-item date-item" id="endDateGroup">
-                    <div class="res-label"><small>End Date</small></div>
-                    <div class="date-line"><p id="endDate">--</p><button type="button" class="clear-date" id="clearEndBtn" title="Clear end date">Clear</button></div>
-                    <input type="hidden" name="endDate" id="endDateInput">
-                    <div id="dateError" class="time-error" style="display:none;"></div>
-                    <input type="time" name="endTime" id="endTimeInput" min="08:00" max="23:00" style="display:none;">
-                    <div id="timeError" class="time-error" style="display:none;"></div>
                     <div class="note">Reservations must be made at least 1 day in advance. Same-day bookings are not allowed.</div>
                     <div class="res-item persons">
                       <div class="res-item" id="poolBookingTypeRow" style="display:none;">
