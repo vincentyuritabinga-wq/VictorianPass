@@ -452,6 +452,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'user_id' => $user_id,
               'entry_pass_id' => $entry_pass_id,
               'booking_for' => $booking_for,
+              'pool_booking_type' => $pool_booking_type,
               'guest_id' => $guest_id_post,
               'guest_ref_code' => $guest_ref_code_post,
               'ref_code' => $newRef
