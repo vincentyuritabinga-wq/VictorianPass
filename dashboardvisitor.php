@@ -209,10 +209,10 @@ if ($stmt) {
         $eTime = strtotime($row['end_time'] ?? '');
         
         $dateStr = '';
-        if (!empty($start) && !empty($end)) {
-            $dateStr = date('m/d/y', strtotime($start)) . ' - ' . date('m/d/y', strtotime($end));
-        } elseif (!empty($start)) {
-            $dateStr = date('m/d/y', strtotime($start));
+        if (!empty($start)) {
+            $startText = date('m/d/y', strtotime($start));
+            $endText = !empty($end) ? date('m/d/y', strtotime($end)) : $startText;
+            $dateStr = $startText . ' - ' . $endText;
         } else {
             $dateStr = 'Date not set';
         }
