@@ -184,7 +184,7 @@ $displayPhone = $phoneNormalized ?: $phoneRaw;
 // Fetch saved guests for resident (Approved only)
 $guestRows = [];
 if ($con instanceof mysqli) {
-  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status = 'approved' ORDER BY created_at DESC");
+  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status IN ('approved','permission_granted') ORDER BY created_at DESC");
   if ($stmtG) {
     $stmtG->bind_param('i', $userId);
     $stmtG->execute();
