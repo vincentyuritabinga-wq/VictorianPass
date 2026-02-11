@@ -1660,7 +1660,7 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
         </div>
         <div class="scan-actions">
             <button class="btn btn-approve" onclick="scanCode()">Scan</button>
-            <button class="btn" id="scanQrBtn" style="background:#111827;color:#fff">Scan QR Code</button>
+            <button class="btn" id="scanQrBtn" style="background:#111827;color:#fff"><i class="fas fa-camera"></i> Scan QR Code</button>
             <button class="btn" onclick="openStatusCard()" style="background:#23412e;color:#fff">Open QR Card</button>
         </div>
       </div>
