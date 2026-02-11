@@ -2042,7 +2042,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
       html+='<div class="item-extra-section">';
       html+='<div class="item-extra-body">';
       html+='<div class="item-extra-info-only">';
-      html+='<div class="item-extra-status"><span class="status-label '+statusClassFor(effectiveStatus)+'">Access Granted</span></div>';
       html+='<div class="item-extra-note">'+esc('Access granted. Your QR entry pass has already been scanned by the guard.')+'</div>';
       html+='<div class="item-actions">';
       if(ref){
