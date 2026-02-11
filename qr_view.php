@@ -13,6 +13,23 @@ function ensureScannedAtColumns($con) {
     }
 }
 ensureScannedAtColumns($con);
+if ($con instanceof mysqli) {
+    $con->query("CREATE TABLE IF NOT EXISTS entry_scans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ref_code VARCHAR(50) NOT NULL,
+        scanned_by_guard_id INT NULL,
+        scanned_by_name VARCHAR(150) NULL,
+        subject_name VARCHAR(150) NULL,
+        entry_type VARCHAR(50) NULL,
+        status VARCHAR(50) NULL,
+        start_date DATE NULL,
+        end_date DATE NULL,
+        scanned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ref_code (ref_code),
+        INDEX idx_guard (scanned_by_guard_id),
+        INDEX idx_scanned_at (scanned_at)
+    ) ENGINE=InnoDB");
+}
 
 function calculateAgeYears($birthRaw) {
     if (empty($birthRaw)) return null;
@@ -118,6 +135,89 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_
             $upStmt->bind_param('is', $sid, $ref);
             $upStmt->execute();
             $upStmt->close();
+        }
+        if ($con instanceof mysqli) {
+            $gid = isset($_SESSION['staff_id']) ? intval($_SESSION['staff_id']) : null;
+            $gname = isset($_SESSION['guard_surname']) ? trim($_SESSION['guard_surname']) : '';
+            if ($gname === '' && isset($_SESSION['email'])) {
+                $local = explode('@', $_SESSION['email'])[0] ?? '';
+                $s = $local;
+                if (strpos($local, '_') !== false) { $parts = explode('_', $local); $s = end($parts); }
+                if (substr($s, -3) === 'gar') { $s = substr($s, 0, -3); }
+                $s = preg_replace('/[^a-zA-Z]/', '', $s);
+                $gname = strlen($s) ? ucfirst(strtolower($s)) : 'Guard';
+            }
+            if ($gname === '') { $gname = 'Guard'; }
+            $subject = null;
+            $etype = null;
+            $sd = null;
+            $ed = null;
+            if ($tbl === 'guest_forms') {
+                $stmtLog = $con->prepare("SELECT visitor_first_name, visitor_middle_name, visitor_last_name, visit_date, start_date, end_date FROM guest_forms WHERE id = ? AND ref_code = ? LIMIT 1");
+                $stmtLog->bind_param('is', $sid, $ref);
+                $stmtLog->execute();
+                $resLog = $stmtLog->get_result();
+                if ($resLog && ($row = $resLog->fetch_assoc())) {
+                    $subject = trim(($row['visitor_first_name'] ?? '') . ' ' . ($row['visitor_middle_name'] ?? '') . ' ' . ($row['visitor_last_name'] ?? ''));
+                    if ($subject === '') { $subject = 'Guest'; }
+                    $etype = 'Guest Entry';
+                    $sd = $row['visit_date'] ?? ($row['start_date'] ?? null);
+                    $ed = $row['end_date'] ?? $sd;
+                }
+                $stmtLog->close();
+            } elseif ($tbl === 'reservations') {
+                $stmtLog = $con->prepare("SELECT r.start_date, r.end_date, r.booking_for, r.account_type, r.guest_id, r.guest_ref_code, r.entry_pass_id, u.first_name, u.middle_name, u.last_name, e.full_name FROM reservations r LEFT JOIN users u ON r.user_id = u.id LEFT JOIN entry_passes e ON r.entry_pass_id = e.id WHERE r.id = ? AND r.ref_code = ? LIMIT 1");
+                $stmtLog->bind_param('is', $sid, $ref);
+                $stmtLog->execute();
+                $resLog = $stmtLog->get_result();
+                if ($resLog && ($row = $resLog->fetch_assoc())) {
+                    $full = trim($row['full_name'] ?? '');
+                    if ($full === '') { $full = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? '')); }
+                    $bookingFor = strtolower(trim($row['booking_for'] ?? ''));
+                    $accountType = strtolower(trim($row['account_type'] ?? ''));
+                    $hasGuestRef = !empty($row['guest_ref_code']) || !empty($row['guest_id']);
+                    $isVisitor = ($bookingFor === 'guest') || ($accountType === 'visitor') || $hasGuestRef || !empty($row['entry_pass_id']);
+                    $etype = $isVisitor ? 'Visitor Reservation' : 'Resident Reservation';
+                    $subject = $full !== '' ? $full : ($isVisitor ? 'Visitor' : 'Resident');
+                    $sd = $row['start_date'] ?? null;
+                    $ed = $row['end_date'] ?? $sd;
+                }
+                $stmtLog->close();
+            } elseif ($tbl === 'resident_reservations') {
+                $stmtLog = $con->prepare("SELECT rr.start_date, rr.end_date, u.first_name, u.middle_name, u.last_name FROM resident_reservations rr LEFT JOIN users u ON rr.user_id = u.id WHERE rr.id = ? AND rr.ref_code = ? LIMIT 1");
+                $stmtLog->bind_param('is', $sid, $ref);
+                $stmtLog->execute();
+                $resLog = $stmtLog->get_result();
+                if ($resLog && ($row = $resLog->fetch_assoc())) {
+                    $subject = trim(($row['first_name'] ?? '') . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                    if ($subject === '') { $subject = 'Resident'; }
+                    $etype = 'Resident Reservation';
+                    $sd = $row['start_date'] ?? null;
+                    $ed = $row['end_date'] ?? $sd;
+                }
+                $stmtLog->close();
+            }
+            $skipInsert = false;
+            $chk = $con->prepare("SELECT status FROM entry_scans WHERE ref_code = ? AND DATE(scanned_at) = CURDATE() ORDER BY scanned_at DESC LIMIT 1");
+            if ($chk) {
+                $chk->bind_param('s', $ref);
+                $chk->execute();
+                $cres = $chk->get_result();
+                if ($cres && ($row = $cres->fetch_assoc())) {
+                    $st = strtolower(trim($row['status'] ?? ''));
+                    if ($st !== '' && (strpos($st, 'permission') !== false || strpos($st, 'granted') !== false || strpos($st, 'access') !== false)) {
+                        $skipInsert = true;
+                    }
+                }
+                $chk->close();
+            }
+            if (!$skipInsert) {
+                $stmtLog = $con->prepare("INSERT INTO entry_scans (ref_code, scanned_by_guard_id, scanned_by_name, subject_name, entry_type, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stat = 'permission_granted';
+                $stmtLog->bind_param('sissssss', $ref, $gid, $gname, $subject, $etype, $stat, $sd, $ed);
+                @$stmtLog->execute();
+                @$stmtLog->close();
+            }
         }
         $_SESSION['guard_confirmed_ref'] = $ref;
         $_SESSION['guard_confirmed_time'] = time();

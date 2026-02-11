@@ -434,7 +434,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
   $hasRREndTime = false;
   $chkRREndTime = $con->query("SHOW COLUMNS FROM resident_reservations LIKE 'end_time'");
   if ($chkRREndTime && $chkRREndTime->num_rows > 0) { $hasRREndTime = true; }
-  $q = "SELECT e.ref_code, e.subject_name, e.entry_type, e.status, e.start_date, e.end_date, e.scanned_at, " .
+  $q = "SELECT e.ref_code, e.subject_name, e.entry_type, e.status, e.start_date, e.end_date, e.scanned_at, e.scanned_by_name, " .
        ($hasGFVisitTime ? "gf.visit_time AS gf_start_time" : "NULL AS gf_start_time") . ", " .
        ($hasResStartTime ? "r.start_time AS r_start_time" : "NULL AS r_start_time") . ", " .
        ($hasResEndTime ? "r.end_time AS r_end_time" : "NULL AS r_end_time") . ", " .
@@ -469,7 +469,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
       $amenity = $r['r_amenity'] ?? null;
       if (!$amenity) { $amenity = $r['rr_amenity'] ?? null; }
       if (!$amenity) { $amenity = $r['gf_amenity'] ?? null; }
-      $addedBy = $r['r_booked_by'] ?? null;
+      $scannedBy = $r['scanned_by_name'] ?? null;
+      $addedBy = $scannedBy ?: ($r['r_booked_by'] ?? null);
       if (!$addedBy) {
         $addedBy = trim(($r['gf_res_first'] ?? '') . ' ' . ($r['gf_res_middle'] ?? '') . ' ' . ($r['gf_res_last'] ?? ''));
       }
@@ -1928,7 +1929,7 @@ function scanCode(){
 const scanQrBtn = document.getElementById('scanQrBtn');
 if(scanQrBtn){ scanQrBtn.addEventListener('click', startQrScanner); }
 window.addEventListener('beforeunload', stopQrScanner);
-function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${r.status||'-'}</td>`; tbl.appendChild(tr); }); }
+function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
 // Incident listing & escalation
@@ -2019,7 +2020,16 @@ function renderIncidents(rows){
 }
 function loadIncidents(){ fetch('guard.php?action=list_incidents').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderIncidents(data.incidents||[]); } }).catch(_=>{}); }
 document.addEventListener('DOMContentLoaded', function(){ loadIncidents(); setInterval(loadIncidents, 15000); });
-function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${r.status||'-'}</td>`; tbody.appendChild(tr); }); }
+function formatEntryStatus(s){
+  const raw=String(s||'').trim();
+  if(!raw) return '-';
+  const v=raw.toLowerCase();
+  if(v.indexOf('permission')!==-1 && v.indexOf('grant')!==-1) return 'Permission Granted';
+  if(v.indexOf('access')!==-1 && v.indexOf('grant')!==-1) return 'Access Granted';
+  const cleaned=raw.replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  return cleaned.replace(/\b\w/g,function(m){return m.toUpperCase();});
+}
+function renderTodayEntries(rows){ const tbody=document.getElementById('todayEntriesBody'); if(!tbody) return; tbody.innerHTML=''; if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='todayEmpty'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">No scans today</td>`; tbody.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbody.appendChild(tr); }); }
 function formatMDY(ymd){ try{ const d=new Date(ymd); return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; }catch(e){ return ymd; } }
 function formatDateTime(dt){ try{ const d=new Date(dt); const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; }catch(e){ return dt; } }
 function formatDateValue(v){ if(!v) return ''; try{ const d=new Date(v); if(isNaN(d.getTime())) return v; const mm=(d.getMonth()+1).toString().padStart(2,'0'); const dd=d.getDate().toString().padStart(2,'0'); const yy=String(d.getFullYear()).slice(-2); const hasTime=String(v).match(/\d{1,2}:\d{2}/); if(hasTime){ let h=d.getHours(); const mi=d.getMinutes().toString().padStart(2,'0'); const ap=h>=12?'PM':'AM'; h=h%12; if(h===0) h=12; return `${mm}/${dd}/${yy} ${h}:${mi} ${ap}`; } return `${mm}/${dd}/${yy}`; }catch(e){ return v; } }
