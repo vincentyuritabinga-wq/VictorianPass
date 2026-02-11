@@ -825,8 +825,9 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; color: var(--text-main); }
     gap: 24px;
     position: sticky;
     top: 0;
-    z-index: 90;
+    z-index: 99;
     color: #fff;
+    flex-wrap: wrap;
 }
 
 .header-brand, .header-actions {
@@ -1134,6 +1135,41 @@ tr:last-child td { border-bottom: none; }
 tr:hover { background-color: #f8fafc; }
 tbody tr { transition: background-color 0.2s ease-in-out; }
 
+/* Responsive Table Container for Mobile Horizontal Scrolling */
+.table-responsive-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius);
+}
+.table-responsive-wrapper table {
+    width: 100%;
+    min-width: 800px;
+}
+@media (max-width: 768px) {
+    .table-responsive-wrapper {
+        margin: 0 -16px;
+        padding: 0 16px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+    .table-responsive-wrapper::after {
+        content: '';
+        display: block;
+        width: 8px;
+        flex-shrink: 0;
+    }
+    table {
+        font-size: 0.85rem;
+    }
+    th, td {
+        padding: 10px 12px;
+        font-size: 0.80rem;
+        white-space: nowrap;
+    }
+}
+
 /* Buttons */
 .action-btn, .btn {
     padding: 8px 14px;
@@ -1234,6 +1270,47 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     flex-wrap:wrap;
 }
 
+@media (max-width: 768px) {
+    .scan-row {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+        margin-bottom: 15px;
+        padding: 0 16px;
+    }
+    .scan-input {
+        min-width: auto;
+        width: 100%;
+        flex: none;
+    }
+    .scan-input input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+    }
+    .scan-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        width: 100%;
+    }
+    .scan-actions .btn {
+        padding: 9px 6px;
+        font-size: 0.75rem;
+        line-height: 1.3;
+        white-space: normal;
+        word-break: break-word;
+        text-align: center;
+        min-height: 38px;
+        min-width: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
 /* Responsive */
 @media(max-width:900px){
     .sidebar {
@@ -1251,7 +1328,21 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     .sidebar-overlay.show { display: block; }
     .main { width: 100%; }
     .dashboard { grid-template-columns: 1fr; }
-    .top-header { padding: 12px 18px; height: auto; }
+    .top-header { 
+        padding: 10px 12px; 
+        height: auto;
+        min-height: var(--header-height);
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 99;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .main {
+        padding-top: var(--header-height);
+    }
     .page-header { padding: 16px 20px 6px; }
     .panel, .card, .card-box { margin: 0 16px 20px 16px; padding: 18px; }
     .dashboard { padding: 0 16px; }
@@ -1270,11 +1361,107 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 20px;
-    padding: 8px 15px;
+    padding: 10px 15px;
     width: 100%;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     color: var(--text-main);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+.scan-search:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Scan Row Base Styles */
+.scan-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+    padding: 0 30px;
+}
+.scan-input {
+    flex: 1;
+    min-width: 250px;
+}
+.scan-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.scan-actions .btn {
+    flex: 0 1 auto;
+    min-width: 120px;
+}
+
+/* Expected Controls Mobile Responsive */
+.expected-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0 30px 12px 30px;
+}
+.quick-filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.quick-filters .btn {
+    flex: 1;
+    min-width: 100px;
+}
+.custom-range {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.custom-range input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+}
+.custom-range .btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .expected-controls {
+        margin: 0 16px 12px 16px;
+        gap: 10px;
+    }
+    .quick-filters {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .quick-filters .btn {
+        flex: none;
+        min-width: auto;
+        padding: 8px 6px;
+        font-size: 0.75rem;
+        min-height: 36px;
+    }
+    .custom-range {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .custom-range input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 0.85rem;
+        box-sizing: border-box;
+    }
+    .custom-range .btn {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
 }
 .scan-search:focus {
     border-color: var(--primary);
@@ -1403,10 +1590,6 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
 }
 .proofs a { display: inline-block; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
 @media(max-width:768px){
-    .scan-row{ flex-direction: column; align-items: stretch; }
-    .scan-input{ width:100%; min-width:0; }
-    .scan-actions{ width:100%; flex-direction: column; }
-    .scan-actions .btn{ width:100%; }
     .details-grid{ grid-template-columns: 1fr; }
     .notif-panel{ right: 12px; top: calc(var(--header-height) + 8px); }
 }
@@ -1490,68 +1673,84 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
         <div id="qrScannerMsg" class="qr-scanner-msg"></div>
       </div>
       <div class="content-row">
-      <table id="entryTable">
-        <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tr id="emptyRow"><td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table id="entryTable">
+          <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+          <tr id="emptyRow"><td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td></tr>
+        </table>
+      </div>
     </div>
     </div>
     <div class="panel">
       <h3>Restricted</h3>
-      <table>
-        <tr><th>IP</th><th>Image</th><th>Name</th><th>Status</th></tr>
-        <tr id="restrictedEmpty"><td colspan="4" style="text-align:center;color:#6b6b6b">No restricted entries</td></tr>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table>
+          <tr><th>IP</th><th>Image</th><th>Name</th><th>Status</th></tr>
+          <tr id="restrictedEmpty"><td colspan="4" style="text-align:center;color:#6b6b6b">No restricted entries</td></tr>
+        </table>
+      </div>
     </div>
   </div>
   <div id="entriesSection" class="section hidden">
     <div class="panel">
       <h3>Today's Entry (Detailed)</h3>
-      <table id="todayEntries" class="history-table">
-        <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tbody id="todayEntriesBody">
-          <tr id="todayEmpty"><td colspan="5" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
-        </tbody>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table id="todayEntries" class="history-table">
+          <tr><th>Code</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+          <tbody id="todayEntriesBody">
+            <tr id="todayEmpty"><td colspan="5" style="text-align:center;color:#6b6b6b">No scans today</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div id="expectedSection" class="section">
     <div class="panel">
-      <div style="display:flex;gap:12px;align-items:center;margin:0 30px 12px 30px">
-        <button class="btn" id="thisWeekBtn" style="background:var(--accent)">This Week</button>
-        <button class="btn" id="weekFromStartBtn" style="background:#23412e">Next 7 Days</button>
-        <button class="btn" id="next30Btn" style="background:#6b7280">Next 30 Days</button>
-        <input type="date" id="expectedStart" style="margin-left:auto">
-        <input type="date" id="expectedEnd">
-        <button class="btn btn-view" id="applyExpected">Custom Range</button>
+      <div class="expected-controls">
+        <div class="quick-filters">
+          <button class="btn" id="thisWeekBtn" style="background:var(--accent)">This Week</button>
+          <button class="btn" id="weekFromStartBtn" style="background:#23412e">Next 7 Days</button>
+          <button class="btn" id="next30Btn" style="background:#6b7280">Next 30 Days</button>
+        </div>
+        <div class="custom-range">
+          <input type="date" id="expectedStart">
+          <input type="date" id="expectedEnd">
+          <button class="btn btn-view" id="applyExpected">Custom Range</button>
+        </div>
       </div>
       <div style="margin:6px 30px 8px; font-weight:600; color:#2c3e50;">Amenity Reservation</div>
-      <table id="expectedTable" class="history-table">
-        <tr><th>Code</th><th>Name</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tbody id="expectedBody">
-          <tr id="expectedEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td></tr>
-        </tbody>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table id="expectedTable" class="history-table">
+          <tr><th>Code</th><th>Name</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+          <tbody id="expectedBody">
+            <tr id="expectedEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No scheduled arrivals in selected range</td></tr>
+          </tbody>
+        </table>
+      </div>
       <div style="margin:16px 30px 8px; font-weight:600; color:#2c3e50;">Guest Entries</div>
-      <table id="expectedGuestTable" class="history-table">
-        <tr><th>Code</th><th>Added By</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
-        <tbody id="expectedGuestBody">
-          <tr id="expectedGuestEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No guest entries in selected range</td></tr>
-        </tbody>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table id="expectedGuestTable" class="history-table">
+          <tr><th>Code</th><th>Added By</th><th>Type</th><th>Amenity Reserve</th><th>Reservation Schedule</th><th>Status</th></tr>
+          <tbody id="expectedGuestBody">
+            <tr id="expectedGuestEmpty"><td colspan="6" style="text-align:center;color:#6b6b6b">No guest entries in selected range</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div id="restrictedSection" class="section hidden">
     <div class="panel">
       <h3>Manage Reported Incidents</h3>
-      <table id="incidentTable">
-        <thead>
-          <tr><th>Report ID</th><th>Resident Name</th><th>Description</th><th>Report Date</th><th>Action</th></tr>
-        </thead>
-        <tbody id="incidentTableBody">
-          <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
-        </tbody>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table id="incidentTable">
+          <thead>
+            <tr><th>Report ID</th><th>Resident Name</th><th>Description</th><th>Report Date</th><th>Action</th></tr>
+          </thead>
+          <tbody id="incidentTableBody">
+            <tr id="noIncidents"><td colspan="5" style="text-align:center;color:#6b6b6b">No incidents reported</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
   <div class="section" id="historySection">
@@ -1567,18 +1766,20 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
           <?php echo ($currentLogin && $currentLogin['logout_time']) ? htmlspecialchars($currentLogin['logout_time']) : 'Pending'; ?>
         </span>
       </div>
-      <table class="history-table">
-        <tr><th>Login Time</th><th>Logout Time</th><th>Status</th></tr>
-        <?php if (count($history) === 0) { ?>
-          <tr><td colspan="3" style="text-align:center;color:#6b6b6b">No records</td></tr>
-        <?php } else { foreach ($history as $h) { $st = ($h['logout_time'] ? 'Completed' : 'Pending'); ?>
-          <tr>
-            <td><?php echo htmlspecialchars($h['login_time']); ?></td>
-            <td><?php echo htmlspecialchars($h['logout_time'] ?? ''); ?></td>
-            <td><?php echo htmlspecialchars($st); ?></td>
-          </tr>
-        <?php } } ?>
-      </table>
+      <div class="table-responsive-wrapper">
+        <table class="history-table">
+          <tr><th>Login Time</th><th>Logout Time</th><th>Status</th></tr>
+          <?php if (count($history) === 0) { ?>
+            <tr><td colspan="3" style="text-align:center;color:#6b6b6b">No records</td></tr>
+          <?php } else { foreach ($history as $h) { $st = ($h['logout_time'] ? 'Completed' : 'Pending'); ?>
+            <tr>
+              <td><?php echo htmlspecialchars($h['login_time']); ?></td>
+              <td><?php echo htmlspecialchars($h['logout_time'] ?? ''); ?></td>
+              <td><?php echo htmlspecialchars($st); ?></td>
+            </tr>
+          <?php } } ?>
+        </table>
+      </div>
     </div>
   </div>
 </main>
