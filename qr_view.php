@@ -56,7 +56,7 @@ $verificationLink = sprintf('%s://%s%s/qr_view.php?code=%s', $scheme, $host, $ba
 // -------------------------------------------------------------------------
 if (isset($_POST['action']) && $_POST['action'] === 'confirm_entry' && !empty($_POST['ref_code']) && !empty($_POST['source_table']) && !empty($_POST['source_id'])) {
     if (!$isAuthorizedScanner) {
-        header("Location: " . $_SERVER['REQUEST_URI']);
+        http_response_code(403);
         exit;
     }
 
@@ -373,8 +373,8 @@ if (empty($error)) {
         if (isset($_GET['just_scanned']) && $_GET['just_scanned'] === '1') {
             $justConfirmed = true;
         }
-        $showConfirmPopup = !empty($_SESSION['confirm_popup']);
-        if ($showConfirmPopup) {
+        $showConfirmPopup = $isAuthorizedScanner && !empty($_SESSION['confirm_popup']);
+        if (!empty($_SESSION['confirm_popup'])) {
             unset($_SESSION['confirm_popup']);
         }
         if (!empty($data['guardian_block'])) {

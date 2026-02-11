@@ -973,8 +973,10 @@ input:focus-visible {
   .reservation-card{padding:18px}
   .calendar{max-width:100%}
   .booking-steps{width:100%; max-width:100%}
-  .date-row{flex-direction:row; gap:10px; flex-wrap:nowrap}
-  .date-row .date-item{width:auto; flex:1 1 50%}
+  .date-row{flex-direction:column; gap:12px; flex-wrap:nowrap}
+  .date-row .date-item{width:100%; flex:1 1 100%}
+  .selected-time-range,
+  .selected-time-note{width:100%}
   .btn-link{width:100%; text-align:center}
 }
 @media (max-width:480px){

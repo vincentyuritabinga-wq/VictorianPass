@@ -1,6 +1,36 @@
 <?php
+$staffInactivityLimit = 2700;
+ini_set('session.gc_maxlifetime', (string)$staffInactivityLimit);
 session_start();
 require_once 'connect.php';
+
+$now = time();
+$last = intval($_SESSION['staff_last_activity'] ?? 0);
+$timeout = intval($_SESSION['staff_session_timeout'] ?? $staffInactivityLimit);
+if ($last > 0 && $timeout > 0 && ($now - $last) > $timeout) {
+  $con->query("CREATE TABLE IF NOT EXISTS login_history (id INT AUTO_INCREMENT PRIMARY KEY, staff_id INT NOT NULL, login_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, logout_time DATETIME NULL, INDEX idx_staff_id (staff_id)) ENGINE=InnoDB");
+  $loginId = intval($_SESSION['login_history_id'] ?? 0);
+  if ($loginId > 0) {
+    $stmt = $con->prepare('UPDATE login_history SET logout_time = NOW() WHERE id = ? AND logout_time IS NULL');
+    $stmt->bind_param('i', $loginId);
+    $stmt->execute();
+    $stmt->close();
+  }
+  $_SESSION = [];
+  if (ini_get('session.use_cookies')) {
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+  }
+  session_destroy();
+  header("Location: login.php");
+  exit;
+}
+if (isset($_SESSION['role']) && $_SESSION['role'] === 'guard') {
+  $_SESSION['staff_last_activity'] = $now;
+  if (!isset($_SESSION['staff_session_timeout'])) {
+    $_SESSION['staff_session_timeout'] = $staffInactivityLimit;
+  }
+}
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'guard') { header('Location: login.php'); exit; }
 $email = $_SESSION['email'] ?? '';
 $local = explode('@', $email)[0] ?? '';
@@ -427,6 +457,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'list_today_scans') {
   $res = $con->query($q);
   if ($res) {
     while ($r = $res->fetch_assoc()) {
+      $statusLower = strtolower(trim($r['status'] ?? ''));
+      if ($statusLower === '' || (strpos($statusLower, 'permission') === false && strpos($statusLower, 'granted') === false && strpos($statusLower, 'access') === false)) {
+        continue;
+      }
       $startTime = $r['r_start_time'] ?? null;
       if (!$startTime) { $startTime = $r['rr_start_time'] ?? null; }
       if (!$startTime) { $startTime = $r['gf_start_time'] ?? null; }
@@ -1185,6 +1219,20 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     * { transition: none !important; animation: none !important; }
 }
 
+.scan-row{
+    display:flex;
+    gap:15px;
+    align-items:center;
+    margin-bottom:25px;
+    flex-wrap:wrap;
+}
+.scan-input{ flex:1; min-width:250px; }
+.scan-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
 /* Responsive */
 @media(max-width:900px){
     .sidebar {
@@ -1204,6 +1252,16 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     .dashboard { grid-template-columns: 1fr; }
     .top-header { padding: 12px 18px; height: auto; }
     .page-header { padding: 16px 20px 6px; }
+    .panel, .card, .card-box { margin: 0 16px 20px 16px; padding: 18px; }
+    .dashboard { padding: 0 16px; }
+    .page-header h2 { font-size: 1.3rem; }
+    .header-title { font-size: 1.05rem; }
+    .header-subtitle { font-size: 0.78rem; }
+    table { min-width: 100%; }
+    th, td { padding: 10px 12px; font-size: 0.82rem; white-space: normal; word-break: break-word; }
+    th { position: static; }
+    .panel { overflow-x: visible; }
+    .notif-panel { right: 16px; width: min(92vw, 360px); }
 }
 .dashboard .panel { margin: 0; }
 
@@ -1222,6 +1280,49 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     box-shadow: 0 0 0 3px rgba(35, 65, 46, 0.1);
     transform: translateY(-1px);
 }
+.qr-scanner-panel{
+    margin-top:12px;
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--bg-surface);
+    display:none;
+}
+.qr-scanner-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:10px;
+}
+.qr-scanner-title{
+    font-weight:700;
+    color:var(--text-main);
+}
+.qr-scanner-close{
+    background:#e5e7eb;
+    color:#111827;
+    border:none;
+    padding:8px 12px;
+    border-radius:8px;
+    font-weight:600;
+    cursor:pointer;
+}
+.qr-scanner-close:hover{ background:#d1d5db; }
+.qr-video{
+    width:100%;
+    max-height:360px;
+    background:#000;
+    border-radius:12px;
+}
+.qr-scanner-msg{
+    margin-top:8px;
+    font-size:0.9rem;
+    color:#6b7280;
+    font-weight:600;
+}
+.qr-scanner-msg.error{ color:#b30000; }
+.scan-actions .btn{ min-height: 40px; }
 .profile-mini {
     display: flex;
     align-items: center;
@@ -1300,6 +1401,23 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
     display: block;
 }
 .proofs a { display: inline-block; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+@media(max-width:768px){
+    .scan-row{ flex-direction: column; align-items: stretch; }
+    .scan-input{ width:100%; min-width:0; }
+    .scan-actions{ width:100%; flex-direction: column; }
+    .scan-actions .btn{ width:100%; }
+    .details-grid{ grid-template-columns: 1fr; }
+    .notif-panel{ right: 12px; top: calc(var(--header-height) + 8px); }
+}
+@media(max-width:600px){
+    .top-header{ padding: 10px 12px; gap: 12px; }
+    .sidebar-toggle, .icon-btn, .notif-btn{ width: 44px; height: 44px; }
+    .btn, .action-btn{ padding: 12px 14px; font-size: 0.9rem; min-height: 44px; }
+    .scan-search{ padding: 12px 16px; font-size: 0.95rem; }
+    .panel h3{ font-size: 1rem; }
+    .page-header{ padding: 14px 14px 4px; }
+    .panel, .card, .card-box{ margin: 0 12px 18px 12px; padding: 16px; }
+}
 </style>
 </head>
 <body>
@@ -1352,14 +1470,23 @@ tbody tr { transition: background-color 0.2s ease-in-out; }
   <div id="dashboardSection" class="dashboard section hidden">
     <div class="panel">
       <h3>Today's Entry</h3>
-      <div style="display:flex; gap:15px; align-items:center; margin-bottom:25px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:250px;">
-             <input id="scanCode" type="text" class="scan-search" placeholder="Scan or enter code...">
+      <div class="scan-row">
+        <div class="scan-input">
+             <input id="scanCode" type="text" class="scan-search" placeholder="Enter reference code for manual scanning">
         </div>
-        <div style="display:flex; gap:10px;">
+        <div class="scan-actions">
             <button class="btn btn-approve" onclick="scanCode()">Scan</button>
+            <button class="btn" id="scanQrBtn" style="background:#111827;color:#fff">Scan QR Code</button>
             <button class="btn" onclick="openStatusCard()" style="background:#23412e;color:#fff">Open QR Card</button>
         </div>
+      </div>
+      <div id="qrScannerPanel" class="qr-scanner-panel">
+        <div class="qr-scanner-head">
+          <div class="qr-scanner-title">QR Scanner</div>
+          <button type="button" class="qr-scanner-close" onclick="stopQrScanner()">Close</button>
+        </div>
+        <video id="qrVideo" class="qr-video" playsinline></video>
+        <div id="qrScannerMsg" class="qr-scanner-msg"></div>
       </div>
       <div class="content-row">
       <table id="entryTable">
@@ -1672,6 +1799,90 @@ function showToast(message, type){
 }
 const guardConfirmMsg = <?php echo json_encode($guardConfirmRef !== '' ? ('Confirmed entry of code number ' . $guardConfirmRef) : ''); ?>;
 if(guardConfirmMsg){ showToast(guardConfirmMsg); }
+let qrStream = null;
+let qrDetector = null;
+let qrScanActive = false;
+let qrScanRaf = 0;
+function setQrMessage(msg, isError){
+  const el = document.getElementById('qrScannerMsg');
+  if(!el) return;
+  el.textContent = msg || '';
+  if(isError){ el.classList.add('error'); }
+  else { el.classList.remove('error'); }
+}
+function startQrScanner(){
+  const panel = document.getElementById('qrScannerPanel');
+  if(panel){ panel.style.display = 'block'; }
+  const video = document.getElementById('qrVideo');
+  if(!video){ setQrMessage('Camera view unavailable.', true); return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    setQrMessage('Camera not supported on this device. Use manual code entry.', true);
+    return;
+  }
+  setQrMessage('Requesting camera access...', false);
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    .then(stream=>{
+      qrStream = stream;
+      video.srcObject = stream;
+      video.setAttribute('playsinline','');
+      return video.play();
+    })
+    .then(()=>{
+      if(!('BarcodeDetector' in window)){
+        setQrMessage('QR scanning is not supported on this device. Use manual code entry.', true);
+        return;
+      }
+      try { qrDetector = new BarcodeDetector({ formats: ['qr_code'] }); }
+      catch(_){ qrDetector = new BarcodeDetector(); }
+      qrScanActive = true;
+      setQrMessage('Point the camera at a QR code.', false);
+      scanQrFrame();
+    })
+    .catch(err=>{
+      const msg = err && err.name === 'NotAllowedError'
+        ? 'Camera access denied. Allow permission to scan.'
+        : (err && err.name === 'NotFoundError'
+          ? 'No camera found on this device.'
+          : 'Unable to access camera. Use manual code entry.');
+      setQrMessage(msg, true);
+    });
+}
+function scanQrFrame(){
+  if(!qrScanActive) return;
+  const video = document.getElementById('qrVideo');
+  if(!video || !qrDetector){ qrScanActive = false; return; }
+  qrDetector.detect(video)
+    .then(codes=>{
+      if(!qrScanActive) return;
+      if(codes && codes.length){
+        const raw = codes[0].rawValue || '';
+        if(raw){
+          handleQrResult(raw);
+          return;
+        }
+      }
+      qrScanRaf = requestAnimationFrame(scanQrFrame);
+    })
+    .catch(_=>{
+      qrScanRaf = requestAnimationFrame(scanQrFrame);
+    });
+}
+function handleQrResult(raw){
+  const input = document.getElementById('scanCode');
+  if(input){ input.value = raw; }
+  stopQrScanner();
+  scanCode();
+}
+function stopQrScanner(){
+  qrScanActive = false;
+  if(qrScanRaf){ cancelAnimationFrame(qrScanRaf); qrScanRaf = 0; }
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream = null; }
+  const video = document.getElementById('qrVideo');
+  if(video){ video.pause(); video.srcObject = null; }
+  const panel = document.getElementById('qrScannerPanel');
+  if(panel){ panel.style.display = 'none'; }
+  setQrMessage('', false);
+}
 function scanCode(){
   const raw=(document.getElementById('scanCode').value||'').trim();
   if(!raw){ showToast('Enter a code to scan','error'); return; }
@@ -1714,6 +1925,9 @@ function scanCode(){
     })
     .catch(_=>{ showToast('Network error','error'); });
 }
+const scanQrBtn = document.getElementById('scanQrBtn');
+if(scanQrBtn){ scanQrBtn.addEventListener('click', startQrScanner); }
+window.addEventListener('beforeunload', stopQrScanner);
 function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="6" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const addedByDisplay=r.added_by||r.name||'-'; const amenityDisplay=r.amenity||'-'; tr.innerHTML=`<td>${r.code||'-'}</td><td>${addedByDisplay}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${r.status||'-'}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
   function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
@@ -1836,15 +2050,20 @@ function formatScheduleRow(r){
   if(timeLabel){ return `${startDateLabel} ${timeLabel}`; }
   return startDateLabel;
 }
+function isApprovedStatus(s){
+  const v=String(s||'').toLowerCase();
+  return v.indexOf('approv')!==-1;
+}
 function renderExpected(rows){
   const tbody=document.getElementById('expectedBody'); if(!tbody) return;
   const guestBody=document.getElementById('expectedGuestBody');
   tbody.innerHTML='';
   if(guestBody) guestBody.innerHTML='';
   const list=Array.isArray(rows)?rows:[];
+  const approved=list.filter(r=>isApprovedStatus(r.status));
   const guestRows=[];
   const otherRows=[];
-  list.forEach(r=>{ if(String(r.type||'').toLowerCase()==='guest entry'){ guestRows.push(r); } else { otherRows.push(r); } });
+  approved.forEach(r=>{ if(String(r.type||'').toLowerCase()==='guest entry'){ guestRows.push(r); } else { otherRows.push(r); } });
   if(otherRows.length===0){
     const tr=document.createElement('tr');
     tr.id='expectedEmpty';
