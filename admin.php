@@ -77,11 +77,11 @@ function ensureDownpaymentColumn($con){
 function ensureHouseRange($con){
   if(!($con instanceof mysqli)) return;
   @$con->begin_transaction();
-  @$con->query("DELETE FROM houses WHERE house_number NOT REGEXP '^VH-[0-9]{4}$' OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) < 1 OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) > 2200");
+  @$con->query("DELETE FROM houses WHERE house_number NOT REGEXP '^VH-[0-9]{4}$' OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) < 1 OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) > 2220");
   $stmt = $con->prepare("INSERT IGNORE INTO houses (house_number, address) VALUES (?, ?)");
   if ($stmt) {
     $addr = 'Victorian Heights Subdivision';
-    for ($i=1; $i<=2200; $i++){
+    for ($i=1; $i<=2220; $i++){
       $hn = 'VH-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
       $stmt->bind_param('ss', $hn, $addr);
       $stmt->execute();
@@ -4398,13 +4398,15 @@ body.modal-open { overflow: hidden; }
     .header-actions { order: 2; }
     .header-search { order: 3; width: 100%; }
     .search { width: 100%; }
-    .page-header { padding: 16px 20px 6px; }
+    .page-header { padding: 12px 16px 6px; }
+    .main { margin-left: 0; width: 100%; }
     
-    .dashboard-grid, .panel { padding: 0 20px; margin: 0 0 20px 0; }
-    .panel { margin: 0 20px 20px 20px; padding: 20px; }
+    .dashboard-grid, .panel { padding: 0 16px; margin: 0 0 16px 0; }
+    .panel { margin: 0 16px 16px 16px; padding: 16px; }
     
-    table { min-width: 600px; }
-    .content-row { overflow-x: auto; }
+    table { min-width: 520px; }
+    th, td { padding: 10px 12px; font-size: 0.8rem; }
+    .content-row { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 .notif-badge { font-family: 'Poppins', sans-serif; }
 </style>
