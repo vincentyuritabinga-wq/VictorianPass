@@ -958,7 +958,7 @@ input:focus-visible {
   .reservation-grid .reservation-left{grid-area:form}
 }
 .toast{position:fixed; top:14px; left:50%; transform:translateX(-50%); background:#23412e; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 8px 18px rgba(0,0,0,.12); font-size:.9rem; z-index:1000; display:none}
-#amenityImageModalImg{width:720px; height:480px; object-fit:cover;}
+#amenityImageModalImg{width:100%; height:auto; max-width:85vw; max-height:80vh; object-fit:contain;}
 @media (max-width:640px){
   body{padding-top:64px}
   .navbar{padding:10px 4%}
@@ -989,7 +989,7 @@ input:focus-visible {
   .booking-step{min-width:0}
   .step-title{font-size:0.85rem}
 }
-@media (max-width:768px){ #amenityImageModalImg{ width:90vw; height:60vh; } }
+@media (max-width:768px){ #amenityImageModalImg{ width:90vw; max-height:75vh; } }
 
 /* Additional mobile calendar responsiveness tweaks */
 @media (max-width:480px) {
