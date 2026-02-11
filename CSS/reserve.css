@@ -237,6 +237,7 @@ html, body { max-width: 100%; overflow-x: hidden; height: auto; min-height: 100%
 .persons .counter{justify-content:center;margin-top:10px}
 .note{display:block;color:#666;font-size:.85rem;margin-top:6px}
 .reservation-card p{margin:0;font-weight:500;color:#374151;line-height:1.5}
+.date-extra{margin-top:12px}
 
 @media (min-width:1024px){
   .reservation-left .res-item{
