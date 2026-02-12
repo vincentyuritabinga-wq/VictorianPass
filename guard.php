@@ -2122,12 +2122,20 @@ function stopQrScanner(){
   if(panel){ panel.style.display = 'none'; }
   setQrMessage('', false);
 }
+function isResidentRefCode(code){
+  return /^VH-/i.test(String(code||'').trim());
+}
+function getResidentProofUrl(basePath, code){
+  return `${location.origin}${basePath}/resident_qr_view.php?code=${encodeURIComponent(code)}`;
+}
 function scanCode(){
   const raw=(document.getElementById('scanCode').value||'').trim();
   if(!raw){ showToast('Enter a code to scan','error'); return; }
   const basePath = window.location.pathname.replace(/\/[^\/]*$/, '');
   let codeForLog = raw;
-  let openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(raw)}`;
+  let openUrl = isResidentRefCode(raw)
+    ? getResidentProofUrl(basePath, raw)
+    : `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(raw)}`;
   let parsedUrl = null;
   try { parsedUrl = new URL(raw); } catch(_){}
   if(parsedUrl){
@@ -2135,7 +2143,9 @@ function scanCode(){
     const ridParam = parsedUrl.searchParams.get('rid');
     if(codeParam){
       codeForLog = codeParam;
-      openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
+      openUrl = isResidentRefCode(codeParam)
+        ? getResidentProofUrl(basePath, codeParam)
+        : `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
     } else if(ridParam && parsedUrl.pathname.indexOf('resident_qr_view.php') !== -1){
       codeForLog = raw;
       openUrl = parsedUrl.href;
@@ -2146,7 +2156,9 @@ function scanCode(){
     if(codeMatch && codeMatch[1]){
       const codeParam = decodeURIComponent(codeMatch[1]);
       codeForLog = codeParam;
-      openUrl = `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
+      openUrl = isResidentRefCode(codeParam)
+        ? getResidentProofUrl(basePath, codeParam)
+        : `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(codeParam)}`;
     } else if(ridMatch && ridMatch[1]){
       codeForLog = raw;
       openUrl = `${location.origin}${basePath}/resident_qr_view.php?rid=${encodeURIComponent(ridMatch[1])}`;
@@ -2169,7 +2181,7 @@ if(scanQrBtn){ scanQrBtn.addEventListener('click', startQrScanner); }
 window.addEventListener('beforeunload', stopQrScanner);
 function renderDashboardEntries(rows){ const tbl=document.getElementById('entryTable'); if(!tbl) return; const header=tbl.querySelector('tr'); const rowsToRemove=Array.from(tbl.querySelectorAll('tr')).slice(1); rowsToRemove.forEach(tr=>tr.remove()); if(!rows||rows.length===0){ const tr=document.createElement('tr'); tr.id='emptyRow'; tr.innerHTML=`<td colspan="5" style="text-align:center;color:#6b6b6b">Awaiting scans...</td>`; tbl.appendChild(tr); return; } rows.forEach(r=>{ const tr=document.createElement('tr'); const scheduleDisplay=formatScheduleRow(r); const amenityDisplay=r.amenity||'-'; const statusDisplay=formatEntryStatus(r.status); tr.innerHTML=`<td>${r.code||'-'}</td><td>${r.type||'-'}</td><td>${amenityDisplay}</td><td>${scheduleDisplay}</td><td>${statusDisplay}</td>`; tbl.appendChild(tr); }); }
 function loadDashboardEntries(){ fetch('guard.php?action=list_today_scans').then(r=>r.json()).then(data=>{ if(data&&data.success){ renderDashboardEntries(data.entries||[]); } }).catch(_=>{}); }
-  function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } window.open(`qr_view.php?code=${encodeURIComponent(code)}`,'_blank'); }
+  function openStatusCard(){ const code=(document.getElementById('scanCode').value||'').trim(); if(!code){ showToast('Enter a code first','error'); return; } const basePath = window.location.pathname.replace(/\/[^\/]*$/, ''); const codeMatch = code.match(/[?&]code=([^&]+)/i); const extracted = codeMatch && codeMatch[1] ? decodeURIComponent(codeMatch[1]) : code; const url = isResidentRefCode(extracted) ? getResidentProofUrl(basePath, extracted) : `${location.origin}${basePath}/qr_view.php?code=${encodeURIComponent(extracted)}`; window.open(url,'_blank'); }
 // Incident listing & escalation
 let lastIncidentIds = new Set();
 function setActionClicked(btn){

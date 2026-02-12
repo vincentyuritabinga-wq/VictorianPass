@@ -210,8 +210,14 @@ if (!$isAccountBlocked) {
     $scheme = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/VictorianPass'), '/\\');
-    $qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
-    $qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
+    $houseCode = strtoupper(trim((string)($user['house_number'] ?? '')));
+    if ($houseCode !== '') {
+        $qrLink = sprintf('%s://%s%s/resident_qr_view.php?code=%s', $scheme, $host, $basePath, urlencode($houseCode));
+        $qrRelPath = 'uploads/qr_resident_' . preg_replace('/[^A-Z0-9]+/', '_', $houseCode) . '.png';
+    } else {
+        $qrLink = sprintf('%s://%s%s/resident_qr_view.php?rid=%d', $scheme, $host, $basePath, intval($user['id'] ?? $userId));
+        $qrRelPath = 'uploads/qr_resident_' . intval($user['id'] ?? $userId) . '.png';
+    }
     $qrAbsPath = __DIR__ . '/' . $qrRelPath;
     // Always ensure the cached QR encodes the current resident ID link
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($qrLink);
