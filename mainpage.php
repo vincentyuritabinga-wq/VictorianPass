@@ -29,25 +29,113 @@ function ensureEntryPassesTable($con) {
 
 ensureEntryPassesTable($con);
 
+// Ensure users table schema supports visitors
+function ensureUserSchema($con){
+  // Add 'visitor' to user_type enum if missing
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'user_type'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strpos($row['Type'], "visitor") === false) {
+      $con->query("ALTER TABLE users MODIFY COLUMN user_type ENUM('resident','visitor') DEFAULT 'resident'");
+    }
+  }
+  // Make house_number nullable
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'house_number'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN house_number VARCHAR(50) NULL");
+    }
+  }
+  // Make address nullable
+  $res = $con->query("SHOW COLUMNS FROM users LIKE 'address'");
+  if ($res && ($row = $res->fetch_assoc())) {
+    if (strtoupper($row['Null']) === 'NO') {
+      $con->query("ALTER TABLE users MODIFY COLUMN address VARCHAR(255) NULL");
+    }
+  }
+}
+ensureUserSchema($con);
+
 $error = '';
 
-// Load resident mini profile data (for dropdown)
-$residentName = '';
-$residentHouse = '';
-$hasResidentProfile = false;
-if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') {
+// Load user profile data (resident or visitor)
+$userName = '';
+$userFirstName = '';
+$userHouse = '';
+$userType = '';
+$userEmail = '';
+$userPhone = '';
+$userAddress = '';
+$userSex = '';
+$userBirthdate = '';
+$isLoggedIn = false;
+$isResident = false;
+$isVisitor = false;
+
+if (isset($_SESSION['user_id']) && isset($_SESSION['user_type'])) {
   $uid = (int)$_SESSION['user_id'];
-  if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number FROM users WHERE id = ? LIMIT 1")) {
-    $stmt->bind_param("i", $uid);
-    if ($stmt->execute()) {
-      $stmt->bind_result($first, $middle, $last, $house);
-      if ($stmt->fetch()) {
-        $residentName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
-        $residentHouse = $house ?? '';
-        $hasResidentProfile = true;
+  $userType = $_SESSION['user_type'];
+  $foundUser = false;
+  if ($userType === 'resident') {
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, house_number, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
+      $stmt->bind_param("i", $uid);
+      if ($stmt->execute()) {
+        $stmt->bind_result($first, $middle, $last, $house, $email, $phone, $address, $sex, $birthdate);
+        if ($stmt->fetch()) {
+          $foundUser = true;
+          $isLoggedIn = true;
+          $isResident = true;
+          $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userFirstName = $first;
+          $userHouse = $house ?? '';
+          $userEmail = $email ?? '';
+          $userPhone = $phone ?? '';
+          $userAddress = $address ?? '';
+          $userSex = $sex ?? '';
+          $userBirthdate = $birthdate ?? '';
+        }
       }
+      $stmt->close();
     }
-    $stmt->close();
+  } elseif ($userType === 'visitor') {
+    if ($stmt = $con->prepare("SELECT first_name, middle_name, last_name, email, phone, address, sex, birthdate FROM users WHERE id = ? LIMIT 1")) {
+      $stmt->bind_param("i", $uid);
+      if ($stmt->execute()) {
+        $stmt->bind_result($first, $middle, $last, $email, $phone, $address, $sex, $birthdate);
+        if ($stmt->fetch()) {
+          $foundUser = true;
+          $isLoggedIn = true;
+          $isVisitor = true;
+          $userName = trim($first . ' ' . (($middle ?? '') ? ($middle . ' ') : '') . $last);
+          $userFirstName = $first;
+          $userHouse = 'Visitor';
+          $userEmail = $email ?? '';
+          $userPhone = $phone ?? '';
+          $userAddress = $address ?? '';
+          $userSex = $sex ?? '';
+          $userBirthdate = $birthdate ?? '';
+        }
+      }
+      $stmt->close();
+    }
+  }
+  if ($foundUser) {
+    $profilePicPath = 'images/mainpage/profile\'.jpg';
+    if (file_exists('uploads/profiles/user_' . $uid . '.jpg')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpg';
+    } elseif (file_exists('uploads/profiles/user_' . $uid . '.png')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.png';
+    } elseif (file_exists('uploads/profiles/user_' . $uid . '.jpeg')) {
+        $profilePicPath = 'uploads/profiles/user_' . $uid . '.jpeg';
+    }
+    $profilePicUrl = $profilePicPath . '?t=' . time();
+  } else {
+    unset($_SESSION['user_id']);
+    unset($_SESSION['user_type']);
+    unset($_SESSION['role']);
+    $isLoggedIn = false;
+    $isResident = false;
+    $isVisitor = false;
+    $userType = '';
   }
 }
 
@@ -61,19 +149,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $middle = trim($_POST['middle_name'] ?? '');
   $last = trim($_POST['last_name'] ?? '');
   $address = trim($_POST['address'] ?? '');
-  // Email removed from form; store as empty string
-  $email = '';
+  $email = trim($_POST['email'] ?? '');
   $sex = $_POST['sex'] ?? '';
   $birthdate = $_POST['birthdate'] ?? '';
   $contact = trim($_POST['contact'] ?? '');
+
+  // Normalize phone number to +63 format
+  $phoneClean = preg_replace('/[\s\-]/', '', $contact);
+  if (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^\+63(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^63(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
+      $contact = '+63' . $matches[1];
+  }
 
   // Basic validation mirroring client rules
   if ($first === '' || preg_match('/\d/', $first)) { $formErrors[] = 'Please provide a valid First Name.'; }
   if ($last === '' || preg_match('/\d/', $last)) { $formErrors[] = 'Please provide a valid Last Name.'; }
   if ($address === '') { $formErrors[] = 'Address is required.'; }
+  if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) { $formErrors[] = 'A valid email is required.'; }
   if ($sex === '') { $formErrors[] = 'Sex is required.'; }
   if ($birthdate === '') { $formErrors[] = 'Birthdate is required.'; }
-  if ($contact === '' || (!preg_match('/^09\d{9}$/', $contact) && !preg_match('/^\+639\d{9}$/', $contact))) { $formErrors[] = 'Use 09xxxxxxxxx or +639xxxxxxxxx for contact.'; }
+  if ($contact !== '' && !preg_match('/^\+639\d{9}$/', $contact)) { $formErrors[] = 'Use valid PH mobile format (+63 9XX XXX XXXX or 09XX XXX XXXX).'; }
+  if (!isset($_POST['terms'])) { $formErrors[] = 'You must agree to the Terms and Services.'; }
+  if (!isset($_POST['privacy'])) { $formErrors[] = 'You must acknowledge the Privacy Policy.'; }
 
   // Handle valid ID upload (REQUIRED)
   $validIdPath = null;
@@ -118,311 +220,62 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-  <?php $mainCssVer = @filemtime(__DIR__ . '/mainpage.css') ?: time(); $respCssVer = @filemtime(__DIR__ . '/responsive.css') ?: time(); ?>
-  <link rel="stylesheet" href="mainpage.css?v=<?php echo $mainCssVer; ?>">
-  <link rel="stylesheet" href="responsive.css?v=<?php echo $respCssVer; ?>">
-
-  <style>
-    /* Global Poppins Font Application */
-    * {
-      font-family: 'Poppins', sans-serif !important;
-    }
-    
-    body {
-      animation: fadeIn 0.6s ease-in-out;
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-    }
-    
-    h1, h2, h3, h4, h5, h6 {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 600;
-    }
-    
-    p, span, div, a, button, input, select, textarea, label {
-      font-family: 'Poppins', sans-serif;
-    }
-    
-    .brand-text h1 {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 700;
-    }
-    
-    .brand-text p {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-    }
-    
-    .hero-content h1 {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 900;
-    }
-    
-    .tagline {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 300;
-    }
-    
-    .btn-qr, .btn-nav {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 600;
-    }
-    
-    .entry-form input, .entry-form select, .entry-form textarea {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-    }
-    
-    .form-header span {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 600;
-    }
-    
-    .dropdown-btn {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 500;
-    }
-    
-    .dropdown-content a {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-    }
-    
-    .page-instructions, .form-note {
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-    }
-    
-    .page-instructions strong {
-      font-weight: 600;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }               
-    .action-buttons {
-      display: flex;
-      gap: 15px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .btn-qr {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 10px;
-      font-weight: 600;
-      text-decoration: none;
-      color: #222;
-      background: #e5ddc6;
-      transition: 0.2s;
-      white-space: nowrap;
-      line-height: 1;
-    }
-    .btn-qr img { width: 18px; height: 18px; }
-    .btn-qr:hover { transform: translateY(-2px); opacity: 0.9; }
-    .btn-referral { background: #4CAF50; color: #fff; }
-    .form-note, .page-instructions {
-      margin-top: 15px;
-      font-size: 0.9rem;
-      color: #ddd;
-      text-align: center;
-      max-width: 520px;
-      line-height: 1.5;
-    }
-    .page-instructions strong { color: #fff; }
-    .hero-icons { display: flex; justify-content: center; }
-    .form-instruction { text-align:center; color:#ddd; margin:10px 0 6px; font-size:0.95rem; }
-    .error { background:#ffe5e5; color:#b00020; padding:10px; border-radius:6px; margin:10px 0; text-align:center; }
-
-    .entry-form select { 
-      width: 95%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; 
-      font-size: 0.9rem; font-family: 'Poppins', sans-serif; 
-      background: #fff url("mainpage/arrow.svg") no-repeat right 12px center; 
-      background-size: 14px; appearance: none; color: #333; cursor: pointer; 
-      margin-bottom: 14px;
-    } 
-    .entry-form select:focus { border-color: #4CAF50; }
-
-    .form-group { position: relative; flex: 1; }
-    .form-group input[type="date"] {
-      width: 100%; padding: 12px; border: 1px solid #ccc;
-      border-radius: 8px; font-size: 0.95rem;
-      font-family: 'Poppins', sans-serif; background: #fff; color: #222;
-    }
-    input[type="date"]:not(:focus):placeholder-shown::-webkit-datetime-edit {
-      color: transparent;
-    }
-    input[type="date"]::-webkit-calendar-picker-indicator {
-      position: absolute; right: 12px; cursor: pointer;
-    }
-    .form-group label {
-      position: absolute; left: 12px; top: 12px; color: #888;
-      font-size: 0.95rem; pointer-events: none; transition: 0.2s ease all;
-    }
-    .form-group input:focus + label,
-    .form-group input:not(:placeholder-shown) + label {
-      top: -8px; left: 8px; font-size: 0.75rem; color: #23412e;
-      background: #fff; padding: 0 4px;
-    }
-
-    /* User Type Dropdown Styles */
-    .user-type-dropdown {
-      position: relative;
-      display: inline-block;
-      min-width: 280px;
-    }
-
-    .dropdown-btn {
-      background: #23412e;
-      color: #fff;
-      padding: 14px 22px;
-      border: none;
-      border-radius: 28px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 1.1rem;
-      font-weight: 500;
-      transition: all 0.2s ease;
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .dropdown-btn span {
-      pointer-events: none;
-    }
-
-    .dropdown-btn:hover {
-      background: #6faa82ff;
-      transform: scale(1.05);
-    }
-
-    .dropdown-arrow {
-      font-size: 16px;
-      transition: transform 0.2s ease;
-      user-select: none;
-      pointer-events: none;
-    }
-
-    .dropdown-content {
-      display: none;
-      position: absolute;
-      right: 0;
-      background: #fff;
-      min-width: 160px;
-      box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-      border-radius: 8px;
-      z-index: 1000;
-      overflow: hidden;
-      margin-top: 5px;
-    }
-
-    .dropdown-content a {
-      color: #222;
-      padding: 12px 16px;
-      text-decoration: none;
-      display: block;
-      transition: background-color 0.2s ease;
-    }
-
-    .dropdown-content a:hover {
-      background-color: #f1f1f1;
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Centered placement for User Type selector in hero */
-    .user-type-center {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin: 16px 0 20px;
-    }
-    .btn-change {
-      background: #6c757d;
-      color: #fff;
-      border-radius: 20px;
-      padding: 8px 16px;
-      border: none;
-      cursor: pointer;
-    }
-    .btn-change:hover { opacity: 0.9; }
-
-    /* Profile icon + dropdown */
-    .profile-icon { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #23412e; cursor: pointer; object-fit: cover; }
-    .profile-icon-wrap { position: relative; display: inline-block; }
-    .profile-dropdown { position: absolute; right: 0; top: 125%; width: 260px; background: #fff; color: #222; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.15); border: 1px solid #eee; z-index: 1100; display: none; overflow: hidden; }
-    .profile-dropdown .mini-profile { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid #f0f0f0; }
-    .profile-dropdown .mini-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #23412e; }
-    .profile-dropdown .mini-text { display: flex; flex-direction: column; }
-    .profile-dropdown .mini-name { font-weight: 600; font-size: 0.95rem; }
-    .profile-dropdown .mini-house { color: #666; font-size: 0.85rem; }
-    .profile-dropdown .actions { display: flex; gap: 8px; padding: 10px 12px; }
-    .profile-dropdown .btn { flex: 1; text-align: center; padding: 8px 10px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
-    .profile-dropdown .btn-view { background: #23412e; color: #fff; }
-    .profile-dropdown .btn-view:hover { background: #1a2f21; }
-    .profile-dropdown .btn-logout { background: #e5ddc6; color: #222; }
-    .profile-dropdown .btn-logout:hover { opacity: 0.9; }
-    .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#23412e;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.12);font-size:.9rem;z-index:1000}
-    .toast .code{background:#1f3526;border-radius:8px;padding:2px 8px;margin-left:6px}
-  </style>
+  <?php $mainCssVer = @filemtime(__DIR__ . '/css/mainpage.css') ?: time(); $respCssVer = @filemtime(__DIR__ . '/css/responsive.css') ?: time(); ?>
+  <link rel="stylesheet" href="css/mainpage.css?v=<?php echo $mainCssVer; ?>">
+  <link rel="stylesheet" href="css/responsive.css?v=<?php echo $respCssVer; ?>">
+  
 </head>
 <body>
-  <?php if (!empty($flash)) { ?>
-    <div class="toast"><?php echo htmlspecialchars($flash); ?><?php if(!empty($flashRef)){ echo ' <span class="code">' . htmlspecialchars($flashRef) . '</span>'; } ?></div>
-  <?php } ?>
   <!-- HEADER -->
   <header class="navbar">
     <div class="logo">
-      <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+      <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
       <div class="brand-text">
         <h1>VictorianPass</h1>
         <p>Victorian Heights Subdivision</p>
       </div>
     </div>
     
-    <nav class="page-nav">
-      <a href="#home">Home</a>
-      <a href="#about-us">About Us</a>
-      <a href="#facilities">Amenities</a>
-      <a href="#about-system">About the System</a>
-    </nav>
-
-    <div class="nav-actions">
-      <a href="checkurstatus.php" class="btn-nav btn-status" id="checkStatusNav" style="display: none;">Check Status</a>
-      <!-- Navigation Links (initially hidden) -->
-      <div class="nav-links" id="navLinks" style="display: none;">
-        <a href="login.php" class="btn-nav btn-login">Login</a>
-        <a href="signup.php" class="btn-nav btn-register">Register</a>
-        <div id="profileIcon" class="profile-icon-wrap" style="display: none;">
-          <img src="mainpage/profile'.jpg" alt="Profile" class="profile-icon">
-          <?php if ($hasResidentProfile): ?>
-          <div id="profileDropdown" class="profile-dropdown" role="dialog" aria-label="Resident quick profile">
-            <div class="mini-profile">
-              <img src="mainpage/profile'.jpg" alt="Avatar" class="mini-avatar">
-              <div class="mini-text">
-                <span class="mini-name"><?php echo htmlspecialchars($residentName); ?></span>
-                <span class="mini-house">House No.: <?php echo htmlspecialchars($residentHouse); ?></span>
-              </div>
-            </div>
-            <div class="actions">
-              <a href="profileresident.php" class="btn btn-view">View More</a>
-              <a href="logout.php" class="btn btn-logout">Log Out</a>
-            </div>
+    <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navCollapse"><span></span><span></span><span></span></button>
+    <div class="nav-collapse" id="navCollapse">
+      <nav class="page-nav" id="primaryNav">
+        <a href="#home">Home</a>
+        <a href="#about-us">About Us</a>
+        <a href="#facilities">Amenities</a>
+        <a href="#about-system">About the System</a>
+      </nav>
+      <div class="nav-actions">
+        <?php if ($isLoggedIn): ?>
+          <div style="display:flex; align-items:center; gap:12px; color:#f4f4f4; font-weight:600;">
+             <span>Hi, <?php echo htmlspecialchars($userFirstName ?: 'User'); ?> <small style="font-weight:400; opacity:0.8;">(<?php echo ucfirst($userType); ?>)</small></span>
+             <div class="profile-icon-wrap" id="profileWrap">
+               <button id="profileAccountTrigger" type="button" class="profile-account-btn" style="background:none;border:none;padding:0;cursor:pointer;">
+                 <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="profile-icon">
+               </button>
+               <div class="profile-dropdown" id="profileDropdown">
+                 <div class="mini-profile">
+                    <img src="<?php echo $profilePicUrl; ?>" alt="Profile" class="mini-avatar">
+                    <div class="mini-text" style="text-align:left;">
+                      <div class="mini-name" style="color:#222;"><?php echo htmlspecialchars($userName); ?></div>
+                      <div style="font-size:0.8rem; color:#666;"><?php echo ucfirst($userType); ?></div>
+                    </div>
+                 </div>
+                 <div class="profile-dropdown-actions">
+                    <a href="<?php echo $userType === 'resident' ? 'profileresident.php' : 'dashboardvisitor.php'; ?>" class="btn-dashboard-view">
+                      Open Full View of Profile Dashboard
+                    </a>
+                 </div>
+               </div>
+             </div>
           </div>
-          <?php endif; ?>
-        </div>
+        <?php else: ?>
+          <div class="nav-links" style="display:flex;">
+            <a href="login.php" class="btn-nav btn-login">Login</a>
+            <a href="signup.php" class="btn-nav btn-register">Register</a>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
 
@@ -432,17 +285,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <!-- HERO SECTION -->
   <section class="hero" id="home">
     <?php if ($error !== '') { echo '<div class="error">' . htmlspecialchars($error) . '</div>'; } ?>
-    <div class="hero-content">
+    <div class="hero-content reveal-on-scroll is-visible">
       
-
-      <div class="hero-icons" id="entryPassButtonWrapper" style="display:none;">
-        <a href="entrypass.html" class="icon-box" id="entryFormButton">
-          <img src="mainpage/entrypass.svg" alt="Entry Pass">
-          <span>Entry Pass Form</span>
-        </a>
-      
-      </div>
-      <br>
       <h2>WELCOME TO</h2>
       <div class="hero-brand">
         <h1>VictorianPass</h1>
@@ -450,236 +294,194 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <div class="hero-emblem">
         <span class="line"></span>
-        <img src="mainpage/logo.svg" alt="Emblem">
+        <img src="images/logo.svg" alt="Emblem">
         <span class="line"></span>
       </div>
-      <h3 class="hero-subbrand">Victorian Heights Subdivision</h3>
-      <br><br>
-      <!--<p class="welcome-subtitle">
-        VictorianPass: An Online Amenity Reservation System<br>
-        with QR-based Entry Pass Security<br>
-        for Victorian Heights Subdivision
-      </p> -->      <!-- Moved User Type Dropdown to bottom of hero -->
-      <div class="user-type-center">
-        <div class="user-type-dropdown" id="userTypeDropdown">
-          <button class="dropdown-btn" id="dropdownBtn">
-            <span>Select User Type</span>
-            <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="dropdown-content" id="dropdownContent">
-            <a href="#" onclick="selectUserType('resident')">Resident</a>
-            <?php if (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident'): ?>
-              <a href="#" onclick="return false" title="Log out to switch">Visitor</a>
-            <?php else: ?>
-              <a href="#" onclick="selectUserType('visitor')">Visitor</a>
-            <?php endif; ?>
+
+      <p class="tagline">Every home has a story — start yours in a place worth remembering.</p>
+
+      <div class="action-buttons" style="margin-top: 30px; gap:15px; flex-wrap:wrap;">
+        <?php if (!$isLoggedIn): ?>
+          <button class="btn-change btn-start" onclick="window.location.href='login.php'">Let’s Start</button>
+          <!-- Check Status button removed per UX update -->
+        <?php else: ?>
+          <?php if ($isVisitor): ?>
+             <button class="btn-change btn-reserve" onclick="window.location.href='reserve.php'">Reserve an Amenity</button>
+             <!-- Check Status removed for visitors on landing page -->
+          <?php else: ?>
+             <button class="btn-change btn-dashboard" onclick="window.location.href='profileresident.php'">My Dashboard</button>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
+      
+      <!-- Login Required Modal -->
+      <div id="loginModal" class="flash-overlay" style="display:none;">
+        <div class="flash-modal" style="text-align:center; padding:30px;">
+          <div class="title" style="color:#23412e; font-size:1.5rem; margin-bottom:10px;">Login Required</div>
+          <div class="text" style="color:#555; margin-bottom:20px;">Please login to view your status.</div>
+          <div style="display:flex; gap:10px; justify-content:center;">
+             <button onclick="window.location.href='login.php'" style="padding:10px 20px; background:#23412e; color:#fff; border:none; border-radius:5px; cursor:pointer;">Login</button>
+             <button onclick="document.getElementById('loginModal').style.display='none'" style="padding:10px 20px; background:#ccc; color:#333; border:none; border-radius:5px; cursor:pointer;">Cancel</button>
           </div>
         </div>
       </div>
-      <p class="tagline">
-        Every home holds a story —<br>
-        start yours in a place worth remembering.
-      </p>
 
-      
-
-
-
-      <!-- Change user type helper (shown after selection) -->
-      <div class="user-type-center" id="userTypeSwitch" style="display:none;">
-        <button class="btn-change" onclick="resetUserType()">Change User Type</button>
-      </div>
+      <script>
+         document.getElementById('loginModal').addEventListener('click', function(e) {
+             if (e.target === this) this.style.display = 'none';
+         });
+      </script>
     </div>
   </section>
 
-  <section id="about-us" class="section">
+  <section id="about-us" class="section reveal-on-scroll">
     <h2 class="section-title">About Us</h2>
     <div class="section-divider"></div>
     <div class="section-body">
-      <p>Victorian Heights subdivision is a gated residence that offers accessibility located at Dahlia Fairview, BRGY. Sauyo, Quezon City. It is a residential development by Swire Land Corporation that provides accessibility and exclusivity with a gated community with 222 houses and an estimated 2,220 residents, making it secure against harm and vulnerability. Furthermore, beautifully designed houses that cater to thousands of residents live within reach of convenience and service while getting the experience of peace in a suburban community .</p>
+      <p>Victorian Heights Subdivision is a gated residential community located along Dahlia, Fairview, Brgy. Sauyo, Quezon City. Developed by Swire Land Corporation, it offers both accessibility and exclusivity within a secure environment. The subdivision consists of 222 houses with an estimated population of about 2,220 residents, providing a safe and well-protected living space. In addition, the community features thoughtfully designed homes that allow residents to enjoy convenient access to essential services while experiencing peace and comfort in a suburban setting.
+
+</p>
+      <img src="images/about subd.jpg" alt="Victorian Heights Subdivision" class="about-subdivision-photo">
     </div>
   </section>
 
-  <section id="facilities" class="section">
+  <section id="facilities" class="section reveal-on-scroll">
     <h2 class="section-title">Amenities</h2>
     <div class="section-divider"></div>
     <div class="amenities-grid">
       <div class="amenity-card">
-        <img src="mainpage/pool.svg" alt="Community Pool">
+        <img src="images/communitypool.png" alt="Community Pool">
         <h3 class="title">Community Pool</h3>
-        <p class="desc">Relax and enjoy the pool with convenient reservation options.</p>
+        <p class="desc">Relax and enjoy the pool with easy and convenient reservation options.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/clubhouse.svg" alt="Clubhouse">
+        <img src="images/clubhouse.png" alt="Clubhouse">
         <h3 class="title">Clubhouse</h3>
-        <p class="desc">Host gatherings and events in the subdivision clubhouse.</p>
+        <p class="desc">A perfect venue for gatherings, celebrations, and community events within the subdivision.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/basketball.svg" alt="Basketball Court">
+        <img src="images/basketballcourt.png" alt="Basketball Court">
         <h3 class="title">Basketball Court</h3>
-        <p class="desc">Play and practice on our outdoor basketball court.</p>
+        <p class="desc">Our outdoor basketball court provides residents a space for recreation, sports, and fitness activities.</p>
       </div>
       <div class="amenity-card">
-        <img src="mainpage/tennis.svg" alt="Tennis Court">
+        <img src="images/tenniscourt.png" alt="Tennis Court">
         <h3 class="title">Tennis Court</h3>
-        <p class="desc">Reserve time to enjoy a game at the tennis court.</p>
+        <p class="desc">Our tennis court offers residents a dedicated space for sports, recreation, and friendly matches.</p>
       </div>
     </div>
   </section>
-  <section id="about-system" class="section">
+  <section id="about-system" class="section reveal-on-scroll">
     <h2 class="section-title">About the System</h2>
     <div class="section-divider"></div>
     <div class="section-body">
       <p>Victorian Pass is a modern subdivision management system that utilizes QR technology to provide fast, secure, and seamless access for residents and visitors. Designed to enhance security and streamline daily processes, the system handles amenity reservations, entry pass requests, incident reporting, and user verification, all in one platform. By replacing manual checks with QR scanning, Victorian Pass ensures quicker entry, and secure access, while improved monitoring subdivision welfare. the system strengthens community safety while offering a more convenient experience for everyone in the subdivision.</p>
+      <div class="about-intro"><h3>Experience peace of mind designed to safeguard your neighborhood.</h3></div>
+      <div class="about-system-grid">
+        <div class="about-card">
+          <img src="images/as1.png" alt="Community Life">
+          <h3>What You'll Find in Victorian Heights Subdivision?</h3>
+          <p>At Victorian Heights, life is secure, convenient, and truly connected. With Victorian Pass, residents enjoy hassle-free access to amenities, streamlined services, and a community that’s organized for comfort, safety, and a genuine sense of belonging.</p>
+        </div>
+        <div class="about-card">
+          <img src="images/as2.png" alt="Quick Response">
+          <h3>Quick response</h3>
+          <p> QR-based entry and reservation systems allow fast approvals and real-time updates for residents, visitors, and security personnel, making processes smoother, safer, and easier to manage.</p>
+        </div>
+        <div class="about-card">
+          <img src="images/as3.png" alt="A Shelter">
+          <h3>A Shelter</h3>
+          <p>A safe and welcoming space that provides comfort and peace of mind for every resident, with systems in place to protect and organize daily community life.</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- Visitor-friendly instructions box fixed at the bottom-left -->
-   <br>
-   <br>
-  <div class="bottom-instructions" id="bottomInstructions" style="display: none;">
-    <strong>Visitor Tips</strong><br>
-    • Click <b>Entry Pass Form</b> to apply for a visitor pass.<br>
-    • Use <b>Check Status</b> to look up your code or track your request.
-  </div>
 
+
+  <script src="js/logout-modal.js"></script>
   <script>
-    const isResidentLoggedIn = <?php echo (isset($_SESSION['user_id']) && isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'resident') ? 'true' : 'false'; ?>;
-    function selectUserType(type) {
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const checkStatusNav = document.getElementById('checkStatusNav');
-      const bottomInstructions = document.getElementById('bottomInstructions');
-      const switcher = document.getElementById('userTypeSwitch');
-
-      if (type === 'resident') {
-        // Hide dropdown and show navigation links
-        dropdown.style.display = 'none';
-        navLinks.style.display = 'flex';
-        if (checkStatusNav) checkStatusNav.style.display = 'none';
-        if (bottomInstructions) bottomInstructions.style.display = 'none';
-        switcher.style.display = 'block';
-        // Hide Entry Pass button/instruction for residents
-        var epBtn = document.getElementById('entryPassButtonWrapper');
-        var epInst = document.getElementById('entryPassInstruction');
-        if (epBtn) epBtn.style.display = 'none';
-        if (epInst) epInst.style.display = 'none';
-        try{ localStorage.setItem('vp_user_type','resident'); }catch(e){}
-
-        // Check if user is logged in (you can modify this logic based on your session handling)
-        <?php if (isset($_SESSION['user_id'])): ?>
-          profileIcon.style.display = 'block';
-        <?php endif; ?>
-
-      } else if (type === 'visitor') {
-        if (isResidentLoggedIn) { alert('You are logged in as a resident. Please log out to switch to Visitor.'); return; }
-        // Hide dropdown and show entry form and check status
-        dropdown.style.display = 'none';
-        navLinks.style.display = 'none';
-        profileIcon.style.display = 'none';
-        if (checkStatusNav) checkStatusNav.style.display = 'inline-block';
-        if (bottomInstructions) bottomInstructions.style.display = 'block';
-        switcher.style.display = 'block';
-        // Show Entry Pass button/instruction for visitors
-        var epBtn = document.getElementById('entryPassButtonWrapper');
-        var epInst = document.getElementById('entryPassInstruction');
-        if (epBtn) epBtn.style.display = 'flex';
-        if (epInst) epInst.style.display = 'block';
-        try{ localStorage.setItem('vp_user_type','visitor'); }catch(e){}
-      }
-    }
-
-    function resetUserType(){
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const checkStatusNav = document.getElementById('checkStatusNav');
-      const bottomInstructions = document.getElementById('bottomInstructions');
-      const switcher = document.getElementById('userTypeSwitch');
-      const epBtn = document.getElementById('entryPassButtonWrapper');
-      const epInst = document.getElementById('entryPassInstruction');
-
-      // Reset to initial state
-      dropdown.style.display = 'block';
-      const content = document.getElementById('dropdownContent');
-      if (content) content.style.display = 'none';
-      navLinks.style.display = 'none';
-      // No inline entry form on main page
-      if (profileIcon) profileIcon.style.display = 'none';
-      if (checkStatusNav) checkStatusNav.style.display = 'none';
-      if (bottomInstructions) bottomInstructions.style.display = 'none';
-      switcher.style.display = 'none';
-      if (epBtn) epBtn.style.display = 'none';
-      if (epInst) epInst.style.display = 'none';
-      try{ localStorage.removeItem('vp_user_type'); }catch(e){}
-    }
-
-    // Toggle dropdown visibility
-    document.getElementById('dropdownBtn').addEventListener('click', function(event) {
-      event.stopPropagation();
-      const content = document.getElementById('dropdownContent');
-      content.style.display = content.style.display === 'block' ? 'none' : 'block';
-    });
-
-    // Close dropdown when clicking outside
-    window.addEventListener('click', function(event) {
-      if (!event.target.closest('.dropdown-btn')) {
-        const dropdowns = document.getElementsByClassName('dropdown-content');
-        for (let i = 0; i < dropdowns.length; i++) {
-          dropdowns[i].style.display = 'none';
+    (function(){var t=document.getElementById('navToggle');var c=document.getElementById('navCollapse');if(!t||!c)return;t.addEventListener('click',function(){var o=c.classList.toggle('open');t.setAttribute('aria-expanded',o?'true':'false');});window.addEventListener('click',function(e){if(!c.contains(e.target)&&!t.contains(e.target)){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});window.addEventListener('resize',function(){if(window.innerWidth>900){c.classList.remove('open');t.setAttribute('aria-expanded','false');}});})();
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      var items = document.querySelectorAll('.reveal-on-scroll');
+      if (!items.length) return;
+      if (!('IntersectionObserver' in window)) {
+        for (var i = 0; i < items.length; i++) {
+          items[i].classList.add('is-visible');
         }
+        return;
+      }
+      var observer = new IntersectionObserver(function(entries, obs){
+        for (var i = 0; i < entries.length; i++) {
+          var entry = entries[i];
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            obs.unobserve(entry.target);
+          }
+        }
+      }, { threshold: 0.15 });
+      for (var j = 0; j < items.length; j++) {
+        observer.observe(items[j]);
       }
     });
   </script>
   <script>
-    // Persist selected user type across navigation
-    document.addEventListener('DOMContentLoaded',function(){
-      try{
-        var saved = localStorage.getItem('vp_user_type');
-        if(saved==='visitor' && isResidentLoggedIn){ selectUserType('resident'); return; }
-        if(saved==='resident' || saved==='visitor'){ selectUserType(saved); }
-      }catch(e){}
-    });
-  </script>
-  <script>
-    // Auto-show resident nav state after login
     document.addEventListener('DOMContentLoaded', function(){
-      const dropdown = document.getElementById('userTypeDropdown');
-      const navLinks = document.getElementById('navLinks');
-      const profileIcon = document.getElementById('profileIcon');
-      const loginBtn = document.querySelector('.btn-login');
-      const registerBtn = document.querySelector('.btn-register');
-      <?php if (isset($_SESSION['user_id'])): ?>
-        if (dropdown) dropdown.style.display = 'none';
-        if (navLinks) navLinks.style.display = 'flex';
-        if (profileIcon) profileIcon.style.display = 'block';
-        if (loginBtn) loginBtn.style.display = 'none';
-        if (registerBtn) registerBtn.style.display = 'none';
-      <?php endif; ?>
-    });
-  </script>
-  <script>
-    // Profile dropdown interactions: click/hover to open, click outside to close
-    document.addEventListener('DOMContentLoaded', function(){
-      const iconWrap = document.getElementById('profileIcon');
-      const dd = document.getElementById('profileDropdown');
-      if (!iconWrap || !dd) return;
+      // Profile Dropdown Logic
+      var wrap = document.getElementById('profileWrap');
+      var trigger = document.getElementById('profileAccountTrigger');
+      var dropdown = document.getElementById('profileDropdown');
+      
+      if(wrap && dropdown && trigger) {
+          var closeTimeout;
 
-      const openDD = () => { dd.style.display = 'block'; };
-      const closeDD = () => { dd.style.display = 'none'; };
-      const toggleDD = () => { dd.style.display = (dd.style.display === 'block') ? 'none' : 'block'; };
+          function openDropdown() {
+              clearTimeout(closeTimeout);
+              dropdown.style.display = 'block';
+              requestAnimationFrame(function() {
+                  dropdown.classList.add('show');
+              });
+          }
 
-      // Toggle when clicking the icon itself; allow clicks inside dropdown to navigate
-      iconWrap.addEventListener('click', function(e){
-        if (dd.contains(e.target)) return; // let dropdown links work normally
-        e.stopPropagation();
-        toggleDD();
-      });
-      iconWrap.addEventListener('mouseenter', function(){ openDD(); });
-      iconWrap.addEventListener('mouseleave', function(){ setTimeout(function(){ if (!dd.matches(':hover')) closeDD(); }, 160); });
-      dd.addEventListener('mouseleave', function(){ closeDD(); });
-      window.addEventListener('click', function(e){ if (!iconWrap.contains(e.target) && !dd.contains(e.target)) closeDD(); });
+          function closeDropdown() {
+              closeTimeout = setTimeout(function() {
+                  dropdown.classList.remove('show');
+                  setTimeout(function() {
+                      if (!dropdown.classList.contains('show')) {
+                          dropdown.style.display = 'none';
+                      }
+                  }, 300); // Match CSS transition duration
+              }, 200); // Small delay before closing to allow moving mouse
+          }
+
+          // Hover Events
+          wrap.addEventListener('mouseenter', openDropdown);
+          wrap.addEventListener('mouseleave', closeDropdown);
+
+          // Click Toggle
+          trigger.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (dropdown.classList.contains('show')) {
+                  dropdown.classList.remove('show');
+                  setTimeout(function() { dropdown.style.display = 'none'; }, 300);
+              } else {
+                  openDropdown();
+              }
+          });
+
+          // Close when clicking outside
+          window.addEventListener('click', function(e) {
+              if (!wrap.contains(e.target)) {
+                  if (dropdown.classList.contains('show')) {
+                      dropdown.classList.remove('show');
+                      setTimeout(function() { dropdown.style.display = 'none'; }, 300);
+                  }
+              }
+          });
+      }
     });
   </script>
 

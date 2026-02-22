@@ -20,28 +20,28 @@ $visitor_last_name  = trim($_POST['visitor_last_name'] ?? '');
 $visitor_sex        = trim($_POST['visitor_sex'] ?? '');
 $visitor_birthdate  = trim($_POST['visitor_birthdate'] ?? '');
 $visitor_contact    = trim($_POST['visitor_contact'] ?? '');
+ $visitor_address    = trim($_POST['visitor_address'] ?? '');
+
+if ($visitor_birthdate !== '') {
+  $today = date('Y-m-d');
+  if ($visitor_birthdate > $today) {
+    echo json_encode(['success' => false, 'message' => 'Birthdate cannot be in the future.']);
+    exit;
+  }
+}
+$visitor_email      = trim($_POST['visitor_email'] ?? '');
 
 
-$visit_date    = trim($_POST['visit_date'] ?? '');
-$visit_time    = trim($_POST['visit_time'] ?? '');
-$visit_purpose = trim($_POST['visit_purpose'] ?? '');
-// Persons count (optional on form; default to 1)
-$visit_persons = isset($_POST['visit_persons']) ? max(1, intval($_POST['visit_persons'])) : 1;
+$visit_date    = null;
+$visit_time    = null;
+$visit_purpose = null;
+$visit_persons = 1;
+$wants_amenity = 0;
 
-// Determine amenity intent early
-$wants_amenity = isset($_POST['wants_amenity']) ? 1 : 0;
-
-// Validate required inputs
-// If reserving an amenity, allow Visit Details (date/time/purpose) to be blank; otherwise require them.
 if ($resident_full_name === '' || $resident_house === '' || $resident_email === '' || $resident_contact === '' ||
     $visitor_first_name === '' || $visitor_last_name === '' || $visitor_sex === '' || $visitor_birthdate === '' ||
-    $visitor_contact === '') {
+    $visitor_contact === '' || $visitor_address === '') {
   echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
-  exit;
-}
-// Only require visit details if not reserving an amenity
-if (!$wants_amenity && ($visit_date === '' || $visit_time === '' || $visit_purpose === '')) {
-  echo json_encode(['success' => false, 'message' => 'Please fill in all visit details.']);
   exit;
 }
 
@@ -52,20 +52,52 @@ if (!preg_match($namePattern, $resident_full_name)) {
   exit;
 }
 if (!preg_match($namePattern, $visitor_first_name) || !preg_match($namePattern, $visitor_last_name)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor names must contain letters only.']);
+  echo json_encode(['success' => false, 'message' => 'Guest names must contain letters only.']);
   exit;
 }
+// Normalize phone numbers to 09 format (11 digits)
+$phonesToNormalize = ['resident_contact' => &$resident_contact, 'visitor_contact' => &$visitor_contact];
+foreach ($phonesToNormalize as $key => &$pVal) {
+    $phoneClean = preg_replace('/[\s\-]/', '', $pVal);
+    // Remove +63 or 63 prefix if present
+    if (preg_match('/^(\+63|63)(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '0' . $matches[2];
+    } elseif (preg_match('/^0(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '0' . $matches[1];
+    } elseif (preg_match('/^(9\d{9})$/', $phoneClean, $matches)) {
+        $pVal = '0' . $matches[1];
+    }
+}
+unset($pVal);
+
 if (!preg_match('/^09\d{9}$/', $resident_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Resident phone must start with 09 and contain numbers only.']);
+  echo json_encode(['success' => false, 'message' => 'Resident phone must be 11 digits starting with 09 (e.g. 09XX...).']);
   exit;
 }
 if (!preg_match('/^09\d{9}$/', $visitor_contact)) {
-  echo json_encode(['success' => false, 'message' => 'Visitor phone must start with 09 and contain numbers only.']);
+  echo json_encode(['success' => false, 'message' => 'Guest phone must be 11 digits starting with 09 (e.g. 09XX...).']);
   exit;
 }
 if (!filter_var($resident_email, FILTER_VALIDATE_EMAIL)) {
   echo json_encode(['success' => false, 'message' => 'Please provide a valid resident email address.']);
   exit;
+}
+$rParts = explode('@', $resident_email);
+if (ctype_digit($rParts[0])) {
+  echo json_encode(['success' => false, 'message' => 'Resident Email Invalid']);
+  exit;
+}
+
+if ($visitor_email !== '') {
+  if (!filter_var($visitor_email, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['success' => false, 'message' => 'Please provide a valid guest email address.']);
+    exit;
+  }
+  $vParts = explode('@', $visitor_email);
+  if (ctype_digit($vParts[0])) {
+    echo json_encode(['success' => false, 'message' => 'Guest Email Invalid']);
+    exit;
+  }
 }
 
 // Handle valid ID upload
@@ -92,7 +124,7 @@ if (isset($_FILES['visitor_valid_id']) && $_FILES['visitor_valid_id']['error'] =
   }
   $validIdPath = $dest;
 } else {
-  echo json_encode(['success' => false, 'message' => 'Visitor valid ID is required.']);
+  echo json_encode(['success' => false, 'message' => 'Guest valid ID is required.']);
   exit;
 }
 
@@ -109,6 +141,7 @@ $con->query("CREATE TABLE IF NOT EXISTS guest_forms (
   visitor_birthdate DATE NULL,
   visitor_contact VARCHAR(50) NULL,
   visitor_email VARCHAR(150) NULL,
+  visitor_address VARCHAR(255) NULL,
   valid_id_path VARCHAR(255) NULL,
   visit_date DATE NULL,
   visit_time VARCHAR(20) NULL,
@@ -125,6 +158,11 @@ $con->query("CREATE TABLE IF NOT EXISTS guest_forms (
   INDEX idx_resident_user_id (resident_user_id),
   INDEX idx_ref_code (ref_code)
 ) ENGINE=InnoDB");
+
+$columnCheck = $con->query("SHOW COLUMNS FROM guest_forms LIKE 'visitor_address'");
+if ($columnCheck && $columnCheck->num_rows === 0) {
+  $con->query("ALTER TABLE guest_forms ADD COLUMN visitor_address VARCHAR(255) NULL");
+}
 
 // Generate a reference code for this guest form
 $ref_code = 'VP-' . strtoupper(bin2hex(random_bytes(4)));
@@ -148,18 +186,16 @@ if ($resident_user_id === null) {
   }
 }
 
-// Insert into guest_forms
-
-// Insert into guest_forms (visitor_email is not required anymore)
 $stmtGF = $con->prepare("INSERT INTO guest_forms (
   resident_user_id, resident_house, resident_email,
   visitor_first_name, visitor_middle_name, visitor_last_name,
-  visitor_sex, visitor_birthdate, visitor_contact,
+  visitor_sex, visitor_birthdate, visitor_contact, visitor_email, visitor_address,
   valid_id_path, visit_date, visit_time, purpose, persons, wants_amenity, ref_code, approval_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
 
+$types = 'i' . str_repeat('s', 14) . 'ii' . 's';
 $stmtGF->bind_param(
-  'isssssssssssssis',
+  $types,
   $resident_user_id,
   $resident_house,
   $resident_email,
@@ -169,6 +205,8 @@ $stmtGF->bind_param(
   $visitor_sex,
   $visitor_birthdate,
   $visitor_contact,
+  $visitor_email,
+  $visitor_address,
   $validIdPath,
   $visit_date,
   $visit_time,
@@ -186,4 +224,3 @@ $stmtGF->close();
 
 echo json_encode(['success' => true, 'ref_code' => $ref_code]);
 exit;
-?>

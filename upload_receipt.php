@@ -52,15 +52,57 @@ if (!move_uploaded_file($file['tmp_name'], $filePath)) {
     exit;
 }
 
-// Update database with receipt path
-$stmt = $con->prepare("UPDATE reservations SET receipt_path = ? WHERE ref_code = ?");
-$stmt->bind_param('ss', $filePath, $ref_code);
+$currentStatus = '';
+if ($con instanceof mysqli) {
+    $stmtCheck = $con->prepare("SELECT payment_status FROM reservations WHERE ref_code = ? LIMIT 1");
+    if ($stmtCheck) {
+        $stmtCheck->bind_param('s', $ref_code);
+        if ($stmtCheck->execute()) {
+            $res = $stmtCheck->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $currentStatus = strtolower(trim($row['payment_status'] ?? ''));
+            }
+        }
+        $stmtCheck->close();
+    }
+}
+$newStatus = ($currentStatus === 'rejected') ? 'pending_update' : 'pending';
+
+// Update database with receipt path and reset payment verification
+$stmt = $con->prepare("UPDATE reservations SET receipt_path = ?, payment_status = ?, verified_by = NULL, verification_date = NULL, receipt_uploaded_at = NOW() WHERE ref_code = ?");
+$stmt->bind_param('sss', $filePath, $newStatus, $ref_code);
 
 if ($stmt->execute()) {
+    if ($newStatus === 'pending_update') {
+        try {
+            $con->query("CREATE TABLE IF NOT EXISTS notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NULL COMMENT 'For residents',
+                entry_pass_id INT NULL COMMENT 'For visitors',
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                is_read TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                type ENUM('info', 'success', 'warning', 'error') DEFAULT 'info',
+                INDEX idx_user_id (user_id),
+                INDEX idx_is_read (is_read)
+            ) ENGINE=InnoDB");
+            $title = 'Payment proof updated';
+            $message = "User updated payment proof for reservation {$ref_code}.";
+            $type = 'warning';
+            $stmtN = $con->prepare("INSERT INTO notifications (user_id, title, message, type, created_at) VALUES (NULL, ?, ?, ?, NOW())");
+            if ($stmtN) {
+                $stmtN->bind_param('sss', $title, $message, $type);
+                $stmtN->execute();
+                $stmtN->close();
+            }
+        } catch (Throwable $e) {}
+    }
     echo json_encode([
         'success' => true, 
         'message' => 'Receipt uploaded successfully',
-        'file_path' => $filePath
+        'file_path' => $filePath,
+        'payment_status' => $newStatus
     ]);
 } else {
     // Delete uploaded file if database update fails

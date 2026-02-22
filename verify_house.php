@@ -1,6 +1,24 @@
 <?php
 include("connect.php");
 
+function ensureHouseRange($con){
+  if(!($con instanceof mysqli)) return;
+  @$con->begin_transaction();
+  @$con->query("DELETE FROM houses WHERE house_number NOT REGEXP '^VH-[0-9]{4}$' OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) < 1 OR CAST(SUBSTRING(house_number,4) AS UNSIGNED) > 2220");
+  $stmt = $con->prepare("INSERT IGNORE INTO houses (house_number, address) VALUES (?, ?)");
+  if ($stmt) {
+    $addr = 'Victorian Heights Subdivision';
+    for ($i=1; $i<=2220; $i++){
+      $hn = 'VH-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
+      $stmt->bind_param('ss', $hn, $addr);
+      $stmt->execute();
+    }
+    $stmt->close();
+  }
+  @$con->commit();
+}
+ensureHouseRange($con);
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $house_number = trim($_POST['house_number']);
   $isAjax = isset($_POST['ajax']) && $_POST['ajax'] === '1';
@@ -45,10 +63,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <title>Verify House Number</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       font-family: 'Poppins', sans-serif;
-      background: url('signuppage/bgsignup.png') no-repeat center/cover;
+      background: url('images/signuppage/bgsignup.png') no-repeat center/cover;
       display: flex; justify-content: center; align-items: center;
       height: 100vh; margin: 0;
     }
@@ -74,6 +93,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       color: #23412e; text-decoration: none;
     }
     a:hover { text-decoration: underline; }
+    .back-link{display:inline-flex;align-items:center;gap:8px}
+    .back-link i{color:#f2c24f}
   </style>
 </head>
 <body>
@@ -84,7 +105,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       <input type="text" name="house_number" placeholder="e.g., VH-1023" required>
       <button type="submit">Verify</button>
     </form>
-    <a href="signup.php">← Back to Sign Up</a>
+    <a href="signup.php" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Sign Up</a>
   </div>
 </body>
 </html>

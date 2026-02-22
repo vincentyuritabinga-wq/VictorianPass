@@ -1,17 +1,20 @@
 <?php
+$staffInactivityLimit = 2700;
+ini_set('session.gc_maxlifetime', (string)$staffInactivityLimit);
 session_start();
 include 'connect.php';
 
-// Check if already logged in
-if (isset($_SESSION['admin_id'])) {
-    header("Location: admin.php");
-    exit;
+$error = '';
+$staffSessionActive = false;
+$activeRole = strtolower(trim($_SESSION['role'] ?? ''));
+$activeAdminRole = strtolower(trim($_SESSION['admin_role'] ?? ''));
+if (in_array($activeRole, ['admin', 'guard'], true) || in_array($activeAdminRole, ['admin', 'guard'], true) || isset($_SESSION['admin_id'])) {
+    $staffSessionActive = true;
+    $error = "You are already logged in. Please log out before signing in to another account.";
 }
 
-$error = '';
-
 // Handle login form submission
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !$staffSessionActive) {
     $email = $_POST['email'];
     $password = $_POST['password'];
     
@@ -32,10 +35,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // In a production environment, use password_verify() with hashed passwords
             // For now, we're using plain text comparison as per the provided schema
             if ($password == $staff['password']) {
+                session_regenerate_id(true);
+                $_SESSION['staff_last_activity'] = time();
+                $_SESSION['staff_session_timeout'] = $staffInactivityLimit;
                 // Set session variables
                 $_SESSION['admin_id'] = $staff['id'];
                 $_SESSION['admin_email'] = $staff['email'];
                 $_SESSION['admin_role'] = $staff['role'];
+                $_SESSION['staff_id'] = $staff['id'];
+                $_SESSION['role'] = $staff['role'];
+                $_SESSION['email'] = $staff['email'];
                 
                 // Redirect to admin dashboard
                 header("Location: admin.php");
@@ -56,7 +65,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <title>VictorianPass | Admin Login</title>
-    <link rel="icon" type="image/png" href="mainpage/logo.svg">
+    <link rel="icon" type="image/png" href="images/logo.svg">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -143,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
     <div class="login-container">
         <div class="login-header">
-            <img src="mainpage/logo.svg" alt="VictorianPass Logo">
+            <img src="images/logo.svg" alt="VictorianPass Logo">
             <h1>Admin Login</h1>
         </div>
         
@@ -154,13 +163,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <form method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" required>
+                <input type="email" id="email" name="email" required <?php echo $staffSessionActive ? 'disabled' : ''; ?>>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" required <?php echo $staffSessionActive ? 'disabled' : ''; ?>>
             </div>
-            <button type="submit" class="btn-login">Login</button>
+            <button type="submit" class="btn-login" <?php echo $staffSessionActive ? 'disabled' : ''; ?>>Login</button>
         </form>
     </div>
 </body>

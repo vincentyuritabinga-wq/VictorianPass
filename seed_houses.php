@@ -1,23 +1,17 @@
 <?php
 include('connect.php');
 
-$houses = [
-  ['VH-3002', 'Blk 7 Lot 16, Victorian Heights Subdivision'],
-  ['VH-3003', 'Blk 7 Lot 17, Victorian Heights Subdivision'],
-  ['VH-3004', 'Blk 7 Lot 18, Victorian Heights Subdivision'],
-  ['VH-3005', 'Blk 7 Lot 19, Victorian Heights Subdivision'],
-  ['VH-3006', 'Blk 7 Lot 20, Victorian Heights Subdivision'],
-  ['VH-3007', 'Blk 8 Lot 1, Victorian Heights Subdivision'],
-  ['VH-3008', 'Blk 8 Lot 2, Victorian Heights Subdivision'],
-  ['VH-4001', 'Blk 9 Lot 4, Victorian Heights Subdivision'],
-  ['VH-4002', 'Blk 9 Lot 5, Victorian Heights Subdivision'],
-  ['VH-5001', 'Blk 11 Lot 2, Victorian Heights Subdivision'],
-];
+$start = 1;
+$end = 2220;
+$address = 'Victorian Heights Subdivision';
 
-$stmt = $con->prepare("INSERT IGNORE INTO houses (house_number, address) VALUES (?, ?)");
+$con->query("DELETE FROM houses");
+
+$stmt = $con->prepare("INSERT INTO houses (house_number, address) VALUES (?, ?)");
 $inserted = 0;
-foreach ($houses as $h) {
-  $stmt->bind_param('ss', $h[0], $h[1]);
+for ($i = $start; $i <= $end; $i++) {
+  $house = 'VH-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
+  $stmt->bind_param('ss', $house, $address);
   if ($stmt->execute()) {
     $inserted += ($stmt->affected_rows > 0) ? 1 : 0;
   }

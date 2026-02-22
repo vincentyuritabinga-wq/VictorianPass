@@ -34,10 +34,28 @@ $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['middle_name'] ?? ''
 $houseNumber = $user['house_number'] ?? '';
 $email = $user['email'] ?? '';
 $phone = $user['phone'] ?? '';
-// Normalize resident phone to 09 format if stored as +63
 $phoneNormalized = $phone;
-if (preg_match('/^\+63(9\d{9})$/', $phone)) {
-  $phoneNormalized = '0' . substr($phone, 3); // +63xxxxxxxxxx -> 0xxxxxxxxxx
+$pClean = preg_replace('/\D/', '', $phoneNormalized);
+if (strlen($pClean) === 11 && strpos($pClean, '09') === 0) {
+    $phoneNormalized = '+63' . substr($pClean, 1);
+} elseif (strlen($pClean) === 12 && strpos($pClean, '639') === 0) {
+    $phoneNormalized = '+' . $pClean;
+} elseif (strlen($pClean) === 10 && strpos($pClean, '9') === 0) {
+    $phoneNormalized = '+63' . $pClean;
+}
+
+$guestRows = [];
+if ($con instanceof mysqli) {
+  $stmtG = $con->prepare("SELECT id, visitor_first_name, visitor_middle_name, visitor_last_name, visitor_email, visitor_contact, created_at, ref_code FROM guest_forms WHERE resident_user_id = ? AND approval_status <> 'deleted' ORDER BY created_at DESC");
+  if ($stmtG) {
+    $stmtG->bind_param('i', $userId);
+    $stmtG->execute();
+    $resG = $stmtG->get_result();
+    while ($rowG = $resG->fetch_assoc()) {
+      $guestRows[] = $rowG;
+    }
+    $stmtG->close();
+  }
 }
 ?>
 <!DOCTYPE html>
@@ -45,12 +63,13 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guest Entry Pass - VictorianPass</title>
-<link rel="icon" type="image/png" href="mainpage/logo.svg">
+<title>My Guests - VictorianPass</title>
+<link rel="icon" type="image/png" href="images/logo.svg">
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
-<?php echo file_get_contents('guestform.css') ?: '';?>
+<?php echo file_get_contents('css/guestform.css') ?: '';?>
 /* Inline warnings copied from signup style */
 .field-warning {
   color: #333;
@@ -85,41 +104,75 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
 
 <header class="navbar">
   <div class="logo">
-    <a href="mainpage.php"><img src="mainpage/logo.svg" alt="VictorianPass Logo"></a>
+    <a href="mainpage.php"><img src="images/logo.svg" alt="VictorianPass Logo"></a>
     <div class="brand-text">
       <h1>VictorianPass</h1>
       <p>Victorian Heights Subdivision</p>
     </div>
   </div>
   <div class="nav-actions">
-    <a href="profileresident.php"><img src="mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
+    <a href="profileresident.php"><img src="images/mainpage/profile'.jpg" alt="Profile" class="profile-icon"></a>
   </div>
 </header>
 
-<section class="hero">
+<section class="hero" id="addGuestSection">
   <form class="entry-form" id="entryForm">
+    <div class="booking-steps" aria-label="Guest form steps">
+      <div class="booking-steps-header">
+        <div class="booking-steps-label">Guest form steps</div>
+        <button type="button" class="booking-steps-toggle" id="bookingStepsToggle" aria-label="Minimize instructions" aria-expanded="true">−</button>
+      </div>
+      <div class="booking-steps-body">
+        <div class="booking-step is-active" id="step-resident">
+          <div class="step-index">1</div>
+          <div class="step-content">
+            <div class="step-title">Resident information</div>
+            <div class="step-subtitle">Confirm your name, house/unit, and contact details</div>
+          </div>
+        </div>
+        <div class="booking-step" id="step-guest">
+          <div class="step-index">2</div>
+          <div class="step-content">
+            <div class="step-title">Guest information</div>
+            <div class="step-subtitle">Enter your guest’s personal and contact details</div>
+          </div>
+        </div>
+        <div class="booking-step" id="step-upload">
+          <div class="step-index">3</div>
+          <div class="step-content">
+            <div class="step-title">Upload ID &amp; save</div>
+            <div class="step-subtitle">Add a valid ID and save the guest to your list</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="form-header">
-      <img src="mainpage/ticket.svg" alt="Entry Icon">
-      <span>Guest Form</span>
+      <img src="images/mainpage/ticket.svg" alt="Entry Icon">
+      <span>Add Guest</span>
     </div>
 
-    <h4 style="margin:10px 0 5px;color:#23412e;">Resident Information</h4>
+    <h4 style="margin:10px 0 5px;color:#111827;">Resident Information</h4>
     <div class="form-row">
       <input type="text" id="resident_full_name" name="resident_full_name" placeholder="Resident Full Name*" value="<?php echo htmlspecialchars($fullName); ?>" required>
       <input type="text" id="resident_house" name="resident_house" placeholder="House/Unit No.*" value="<?php echo htmlspecialchars($houseNumber); ?>" required>
     </div>
     <div class="form-row">
-      <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
-      <input type="tel" id="resident_contact" name="resident_contact" placeholder="Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+      <div style="flex:1;">
+        <input type="email" id="resident_email" name="resident_email" placeholder="Resident Email*" value="<?php echo htmlspecialchars($email); ?>" required>
+      </div>
+      <div style="flex:1;">
+        <input type="tel" id="resident_contact" name="resident_contact" placeholder="Resident Phone Number*" value="<?php echo htmlspecialchars($phoneNormalized); ?>" required>
+        <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
+      </div>
     </div>
 
-    <h4 style="margin:20px 0 5px;color:#23412e;">Visitor Information</h4>
+    <h4 style="margin:20px 0 5px;color:#111827;">Guest Information</h4>
     <div class="form-row">
       <input type="text" id="visitor_first_name" name="visitor_first_name" placeholder="Visitor First Name*" required>
       <input type="text" id="visitor_last_name" name="visitor_last_name" placeholder="Visitor Last Name*" required>
     </div>
     <div class="form-row">
-      <select name="visitor_sex" required>
+      <select id="visitor_sex" name="visitor_sex" required>
         <option value="" disabled selected>Sex*</option>
         <option>Male</option>
         <option>Female</option>
@@ -130,16 +183,22 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       </div>
     </div>
     <div class="input-wrap">
-      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor's Phone Number*" required>
+      <input type="tel" id="visitor_contact" name="visitor_contact" placeholder="Visitor Phone Number*" required>
+      <span style="display:block; font-size:0.75rem; color:#666; margin-top:4px;">Format: 09XX XXX XXXX (11 digits)</span>
     </div>
-    <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+    <div class="form-group">
+      <input type="email" id="visitor_email" name="visitor_email" placeholder="Visitor Email*" required>
+    </div>
+    <div class="input-wrap">
+      <input type="text" id="visitor_address" name="visitor_address" placeholder="Guest Address (e.g., Blk 00 Lot 00)*" required>
+    </div>
 
     <label class="upload-box">
       <input type="file" id="visitor_valid_id" name="visitor_valid_id" accept="image/*" hidden required>
-      <img src="mainpage/upload.svg" alt="Upload">
-      <p>Upload Visitor’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small></p>
+      <img src="images/mainpage/upload.svg" alt="Upload">
+      <p>Upload Guest’s Valid ID*<br><small>(e.g. National ID, Driver’s License)</small><br><small>Max 5MB</small></p>
     </label>
-    <div class="privacy-note" style="background:#fff9e6;border:1px solid #e6d9a8;color:#4a3c1a;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
+    <div class="privacy-note" style="background:#f9fafb;border:1px solid #e5e7eb;color:#374151;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:0.92rem;line-height:1.35;">
       Data Privacy Notice: The visitor’s ID is used only for verification and stored securely. Access is limited to authorized staff, following the Data Privacy Act of 2012.
     </div>
 
@@ -150,47 +209,77 @@ if (preg_match('/^\+63(9\d{9})$/', $phone)) {
       </div>
     </div>
 
-    <h4 style="margin:20px 0 5px;color:#23412e;">Visit Details</h4>
-    <div class="form-row">
-      <input type="date" name="visit_date" placeholder="Date of Visit*" required>
-      <input type="time" name="visit_time" placeholder="Expected Time*" required>
-    </div>
-    <textarea rows="3" name="visit_purpose" placeholder="Purpose of Visit*" required></textarea>
-
-    <div class="reserve-note">
-      <label for="reserveCheck">
-        <input type="checkbox" id="reserveCheck" name="wants_amenity" value="1">
-        Reserve an amenity instead of a regular visit
-      </label>
-      <div class="note-text">
-        Check this box to proceed to the Next page for amenity reservation; you may leave the Visit Details section empty.
-      </div>
-    </div>
-
     <div class="form-actions">
-      <a href="profileresident.php" class="btn-back">Back</a>
-      <button type="submit" class="btn-next" id="submitBtn">Submit Request</button>
+      <a href="profileresident.php" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Back</a>
+      <button type="submit" class="btn-next" id="submitBtn">Save Guest</button>
     </div>
   </form>
+
+  <div id="guestListSection" style="margin-top:28px;background:#ffffff;border-radius:16px;padding:20px 22px;box-shadow:0 4px 16px rgba(15,23,42,0.08);border:1px solid #e5e7eb;max-width:860px;width:100%;">
+    <h4 style="margin:0 0 10px;color:#111827;">My Saved Guests</h4>
+    <?php if (empty($guestRows)): ?>
+      <p style="margin:4px 0 0;font-size:0.95rem;color:#555;">You have not added any guests yet. Use the form above to add a guest.</p>
+    <?php else: ?>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+          <thead>
+            <tr style="background:#f5f7f5;color:#333;">
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Name</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Contact</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Email</th>
+              <th style="text-align:left;padding:8px 10px;border-bottom:1px solid #e2e6e2;">Added</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($guestRows as $g): ?>
+              <?php
+                $nameParts = [];
+                if (!empty($g['visitor_first_name'])) { $nameParts[] = $g['visitor_first_name']; }
+                if (!empty($g['visitor_middle_name'])) { $nameParts[] = $g['visitor_middle_name']; }
+                if (!empty($g['visitor_last_name'])) { $nameParts[] = $g['visitor_last_name']; }
+                $guestName = trim(implode(' ', $nameParts));
+                if ($guestName === '') { $guestName = 'Guest'; }
+                $contact = $g['visitor_contact'] ?? '';
+                $emailG = $g['visitor_email'] ?? '';
+                $created = $g['created_at'] ?? '';
+                $createdLabel = $created ? date('m/d/y', strtotime($created)) : '';
+              ?>
+              <tr>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;font-weight:600;"><?php echo htmlspecialchars($guestName); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($contact); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;"><?php echo htmlspecialchars($emailG); ?></td>
+                <td style="padding:7px 10px;border-bottom:1px solid #e9ece9;color:#777;"><?php echo htmlspecialchars($createdLabel); ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
 </section>
 
 <!-- Modal -->
 <div id="refModal" class="modal">
   <div class="modal-content">
     <h2>Request Submitted!</h2>
-    <p>Your guest request has been successfully submitted.</p>
-    <p><strong>Share this status code with your visitor:</strong></p>
-    <div id="refCode" class="ref-code"></div>
-    <p><small>Note: Your visitor will need this code to check the status of their Entry Pass,
-      since they don’t have their own VictorianPass account.</small></p>
-    <p><small><em>You can still view and manage the request in your resident dashboard.</em></small></p>
+    <p>Your guest has been successfully saved to your account.</p>
+    <p><small><em>You can view and manage all guests from your resident dashboard.</em></small></p>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
-      <button class="close-btn" onclick="closeModal()">Close</button>
+      <button type="button" class="close-btn" onclick="window.location.href='profileresident.php'">Go to Resident Profile</button>
+    </div>
+  </div>
+</div>
+<div id="verifyModal" class="modal">
+  <div class="modal-content">
+    <h2>Confirm Guest Request</h2>
+    <div id="verifySummary" style="text-align:left;margin-top:10px"></div>
+    <div style="text-align:center;margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" class="btn-cancel" id="verifyCancelBtn">Cancel</button>
+      <button type="button" class="btn-confirm" id="verifyConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
 <script>
-const reserveCheck = document.getElementById('reserveCheck');
 const submitBtn   = document.getElementById('submitBtn');
 const entryForm   = document.getElementById('entryForm');
 const birthdateEl = document.getElementById('birthdate');
@@ -198,13 +287,27 @@ const idInput = document.getElementById('visitor_valid_id');
 const idPreviewWrap = document.getElementById('idPreviewWrap');
 const idPreview = document.getElementById('idPreview');
 const btnClearId = document.getElementById('btnClearId');
-const visitDate = entryForm.querySelector('input[name="visit_date"]');
-const visitTime = entryForm.querySelector('input[name="visit_time"]');
-const visitPurpose = entryForm.querySelector('textarea[name="visit_purpose"]');
+const verifyModal = document.getElementById('verifyModal');
+const verifySummary = document.getElementById('verifySummary');
+const verifyCancelBtn = document.getElementById('verifyCancelBtn');
+const verifyConfirmBtn = document.getElementById('verifyConfirmBtn');
+let submitting = false;
 
-function openModal(refCode){
-  document.getElementById('refCode').textContent = refCode;
-  document.getElementById('refModal').style.display = 'flex';
+document.addEventListener('DOMContentLoaded',function(){
+  var panel=document.querySelector('.booking-steps');
+  var toggle=document.getElementById('bookingStepsToggle');
+  if(panel&&toggle){
+    toggle.addEventListener('click',function(){
+      var collapsed=panel.classList.toggle('is-collapsed');
+      toggle.textContent=collapsed?'+':'−';
+      toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+    });
+  }
+});
+
+function openModal(){
+  var m = document.getElementById('refModal');
+  m.style.display = 'flex';
 }
 function closeModal(){
   document.getElementById('refModal').style.display = 'none';
@@ -248,43 +351,215 @@ function setWarning(key, message){
 }
 
 // Client-side validation following signup patterns
-function blockDigits(e){ if(/[0-9]/.test(e.key)){ e.preventDefault(); setWarning(e.target.id, 'Numbers are not allowed in this field.'); } }
-function sanitizeNoDigits(e){ const val=e.target.value; const cleaned=val.replace(/[0-9]/g,''); if(val!==cleaned){ e.target.value=cleaned; setWarning(e.target.id,'Numbers were removed.'); } else { setWarning(e.target.id,''); } }
-function isValidPhone(el){ const val=el.value.trim(); return /^09\d{9}$/.test(val); }
-function isValidEmail(el){ const val=el.value.trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
-['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockDigits); el.addEventListener('input',sanitizeNoDigits); });
+function blockInvalidNameChars(e){ 
+  if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Enter'].includes(e.key)) return;
+  if (!/^[a-zA-Z\s\-]$/.test(e.key)){ 
+    e.preventDefault(); 
+    setWarning(e.target.id, 'Only letters, spaces, and hyphens are allowed.'); 
+  } else {
+    setWarning(e.target.id, '');
+  }
+}
+function sanitizeNameInput(e){ 
+  const val=e.target.value; 
+  const cleaned=val.replace(/[^a-zA-Z\s\-]/g,''); 
+  if(val!==cleaned){ 
+    e.target.value=cleaned; 
+    setWarning(e.target.id,'Only letters, spaces, and hyphens are allowed.'); 
+  } else { 
+    setWarning(e.target.id,''); 
+  } 
+}
+function isValidPhone(el){ 
+  // Strict 11 digits starting with 09
+  const val=el.value.replace(/[\s\-]/g, '');
+  return /^09\d{9}$/.test(val);
+}
+function getEmailError(el) {
+  const val=el.value.trim(); 
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return 'Please enter a valid email.';
+  const parts = val.split('@');
+  if(/^\d+$/.test(parts[0])) return 'Email Invalid';
+  return '';
+}
+['resident_full_name','visitor_first_name','visitor_last_name'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('keydown',blockInvalidNameChars); el.addEventListener('input',sanitizeNameInput); });
 
-// Live phone/email warnings
-['resident_contact','visitor_contact'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidPhone(el)? '' : 'Phone must start with 09 and contain numbers only.'); }); });
-['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, isValidEmail(el)? '' : 'Please enter a valid email.'); }); });
+['resident_email','visitor_email'].forEach(function(id){ const el=document.getElementById(id); if(!el) return; el.addEventListener('input', function(e){ setWarning(id, getEmailError(el) === 'Please enter a valid email.' && el.value.trim() === '' ? '' : (getEmailError(el) === 'Please enter a valid email.' ? '' : getEmailError(el))); }); });
+['resident_contact','visitor_contact'].forEach(function(id){ 
+  const el=document.getElementById(id); 
+  if(!el) return; 
+  el.setAttribute('maxlength', '15');
+  
+  el.addEventListener('input', function(e){ 
+    // Allow digits, plus, spaces
+    let val = el.value.replace(/[^0-9+\s]/g, '');
+    if (el.value !== val) el.value = val;
+    
+    // Basic format guidance
+    if(!el.value.trim()){ setWarning(id,''); return; } 
+    setWarning(id,'');
+  }); 
 
-// Birthdate must be a past date (not today)
+  el.addEventListener('blur', function(e){
+    let val = e.target.value.trim();
+    if (!val) return;
+    
+    // Normalize logic to 09XXXXXXXXX
+    let clean = val.replace(/\D/g, '');
+    let normalized = '';
+    
+    if (clean.length === 11 && clean.startsWith('09')) {
+       normalized = clean;
+    } else if (clean.length === 12 && clean.startsWith('639')) {
+       normalized = '0' + clean.substring(2);
+    } else if (clean.length === 10 && clean.startsWith('9')) {
+       normalized = '0' + clean;
+    } else {
+       if (!isValidPhone(el)) {
+          setWarning(id, 'Format must be 11 digits starting with 09 (e.g. 09XX XXX XXXX)');
+       }
+       return;
+    }
+    
+    if (normalized) {
+       // Display as 09XX XXX XXXX
+       const part1 = normalized.substring(0, 4);
+       const part2 = normalized.substring(4, 7);
+       const part3 = normalized.substring(7);
+       e.target.value = `${part1} ${part2} ${part3}`;
+       setWarning(id, '');
+    }
+  });
+});
+
+// Birthdate must be not in the future
 if (birthdateEl) {
-  var d=new Date(); d.setDate(d.getDate()-1);
+  var d=new Date();
   birthdateEl.setAttribute('max', d.toISOString().split('T')[0]);
 }
 
-// Toggle button behavior when reserving amenity
-function updateSubmitBehavior(){
-  if (reserveCheck.checked){
-    // Keep as submit so we can create the guest_form then redirect with ref_code
-    submitBtn.textContent = 'Next';
-    submitBtn.type = 'submit';
-    submitBtn.onclick = null;
-    if (visitDate) visitDate.required = false;
-    if (visitTime) visitTime.required = false;
-    if (visitPurpose) visitPurpose.required = false;
-  } else {
-    submitBtn.textContent = 'Submit Request';
-    submitBtn.type = 'submit';
-    submitBtn.onclick = null;
-    if (visitDate) visitDate.required = true;
-    if (visitTime) visitTime.required = true;
-    if (visitPurpose) visitPurpose.required = true;
+  /* Modal Styles */
+  .center-modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
   }
+  .center-modal-content {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      animation: fadeIn 0.3s;
+  }
+  .center-modal-content h3 { margin-top: 0; color: #23412e; }
+  .close-center {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #888;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+  function openTerms(){ document.getElementById('termsModal').style.display='flex'; }
+  function closeTerms(){ document.getElementById('termsModal').style.display='none'; }
+  function openPrivacy(){ document.getElementById('privacyModal').style.display='flex'; }
+  function closePrivacy(){ document.getElementById('privacyModal').style.display='none'; }
+
+  function validateForm(){
+  let valid = true;
+  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_email','visitor_address','birthdate','visitor_contact'];
+  reqIds.forEach(function(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(!String(el.value||'').trim()){
+      setWarning(id,'This field is required.');
+      valid = false;
+    } else {
+      setWarning(id,'');
+    }
+  });
+  const sexEl = document.getElementById('visitor_sex');
+  if (sexEl){
+    if(!sexEl.value){
+      setWarning('visitor_sex','Please select Sex.');
+      valid = false;
+    } else {
+      setWarning('visitor_sex','');
+    }
+  }
+  if (birthdateEl && birthdateEl.value){
+    var todayStr = new Date().toISOString().split('T')[0];
+    if (birthdateEl.value > todayStr){
+      setWarning('birthdate','Birthdate cannot be in the future.');
+      valid = false;
+    } else {
+      setWarning('birthdate','');
+    }
+  }
+  const rc=document.getElementById('resident_contact');
+  const vc=document.getElementById('visitor_contact');
+  const re=document.getElementById('resident_email');
+  const ve=document.getElementById('visitor_email');
+  if(re && getEmailError(re)){ setWarning('resident_email', getEmailError(re)); valid=false; }
+  if(ve && getEmailError(ve)){ setWarning('visitor_email', getEmailError(ve)); valid=false; }
+  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Please enter a valid phone number (e.g. 09XX XXX XXXX).'); valid=false; }
+  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Please enter a valid phone number (e.g. 09XX XXX XXXX).'); valid=false; }
+  if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
+  return valid;
 }
-updateSubmitBehavior();
-reserveCheck.addEventListener('change', updateSubmitBehavior);
+
+function buildVerifySummary(){
+  if (!verifyModal || !verifySummary) return;
+  const resNameEl = document.getElementById('resident_full_name');
+  const resHouseEl = document.getElementById('resident_house');
+  const resContactEl = document.getElementById('resident_contact');
+  const visFirstEl = document.getElementById('visitor_first_name');
+  const visLastEl = document.getElementById('visitor_last_name');
+  const visContactEl = document.getElementById('visitor_contact');
+  const visEmailEl = document.getElementById('visitor_email');
+  const visAddressEl = document.getElementById('visitor_address');
+  const vSexEl = document.getElementById('visitor_sex');
+  const personsEl = document.getElementById('visit_persons');
+  const resName = resNameEl ? resNameEl.value.trim() : '';
+  const resHouse = resHouseEl ? resHouseEl.value.trim() : '';
+  const resContact = resContactEl ? resContactEl.value.trim() : '';
+  const visFirst = visFirstEl ? visFirstEl.value.trim() : '';
+  const visLast = visLastEl ? visLastEl.value.trim() : '';
+  const visContact = visContactEl ? visContactEl.value.trim() : '';
+  const visEmail = visEmailEl ? visEmailEl.value.trim() : '';
+  const visAddress = visAddressEl ? visAddressEl.value.trim() : '';
+  const vSex = vSexEl ? vSexEl.value : '';
+  const vBirth = birthdateEl ? birthdateEl.value : '';
+  const personsVal = personsEl && personsEl.value ? personsEl.value : '1';
+  const items = [
+    ['Resident', resName || '-'],
+    ['House/Unit', resHouse || '-'],
+    ['Resident Contact', resContact || '-'],
+    ['Visitor', (visFirst + ' ' + visLast).trim() || '-'],
+    ['Visitor Sex', vSex || '-'],
+    ['Visitor Birthdate', vBirth || '-'],
+    ['Visitor Contact', visContact || '-'],
+    ['Visitor Email', visEmail || '-'],
+    ['Visitor Address', visAddress || '-']
+  ];
+  verifySummary.innerHTML = items.map(function(x){
+    return '<div style="display:flex;justify-content:space-between;margin:4px 0"><span style="font-weight:600">'+x[0]+'</span><span>'+x[1]+'</span></div>';
+  }).join('');
+  verifyModal.style.display = 'flex';
+}
 
 // Preview selected valid ID and allow clearing
 if (idInput) idInput.addEventListener('change', function(){
@@ -297,42 +572,68 @@ if (idInput) idInput.addEventListener('change', function(){
 });
 if (btnClearId) btnClearId.addEventListener('click', function(){ idInput.value=''; idPreviewWrap.style.display='none'; setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); });
 
-entryForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  let valid = true;
-  const reqIds = ['resident_full_name','resident_house','resident_email','resident_contact','visitor_first_name','visitor_last_name','visitor_contact','visitor_email','birthdate'];
-  reqIds.forEach(function(id){ const el=document.getElementById(id); if(!el) return; if(!String(el.value||'').trim()){ setWarning(id,'This field is required.'); valid=false; }});
-  if (birthdateEl && birthdateEl.value){
-    var todayStr = new Date().toISOString().split('T')[0];
-    if (birthdateEl.value >= todayStr){ setWarning('birthdate','Birthdate must be a past date.'); valid=false; }
+if (verifyCancelBtn && verifyModal){
+  verifyCancelBtn.addEventListener('click', function(){
+    if (submitting) return;
+    verifyModal.style.display = 'none';
+  });
+}
+
+async function performSubmit(){
+  if (submitting) return;
+  submitting = true;
+  if (verifyConfirmBtn){
+    verifyConfirmBtn.disabled = true;
   }
-  const rc=document.getElementById('resident_contact'); const vc=document.getElementById('visitor_contact');
-  if(rc && !isValidPhone(rc)){ setWarning('resident_contact','Phone must start with 09 and contain numbers only.'); valid=false; }
-  if(vc && !isValidPhone(vc)){ setWarning('visitor_contact','Phone must start with 09 and contain numbers only.'); valid=false; }
-  const re=document.getElementById('resident_email'); const ve=document.getElementById('visitor_email');
-  if(re && !isValidEmail(re)){ setWarning('resident_email','Please enter a valid email.'); valid=false; }
-  if(ve && !isValidEmail(ve)){ setWarning('visitor_email','Please enter a valid email.'); valid=false; }
-  if(idInput && !(idInput.files && idInput.files[0])){ setWarning('visitor_valid_id','Please upload Visitor’s Valid ID.'); valid=false; }
-  if(!valid) return;
   try {
     const fd = new FormData(entryForm);
     const res = await fetch('submit_guest.php', { method: 'POST', body: fd });
-    const data = await res.json();
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { data = null; }
+    if (!res.ok || !data) {
+      setWarning('visitor_email', 'Server error. Please try again.');
+      return;
+    }
     if (data && data.success) {
-      const ref = String(data.ref_code || '');
-      if (reserveCheck.checked) {
-        // Proceed to guest amenity reservation page carrying the ref_code
-        const url = 'reserve_guest.php?ref_code=' + encodeURIComponent(ref);
-        window.location.href = url;
-      } else {
-        openModal(ref);
-      }
+      openModal();
     } else {
-      setWarning('visitor_email', data.message || 'Failed to submit guest request.');
+      let msg = data && data.message ? data.message : 'Failed to save guest.';
+      if(msg.includes('Resident phone')) setWarning('resident_contact', msg);
+      else if(msg.includes('Visitor phone')) setWarning('visitor_contact', msg);
+      else if(msg.includes('Resident name')) setWarning('resident_full_name', msg);
+      else if(msg.includes('Visitor name')) setWarning('visitor_first_name', msg);
+      else if(msg.includes('valid ID')) setWarning('visitor_valid_id', msg);
+      else if(msg.includes('Resident email')) setWarning('resident_email', msg);
+      else if(msg.includes('Visitor email')) setWarning('visitor_email', msg);
+      else setWarning('visitor_email', msg);
     }
   } catch (err) {
     setWarning('visitor_email', 'Error connecting to server.');
+  } finally {
+    submitting = false;
+    if (verifyConfirmBtn){
+      verifyConfirmBtn.disabled = false;
+    }
   }
+}
+
+if (verifyConfirmBtn){
+  verifyConfirmBtn.addEventListener('click', function(){
+    if (submitting) return;
+    if (!validateForm()) return;
+    if (verifyModal){
+      verifyModal.style.display = 'none';
+    }
+    performSubmit();
+  });
+}
+
+entryForm.addEventListener('submit', function(e){
+  e.preventDefault();
+  if (submitting) return;
+  if (!validateForm()) return;
+  buildVerifySummary();
 });
 </script>
 </body>

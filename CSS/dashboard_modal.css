@@ -1,0 +1,77 @@
+/* Generic Modal Styles (Same as Admin) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.6); 
+    backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; 
+    padding: 0;
+    border: 1px solid #888;
+    width: 350px; 
+    max-width: 90%;
+    border-radius: 12px;
+    position: relative;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+    animation: modalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-family: 'Poppins', sans-serif;
+}
+
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.9) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute;
+    right: 15px;
+    top: 10px;
+    z-index: 1001;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* QR Card Styles (Adapted for Modal) */
+.qr-card { width: 100%; background: #1e1e1e; border-radius: 12px; overflow: hidden; color: #fff; }
+.qr-card .card-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #111; color: #e5ddc6; }
+.qr-card .card-header img { height: 28px; }
+.qr-card .brand { font-weight: 600; }
+.qr-card .qr-area { background: #fff; display: flex; align-items: center; justify-content: center; padding: 18px; }
+.qr-card .qr-area img { width: 200px; height: 200px; }
+.qr-card .content { padding: 16px; color: #ddd; }
+.qr-card .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.qr-card .label { font-weight: 600; font-size: 0.95rem; }
+.qr-card .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
+.qr-card .badge.resident { background: #1e3a8a; color: #d6eaff; }
+.qr-card .badge.reservation { background: #5b0a1e; color: #ffb1c9; }
+.qr-card .badge.visitor { background: #23412e; color: #e5ddc6; }
+.qr-card .meta { font-size: 0.9rem; line-height: 1.45; color: #bbb; }
+.qr-card .meta strong { color: #eee; }
+.qr-card .divider { height: 1px; background: #2f2f2f; margin: 10px 0 12px; }
+.qr-card .foot { font-size: 0.78rem; color: #aaa; line-height: 1.35; }
+.qr-card .foot .cols { display: flex; justify-content: space-between; }
+.qr-card .verify { display: block; text-align: center; margin: 12px 16px 16px; }
+.qr-card .verify a { color: #9bd08f; font-weight: 600; text-decoration: none; }
+.qr-card .banner { text-align: center; font-weight: 700; padding: 8px; border-top: 1px solid #333; color: #9bd08f; }
+.qr-card .banner.expired, .qr-card .banner.denied { color: #ffb3b3; }

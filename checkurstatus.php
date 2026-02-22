@@ -8,7 +8,8 @@ session_start();
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Check Status - VictorianPass</title>
-  <link rel="icon" type="image/png" href="mainpage/logo.svg">
+  <link rel="icon" type="image/png" href="images/logo.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 
@@ -26,7 +27,7 @@ session_start();
     }
 
     body {
-      background: url("mainpage/background.svg") center/cover no-repeat;
+      background: url("images/background.svg") center/cover no-repeat;
       color: #fff;
       min-height: 100vh;
       display: flex;
@@ -50,22 +51,26 @@ session_start();
       position: absolute;
       top: 30px;
       left: 30px;
-      background: #e5ddc6;
-      color: #2d593d;
-      font-weight: 500;
+      background: #fff;
+      color: #111827;
+      font-weight: 600;
       padding: 8px 16px;
       border-radius: 8px;
       text-decoration: none;
       font-size: 0.9rem;
-      border: none;
+      border: 1px solid #f2c24f;
       box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
-      transition: background 0.2s ease, transform 0.2s ease;
+      transition: filter 0.2s ease, transform 0.2s ease;
       z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
+    .btn-back i { color: #f2c24f; }
 
     .btn-back:hover {
       transform: scale(1.03);
-      opacity: 0.92;
+      filter: brightness(0.95);
     }
 
     /* Status Box */
@@ -176,14 +181,14 @@ session_start();
 <body>
 
   <!-- Go Back Button -->
-  <a href="mainpage.php" class="btn-back">← Go Back</a>
+  <a href="mainpage.php" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Go Back</a>
 
   <!-- STATUS BOX -->
   <div class="status-box">
     <h2>Check Your Status</h2>
     <form id="statusForm" action="status_view.php" method="GET">
-      <label for="code">Status Code:</label>
-      <input type="text" id="code" name="code" placeholder="Enter your code*" required>
+      <label for="code">QR Reference Code:</label>
+      <input type="text" id="code" name="code" placeholder="Enter your QR reference code*" required>
       <button type="submit" class="btn-confirm">Confirm</button>
     </form>
 
@@ -191,7 +196,7 @@ session_start();
 
     <div class="form-note">
       <strong>Instructions:</strong><br>
-      • All visitors should use their <strong>Status Code</strong> to check status.<br>
+      • All visitors should use their <strong>QR Reference Code</strong> to check status.<br>
       • If you are a resident, go to your Profile Page to check your status.
     </div>
   </div>
